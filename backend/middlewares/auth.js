@@ -1,23 +1,43 @@
-import jwt from "jsonwebtoken";
-import pool from "../config/db.js";
+import jwt from 'jsonwebtoken';
+import User from '../models/usermodel.js';
 
-export const protect = async (req, res, next) => {
-    try{
-        const token = req.cookies.token;
+const verifyToken = async (req, res, next) => {
+    let token;
+    let authHeader = req.headers.Authorization || req.headers.authorization;
+
+    if (authHeader && authHeader.startsWith('Bearer')) {
+        token = authHeader.split(' ')[1];
         if (!token) {
-            return res.status(401).json({ error: 'Not authorized, no token' });
+            return res.status(403).json({ message: 'No token provided' });
         }
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const user = await pool.query("SELECT * FROM users WHERE id = $1", [decoded.id]);
-        req.user = user.rows[0];
-        next();
-    } catch (error) {
-        return res.status(401).json({ error: 'Not authorized, token failed' });
+        try {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            // Use findById instead of Sequelize's findByPk
+            req.user = await User.findById(decoded.id);
+            if (!req.user) {
+                return res.status(401).json({ message: 'User not found' });
+            }
+            next();
+        } catch (err) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+    } else {
+        return res.status(403).json({ message: 'No token provided' });
     }
 };
 
-export default protect;
+const checkRole = (...allowedRoles) => {
+    return (req, res, next) => {
+        if (!req.user) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+        if (!allowedRoles.includes(req.user.role)) {
+            return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
+        }
+        next();
+    };
+};
 
-
+export { verifyToken, checkRole };
 
 

@@ -1,8 +1,11 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import Swal from "sweetalert2";
+import "./login.css";
 import sliitLogo from "../src/assets/SLIIT_LOGO.png";
 
 const Login = ({ apiBase, onAuthSuccess }) => {
+    const navigate = useNavigate();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
@@ -22,6 +25,16 @@ const Login = ({ apiBase, onAuthSuccess }) => {
                 const data = await response.json();
                 setError("");
                 onAuthSuccess?.(data.user ?? null);
+                
+                Swal.fire({
+                    icon: "success",
+                    title: "Login Successful",
+                    text: `Welcome back, ${data.user?.username || 'User'}!`,
+                    timer: 1500,
+                    showConfirmButton: false,
+                }).then(() => {
+                    navigate("/dashboard");
+                });
             } else {
                 const errorData = await response.json();
                 setError(errorData.error || "Login failed");
