@@ -1,18 +1,19 @@
-import express from 'express';
-import bcryptjs from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import pool from '../config/db.js';
-import protect from '../middlewares/auth.js';
 
+import express from 'express';
+import jwt from 'jsonwebtoken';
+import bcryptjs from 'bcryptjs';
+import pool from '../config/db.js';
+import { registerValidation, loginValidation, validate } from '../middlewares/validation.js';
+import protect from '../middlewares/auth.js';
 
 const router = express.Router();
 
 const cookieOptions = {
-    expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+    expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    maxAge: 7 * 24 * 60 * 60 * 1000,
 }
 
 const generateToken = (user) => {
@@ -20,7 +21,7 @@ const generateToken = (user) => {
         expiresIn: '7d',
     });
 }
-router.post('/register', async (req, res) => {
+router.post('/register', registerValidation, validate, async (req, res) => {
     const { name, email, password, address, birthday, phonenumber, role } = req.body || {};
     if (!name || !email || !password) {
         return res.status(400).json({ error: 'Name, email, and password are required' });
@@ -42,7 +43,7 @@ router.post('/register', async (req, res) => {
 });
 
 // Login user
-router.post('/login', async (req, res) => {
+router.post('/login', loginValidation, validate, async (req, res) => {
     const { email, password } = req.body || {};
     if (!email || !password) {
         return res.status(400).json({ error: 'Email and password are required' });
