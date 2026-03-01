@@ -33,6 +33,11 @@ body {
   background: var(--surface);
   color: var(--ink);
 }
+/* Force only vertical scrollbar, disable horizontal scroll */
+body {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
 
 html,
 body,
@@ -62,26 +67,4 @@ input,
 select,
 textarea {
   font-family: inherit;
-}
-
-::selection {
-  background: rgba(11, 110, 110, 0.2);
-}
-
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-::-webkit-scrollbar-track {
-  background: #efe9df;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #0b6e6e;
-  border-radius: 999px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #0f8b8d;
 }

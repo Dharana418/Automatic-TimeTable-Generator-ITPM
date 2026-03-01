@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import autoschedule from '../../Home/autoschedule-logo.png';
+import autoschedule from '../assets/SLIIT_LOGO.png';
 import './Navigation.css';
 
 const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000" }) => {
@@ -24,29 +24,35 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000" }
             <div className="nav-brand">
                 <Link to="/" className="nav-brand-link">
                     <h2>SLIIT Timetable Generator</h2>
-                    <img src={autoschedule} alt="AutoScheduler Logo" className="nav-logo" />
+                    <img src={autoschedule} alt="SLIIT Logo" className="nav-logo" />
                 </Link>
             </div>
+
             <div className="nav-links">
-                {isAuthenticated && (
+                {isAuthenticated ? (
                     <>
                         <span className="nav-user">{user?.username}</span>
+
                         {location.pathname !== '/dashboard' && (
-                            <Link to="/dashboard" className="nav-btn dashboard-btn">Dashboard</Link>
+                            <Link to="/dashboard" className="nav-btn">Dashboard</Link>
                         )}
-                        <button onClick={handleLogout} className="nav-btn logout-btn">Logout</button>
+
+                        <button onClick={handleLogout} className="nav-btn">
+                            Logout
+                        </button>
                     </>
-                )}
-                {!isAuthenticated && (
+                ) : (
                     <>
                         {location.pathname !== '/' && (
-                            <Link to="/" className="nav-btn home-btn">Home</Link>
+                            <Link to="/" className="nav-btn">Home</Link>
                         )}
+
                         {location.pathname !== '/login' && (
-                            <Link to="/login" className="nav-btn login-btn">Login</Link>
+                            <Link to="/login" className="nav-btn">Login</Link>
                         )}
+
                         {location.pathname !== '/register' && (
-                            <Link to="/register" className="nav-btn register-btn">Register</Link>
+                            <Link to="/register" className="nav-btn">Register</Link>
                         )}
                     </>
                 )}

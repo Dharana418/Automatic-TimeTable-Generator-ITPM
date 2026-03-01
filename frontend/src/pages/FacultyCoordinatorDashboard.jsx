@@ -1,8 +1,11 @@
+
+
 import React from 'react';
 import '../styles/dashboard.css';
 
-const FacultyCoordinatorDashboard = ({ user }) => {
 
+
+const FacultyCoordinatorDashboard = ({ user }) => {
   return (
     <div className="dashboard-container">
       <div className="dashboard-header">
