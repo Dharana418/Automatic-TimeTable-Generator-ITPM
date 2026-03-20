@@ -1,11 +1,11 @@
 // Particle Swarm Optimization Scheduler for Faculty Coordinator
 // This is a stub. Implement the algorithm logic as needed.
 
-function psoScheduler(constraints) {
-    // TODO: Implement PSO for timetable scheduling
-    // constraints: { ... }
-    // return: { schedule: ... }
-    return { schedule: [], message: 'PSO Scheduler not yet implemented.' };
-}
+import optimizer from './optimizer.js';
 
-module.exports = psoScheduler;
+export default function psoScheduler(constraints, options = {}) {
+    const problem = optimizer.buildProblem(constraints);
+    const result = optimizer.runPSO(problem, options);
+    // result contains schedule, stats, conflicts, fitness
+    return { schedule: result.schedule, stats: result.stats, conflicts: result.conflicts, fitness: result.fitness };
+}
