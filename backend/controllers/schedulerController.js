@@ -2,6 +2,7 @@ import antColonyScheduler from '../scheduler/antColonyScheduler.js';
 import psoScheduler from '../scheduler/psoScheduler.js';
 import hybridScheduler from '../scheduler/hybridScheduler.js';
 import geneticScheduler from '../scheduler/geneticScheduler.js';
+import tabuScheduler from '../scheduler/tabuScheduler.js';
 import pool from '../config/db.js';
 
 const allowedTypes = ['halls', 'modules', 'lics', 'instructors'];
@@ -115,6 +116,9 @@ export const runScheduler = async (req, res) => {
     }
     if (algorithms.includes('hybrid')) {
       results.hybrid = hybridScheduler(constraints);
+    }
+    if (algorithms.includes('tabu') || algorithms.includes('tabusearch')) {
+      results.tabu = tabuScheduler(constraints, options);
     }
 
     return res.json({ success: true, results });
