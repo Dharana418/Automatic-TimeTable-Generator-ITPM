@@ -49,6 +49,22 @@ export async function initDb() {
       )
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS module_assignments (
+        id TEXT PRIMARY KEY,
+        module_id TEXT REFERENCES modules(id) ON DELETE CASCADE,
+        lecturer_id TEXT REFERENCES instructors(id) ON DELETE CASCADE,
+        lic_id TEXT REFERENCES lics(id) ON DELETE CASCADE,
+        academic_year TEXT NOT NULL,
+        semester TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_module_assignment
+      ON module_assignments(module_id, lecturer_id, lic_id, academic_year, semester)
+    `);
+
     // Create users table (for auth) if it doesn't exist
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (

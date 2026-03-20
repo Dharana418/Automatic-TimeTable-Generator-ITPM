@@ -75,9 +75,101 @@ export const listItems = async (req, res) => {
   }
 };
 
+export const getLicsWithInstructors = async (req, res) => {
+  try {
+    const q = `
+      SELECT l.*, COALESCE(json_agg(i.*) FILTER (WHERE i.id IS NOT NULL), '[]') AS instructors
+      FROM lics l
+      LEFT JOIN instructors i ON i.department = l.department
+      GROUP BY l.id
+      ORDER BY l.created_at DESC
+    `;
+    const { rows } = await pool.query(q);
+    return res.json({ success: true, items: rows });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+export const createModuleAssignment = async (req, res) => {
+  try {
+    const {
+      moduleId,
+      lecturerId,
+      licId,
+      academicYear,
+      semester = null,
+    } = req.body;
+
+    if (!moduleId || !lecturerId || !licId || !academicYear) {
+      return res.status(400).json({ error: 'moduleId, lecturerId, licId and academicYear are required' });
+    }
+
+    const id = `asg_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+    const { rows } = await pool.query(
+      `INSERT INTO module_assignments(id,module_id,lecturer_id,lic_id,academic_year,semester)
+       VALUES($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (module_id, lecturer_id, lic_id, academic_year, semester)
+       DO NOTHING
+       RETURNING *`,
+      [id, moduleId, lecturerId, licId, academicYear, semester]
+    );
+
+    if (!rows[0]) {
+      return res.status(409).json({ error: 'Assignment already exists' });
+    }
+
+    return res.status(201).json({ success: true, item: rows[0] });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+export const listModuleAssignments = async (req, res) => {
+  try {
+    const q = `
+      SELECT
+        ma.id,
+        ma.module_id,
+        ma.lecturer_id,
+        ma.lic_id,
+        ma.academic_year,
+        ma.semester,
+        ma.created_at,
+        m.code AS module_code,
+        m.name AS module_name,
+        i.name AS lecturer_name,
+        l.name AS lic_name
+      FROM module_assignments ma
+      LEFT JOIN modules m ON m.id = ma.module_id
+      LEFT JOIN instructors i ON i.id = ma.lecturer_id
+      LEFT JOIN lics l ON l.id = ma.lic_id
+      ORDER BY ma.created_at DESC
+    `;
+    const { rows } = await pool.query(q);
+    return res.json({ success: true, items: rows });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+export const deleteModuleAssignment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rowCount } = await pool.query('DELETE FROM module_assignments WHERE id = $1', [id]);
+    if (!rowCount) {
+      return res.status(404).json({ error: 'Assignment not found' });
+    }
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+
 export const resetData = async (req, res) => {
   try {
-    await pool.query('TRUNCATE halls, modules, lics, instructors');
+    await pool.query('TRUNCATE module_assignments, halls, modules, lics, instructors');
     return res.json({ success: true, message: 'Tables truncated' });
   } catch (err) {
     return res.status(500).json({ error: err.message });
