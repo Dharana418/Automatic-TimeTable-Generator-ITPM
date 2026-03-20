@@ -10,6 +10,7 @@ import LICDashboard from "./pages/LICDashboard.jsx";
 import AcademicCoordinatorDashboard from "./pages/AcademicCoordinatorDashboard.jsx";
 import InstructorDashboard from "./pages/InstructorDashboard.jsx";
 import LecturerDashboard from "./pages/LecturerDashboard.jsx";
+import Scheduler from "./pages/Scheduler.jsx";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -106,6 +107,12 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route path="/scheduler" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
+            {user?.role === "Faculty Coordinator" ? <Scheduler /> : <Navigate to="/dashboard" replace />}
+          </ProtectedRoute>
+        } />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
