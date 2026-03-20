@@ -5,6 +5,8 @@ import cors from 'cors';
 import cookieparser from 'cookie-parser';
 import pool from './config/db.js';
 import authRoutes from './routes/auth.js';
+import schedulerRoutes from './routes/scheduler.js';
+import initDb from './config/initDb.js';
 
 dotenv.config();
 const app = express();
@@ -24,8 +26,14 @@ pool.query('SELECT NOW()', (err, result) => {
     }
 });
 
+// Ensure scheduler tables exist
+initDb().catch(err => {
+    console.error('Failed to initialize DB tables for scheduler:', err);
+});
+
 
 app.use('/api/auth', authRoutes);
+app.use('/api/scheduler', schedulerRoutes);
 
 app.get('/', (req, res) => {
     res.send('Timetable Generator API is running!');
