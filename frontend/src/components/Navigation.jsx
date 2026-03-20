@@ -37,6 +37,10 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000" }
                             <Link to="/dashboard" className="nav-btn">Dashboard</Link>
                         )}
 
+                        {user?.role === 'Faculty Coordinator' && location.pathname !== '/scheduler' && (
+                            <Link to="/scheduler" className="nav-btn">Scheduler</Link>
+                        )}
+
                         <button onClick={handleLogout} className="nav-btn">
                             Logout
                         </button>
