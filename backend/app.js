@@ -11,8 +11,21 @@ import initDb from './config/initDb.js';
 dotenv.config();
 const app = express();
 
+const allowedOrigins = process.env.FRONTEND_URLS
+    ? process.env.FRONTEND_URLS.split(',').map(origin => origin.trim()).filter(Boolean)
+    : ['http://localhost:5173', 'http://localhost:5174'];
+
 app.use(cors({
-    origin: 'http://localhost:5173',
+    origin: (origin, callback) => {
+        // Allow tools like Postman/curl (no browser origin header)
+        if (!origin) return callback(null, true);
+
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+
+        return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
     credentials: true,
 }));
 
