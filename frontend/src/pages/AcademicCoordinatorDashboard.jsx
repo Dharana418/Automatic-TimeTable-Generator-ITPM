@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import '../styles/dashboard.css';
 import schedulerApi from '../api/scheduler.js';
 import moduleCatalog from '../data/moduleCatalog.js';
 

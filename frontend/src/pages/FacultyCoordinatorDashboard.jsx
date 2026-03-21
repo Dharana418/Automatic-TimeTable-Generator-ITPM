@@ -1,7 +1,6 @@
 
 
 import React, { useEffect, useState } from 'react';
-import '../styles/dashboard.css';
 import api from '../api/scheduler.js';
 import BatchList from '../components/BatchList.jsx';
 
