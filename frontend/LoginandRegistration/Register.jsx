@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import sliitLogo from "../src/assets/SLIIT_LOGO.png";
-import "./login.css";
 
 const Register = ({ apiBase, onAuthSuccess }) => {
   const [form, setForm] = useState({
@@ -100,13 +99,13 @@ const Register = ({ apiBase, onAuthSuccess }) => {
   };
 
   return (
-    <div className="auth-card">
-      <img className="auth-logo" src={sliitLogo} alt="SLIIT logo" />
-      <h2 style={{ color: 'black' }}>Register</h2>
-      <form className="form" onSubmit={handleSubmit}>
-        <label className="form__label" htmlFor="name">Full Name</label>
+    <div className="w-full max-w-md rounded-3xl border border-slate-300/50 bg-white/90 px-8 py-10 text-center shadow-2xl backdrop-blur-md">
+      <img className="mx-auto mb-5 block w-20" src={sliitLogo} alt="SLIIT logo" />
+      <h2 className="mb-6 text-3xl text-slate-900">Register</h2>
+      <form className="flex flex-col gap-3 text-left" onSubmit={handleSubmit}>
+        <label className="mb-1 font-semibold text-indigo-950" htmlFor="name">Full Name</label>
         <input
-          className="form__input"
+          className="w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-slate-800 outline-none ring-indigo-500 transition focus:ring-2"
           type="text"
           name="name"
           id="name"
@@ -115,11 +114,11 @@ const Register = ({ apiBase, onAuthSuccess }) => {
           required
           placeholder=""
         />
-        {fieldErrors.name && <span className="error-message">{fieldErrors.name}</span>}
+        {fieldErrors.name && <span className="rounded-lg border border-red-300 bg-red-100 px-3 py-2 text-center text-red-500">{fieldErrors.name}</span>}
 
-        <label className="form__label" htmlFor="email">Email Address</label>
+        <label className="mb-1 mt-1 font-semibold text-indigo-950" htmlFor="email">Email Address</label>
         <input
-          className="form__input"
+          className="w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-slate-800 outline-none ring-indigo-500 transition focus:ring-2"
           type="email"
           name="email"
           id="email"
@@ -128,11 +127,11 @@ const Register = ({ apiBase, onAuthSuccess }) => {
           required
           placeholder=""
         />
-        {fieldErrors.email && <span className="error-message">{fieldErrors.email}</span>}
+        {fieldErrors.email && <span className="rounded-lg border border-red-300 bg-red-100 px-3 py-2 text-center text-red-500">{fieldErrors.email}</span>}
 
-        <label className="form__label" htmlFor="role">Your Role</label>
+        <label className="mb-1 mt-1 font-semibold text-indigo-950" htmlFor="role">Your Role</label>
         <select
-          className="form__input"
+          className="w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-slate-800 outline-none ring-indigo-500 transition focus:ring-2"
           name="role"
           id="role"
           value={form.role}
@@ -146,12 +145,12 @@ const Register = ({ apiBase, onAuthSuccess }) => {
           <option value="Lecturer/Senior Lecturer">Lecturer/Senior Lecturer</option>
           <option value="LIC">LIC</option>
         </select>
-        {fieldErrors.role && <span className="error-message">{fieldErrors.role}</span>}
+        {fieldErrors.role && <span className="rounded-lg border border-red-300 bg-red-100 px-3 py-2 text-center text-red-500">{fieldErrors.role}</span>}
 
-        <label className="form__label" htmlFor="password">Password</label>
-        <div className="input-wrapper">
+        <label className="mb-1 mt-1 font-semibold text-indigo-950" htmlFor="password">Password</label>
+        <div className="relative w-full">
           <input
-            className="form__input"
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-3 pr-11 text-slate-800 outline-none ring-indigo-500 transition focus:ring-2"
             type={showPassword ? "text" : "password"}
             name="password"
             id="password"
@@ -162,7 +161,7 @@ const Register = ({ apiBase, onAuthSuccess }) => {
           />
           <button
             type="button"
-            className="input-toggle"
+            className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center border-none bg-transparent p-0 text-indigo-950"
             aria-label={showPassword ? "Hide password" : "Show password"}
             onClick={() => setShowPassword((s) => !s)}
           >
@@ -181,12 +180,12 @@ const Register = ({ apiBase, onAuthSuccess }) => {
             )}
           </button>
         </div>
-        {fieldErrors.password && <span className="error-message">{fieldErrors.password}</span>}
+        {fieldErrors.password && <span className="rounded-lg border border-red-300 bg-red-100 px-3 py-2 text-center text-red-500">{fieldErrors.password}</span>}
 
-        <label className="form__label" htmlFor="confirmPassword">Confirm Password</label>
-        <div className="input-wrapper">
+        <label className="mb-1 mt-1 font-semibold text-indigo-950" htmlFor="confirmPassword">Confirm Password</label>
+        <div className="relative w-full">
           <input
-            className="form__input"
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-3 pr-11 text-slate-800 outline-none ring-indigo-500 transition focus:ring-2"
             type={showConfirmPassword ? "text" : "password"}
             name="confirmPassword"
             id="confirmPassword"
@@ -197,7 +196,7 @@ const Register = ({ apiBase, onAuthSuccess }) => {
           />
           <button
             type="button"
-            className="input-toggle"
+            className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center border-none bg-transparent p-0 text-indigo-950"
             aria-label={showConfirmPassword ? "Hide password" : "Show password"}
             onClick={() => setShowConfirmPassword((s) => !s)}
           >
@@ -216,11 +215,11 @@ const Register = ({ apiBase, onAuthSuccess }) => {
             )}
           </button>
         </div>
-        {fieldErrors.confirmPassword && <span className="error-message">{fieldErrors.confirmPassword}</span>}
+        {fieldErrors.confirmPassword && <span className="rounded-lg border border-red-300 bg-red-100 px-3 py-2 text-center text-red-500">{fieldErrors.confirmPassword}</span>}
 
-        <label className="form__label" htmlFor="phonenumber">Phone Number</label>
+        <label className="mb-1 mt-1 font-semibold text-indigo-950" htmlFor="phonenumber">Phone Number</label>
         <input
-          className="form__input"
+          className="w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-slate-800 outline-none ring-indigo-500 transition focus:ring-2"
           type="tel"
           name="phonenumber"
           id="phonenumber"
@@ -228,13 +227,13 @@ const Register = ({ apiBase, onAuthSuccess }) => {
           onChange={handleChange}
           placeholder=""
         />
-        {fieldErrors.phonenumber && <span className="error-message">{fieldErrors.phonenumber}</span>}
+        {fieldErrors.phonenumber && <span className="rounded-lg border border-red-300 bg-red-100 px-3 py-2 text-center text-red-500">{fieldErrors.phonenumber}</span>}
 
-        {error && <div className="error-message">{error}</div>}
-        {success && <div className="error-message" style={{ color: '#51cf66', background: 'rgba(81,207,102,0.1)', border: '1px solid #51cf66' }}>{success}</div>}
+        {error && <div className="rounded-lg border border-red-300 bg-red-100 px-3 py-2 text-center text-red-500">{error}</div>}
+        {success && <div className="rounded-lg border border-emerald-500 bg-emerald-50 px-3 py-2 text-center text-emerald-600">{success}</div>}
 
         <button
-          className="form__btn"
+          className="mt-1 rounded-xl bg-gradient-to-br from-indigo-400 to-indigo-950 px-4 py-3 font-bold text-white transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70"
           type="submit"
           disabled={loading}
         >
@@ -245,9 +244,9 @@ const Register = ({ apiBase, onAuthSuccess }) => {
           )}
         </button>
       </form>
-      <div className="auth-footer">
+      <div className="mt-5 text-center text-indigo-950">
         <span>Already have an account?</span>
-        <Link to="/login" className="register-link">Sign in here</Link>
+        <Link to="/login" className="ml-1 font-semibold text-indigo-500 hover:underline">Sign in here</Link>
       </div>
     </div>
   );

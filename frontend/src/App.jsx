@@ -50,7 +50,7 @@ function App() {
     fetchUser();
   }, []);
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <div className="flex min-h-screen items-center justify-center text-lg font-semibold text-slate-700">Loading...</div>;
 
   return (
     <Router>
@@ -65,7 +65,7 @@ function App() {
             isAuthenticated ? (
               <Navigate to="/dashboard" replace />
             ) : (
-              <section className="auth-wrapper">
+              <section className="flex min-h-screen items-center justify-center bg-zinc-600 p-5">
                 <Login apiBase={API_BASE} onAuthSuccess={handleAuthSuccess} />
               </section>
             )
@@ -78,7 +78,7 @@ function App() {
             isAuthenticated ? (
               <Navigate to="/dashboard" replace />
             ) : (
-              <section className="auth-wrapper">
+              <section className="flex min-h-screen items-center justify-center bg-zinc-600 p-5">
                 <Register apiBase={API_BASE} onAuthSuccess={handleAuthSuccess} />
               </section>
             )

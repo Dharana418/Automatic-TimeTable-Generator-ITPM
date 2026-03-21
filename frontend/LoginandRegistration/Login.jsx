@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import sliitLogo from "../src/assets/SLIIT_LOGO.png";
-import "./login.css";
 
 const Login = ({ apiBase, onAuthSuccess }) => {
   const [email, setEmail] = useState("");
@@ -38,26 +37,26 @@ const Login = ({ apiBase, onAuthSuccess }) => {
   };
 
   return (
-    <div className="auth-card">
-      <img src={sliitLogo} alt="SLIIT Logo" className="auth-logo" />
-      <h2>Sign In</h2>
+    <div className="w-full max-w-md rounded-3xl border border-slate-300/50 bg-white/90 px-8 py-10 text-center shadow-2xl backdrop-blur-md">
+      <img src={sliitLogo} alt="SLIIT Logo" className="mx-auto mb-5 block w-20" />
+      <h2 className="mb-6 text-3xl text-slate-900">Sign In</h2>
 
-      <form className="form" onSubmit={handleSubmit}>
-        <label className="form__label">Email</label>
+      <form className="flex flex-col gap-3 text-left" onSubmit={handleSubmit}>
+        <label className="mb-1 font-semibold text-indigo-950">Email</label>
         <input
           type="email"
-          className="form__input"
+          className="w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-slate-800 outline-none ring-indigo-500 transition focus:ring-2"
           placeholder="Enter your email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
         />
 
-        <label className="form__label">Password</label>
-        <div className="input-wrapper">
+        <label className="mb-1 mt-1 font-semibold text-indigo-950">Password</label>
+        <div className="relative w-full">
           <input
             type={showPassword ? "text" : "password"}
-            className="form__input"
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-3 pr-11 text-slate-800 outline-none ring-indigo-500 transition focus:ring-2"
             placeholder="Enter your password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -65,7 +64,7 @@ const Login = ({ apiBase, onAuthSuccess }) => {
           />
           <button
             type="button"
-            className="input-toggle"
+            className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center border-none bg-transparent p-0 text-indigo-950"
             aria-label={showPassword ? "Hide password" : "Show password"}
             onClick={() => setShowPassword((s) => !s)}
           >
@@ -85,14 +84,14 @@ const Login = ({ apiBase, onAuthSuccess }) => {
           </button>
         </div>
 
-        {error && <div className="error-message">{error}</div>}
+        {error && <div className="rounded-lg border border-red-300 bg-red-100 px-3 py-2 text-center text-red-500">{error}</div>}
 
-        <button type="submit" className="form__btn" disabled={loading}>
+        <button type="submit" className="mt-1 rounded-xl bg-gradient-to-br from-indigo-400 to-indigo-950 px-4 py-3 font-bold text-white transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70" disabled={loading}>
           {loading ? "Signing In..." : "Sign In"}
         </button>
       </form>
 
-      <div className="auth-footer">
+      <div className="mt-5 text-center text-indigo-950">
         Don’t have an account? <Link to="/register">Register</Link>
       </div>
     </div>
