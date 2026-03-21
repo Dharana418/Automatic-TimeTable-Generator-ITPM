@@ -7,15 +7,24 @@ function parseJSONField(val) {
   try { return JSON.parse(val); } catch (e) { return val; }
 }
 
+const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const WEEKDAYS = ['Mon','Tue','Wed','Thu','Fri'];
+const WEEKEND = ['Sat','Sun'];
+const SLOTS = ['09:00-10:00','10:00-11:00','11:00-12:00','13:00-14:00','14:00-15:00'];
+
+function hallMatchesModule(hall, module) {
+  const moduleRoomType = String(module?.details?.roomType || module?.details?.room_type || module?.roomType || '').toLowerCase();
+  const hallRoomType = String(hall?.features?.roomType || hall?.features?.room_type || '').toLowerCase();
+
+  if (!moduleRoomType || !hallRoomType) return true;
+  return hallRoomType.includes(moduleRoomType) || moduleRoomType.includes(hallRoomType);
+}
+
 // Build problem sessions and placements
 export function buildProblem(constraints = {}) {
   const halls = (constraints.halls || []).map(h => ({...h, features: parseJSONField(h.features)}));
   const modules = (constraints.modules || []).map(m => ({...m, details: parseJSONField(m.details)}));
   const instructors = (constraints.instructors || []).map(i => ({...i, availabilities: parseJSONField(i.availabilities)}));
-
-  const WEEKDAYS = ['Mon','Tue','Wed','Thu','Fri'];
-  const WEEKEND = ['Sat','Sun'];
-  const SLOTS = ['09:00-10:00','10:00-11:00','11:00-12:00','13:00-14:00','14:00-15:00'];
 
   // Build sessions: each module may require multiple lectures per week
   const sessions = [];
@@ -42,7 +51,13 @@ export function buildProblem(constraints = {}) {
       for (const slot of SLOTS) {
         for (let hIdx=0; hIdx<halls.length; hIdx++) {
           const hall = halls[hIdx];
-          // capacity heuristic: allow even if small; penalize later
+          if (!hallMatchesModule(hall, mod)) continue;
+
+          if (!instructors.length) {
+            possible.push({ day, slot, hallIndex: hIdx, instructorIndex: null });
+            continue;
+          }
+
           for (let insIdx=0; insIdx<instructors.length; insIdx++) {
             const ins = instructors[insIdx];
             // check availability simple: if instructor has specified availabilities, require match
@@ -58,9 +73,17 @@ export function buildProblem(constraints = {}) {
         }
       }
     }
-    // if no placements found (no instructors), fallback to hall-only placements with null instructor
-    if (possible.length === 0) {
-      for (const day of DAYS) for (const slot of SLOTS) for (let hIdx=0; hIdx<halls.length; hIdx++) possible.push({day,slot,hallIndex:hIdx, instructorIndex: null});
+    // if no placements found, fallback to hall-only placements with null instructor
+    if (possible.length === 0 && halls.length > 0) {
+      for (const day of DAYS) {
+        for (const slot of SLOTS) {
+          for (let hIdx = 0; hIdx < halls.length; hIdx++) {
+            const hall = halls[hIdx];
+            if (!hallMatchesModule(hall, mod)) continue;
+            possible.push({ day, slot, hallIndex: hIdx, instructorIndex: null });
+          }
+        }
+      }
     }
     return possible;
   });
@@ -76,14 +99,26 @@ export function evaluateSolution(solution, problem, options = {}) {
 
   // occupancy maps to detect double-bookings: day|slot -> hallIndex -> sessionIndexes[], instructorIndex -> sessionIndexes[]
   const occHall = {}; const occInstr = {};
+  const hallUsageMap = {};
 
   let scheduledCount = 0;
   const totalRequired = sessions.length;
 
   for (let s=0; s<sessions.length; s++) {
     const choiceIdx = solution[s];
-    const placementList = placements[s];
-    const p = placementList[choiceIdx % placementList.length];
+    const placementList = placements[s] || [];
+
+    if (placementList.length === 0) {
+      const mod = sessions[s].module;
+      conflicts.push({
+        type: 'no_hall_or_slot_available',
+        session: s,
+        moduleId: mod.id || mod.code || mod._id,
+      });
+      continue;
+    }
+
+    const p = placementList[Math.abs(choiceIdx) % placementList.length];
     const mod = sessions[s].module;
     const hall = halls[p.hallIndex];
     const instr = (p.instructorIndex != null) ? instructors[p.instructorIndex] : null;
@@ -135,6 +170,17 @@ export function evaluateSolution(solution, problem, options = {}) {
 
     schedule.push(entry);
     scheduledCount++;
+
+    if (entry.hallId) {
+      if (!hallUsageMap[entry.hallId]) {
+        hallUsageMap[entry.hallId] = {
+          hallId: entry.hallId,
+          hallName: entry.hallName || entry.hallId,
+          sessions: 0,
+        };
+      }
+      hallUsageMap[entry.hallId].sessions += 1;
+    }
   }
 
   // detect doubles
@@ -159,8 +205,21 @@ export function evaluateSolution(solution, problem, options = {}) {
   const coverage = totalRequired > 0 ? (scheduledCount / totalRequired) : 0;
   const conflictPenalty = (options.conflictWeight || 1) * conflicts.length;
   const fitness = coverage - 0.1 * conflictPenalty; // simple
+  const hallUsage = Object.values(hallUsageMap).sort((a, b) => b.sessions - a.sessions);
 
-  return { schedule, stats: { scheduled: scheduledCount, totalRequired, coverage }, conflicts, fitness };
+  return {
+    schedule,
+    stats: {
+      scheduled: scheduledCount,
+      totalRequired,
+      coverage,
+      hallsFetched: halls.length,
+      hallsUsed: hallUsage.length,
+      hallUsage,
+    },
+    conflicts,
+    fitness,
+  };
 }
 
 // Genetic Algorithm
@@ -313,4 +372,74 @@ export function runACO(problem, opts = {}) {
   return { bestSolution: best.sol, ...best.eval };
 }
 
-export default { buildProblem, evaluateSolution, runGA, runPSO, runACO };
+// Tabu Search
+export function runTabu(problem, opts = {}) {
+  const sessions = problem.sessions.length;
+  const iterations = opts.iterations || 120;
+  const tabuTenure = opts.tabuTenure || 10;
+  const neighborhoodSize = opts.neighborhoodSize || 60;
+
+  function randSolution() {
+    const sol = new Array(sessions);
+    for (let i = 0; i < sessions; i++) {
+      const choices = problem.placements[i].length;
+      sol[i] = Math.floor(Math.random() * choices);
+    }
+    return sol;
+  }
+
+  let current = randSolution();
+  let currentEval = evaluateSolution(current, problem, opts);
+  let best = { sol: current.slice(), eval: currentEval };
+
+  const tabuMap = new Map();
+
+  function keyForMove(sessionIndex, placementIndex) {
+    return `${sessionIndex}:${placementIndex}`;
+  }
+
+  for (let it = 0; it < iterations; it++) {
+    const neighborhood = [];
+
+    for (let n = 0; n < neighborhoodSize; n++) {
+      const sIdx = Math.floor(Math.random() * sessions);
+      const choices = problem.placements[sIdx].length;
+      if (choices <= 1) continue;
+
+      let newChoice = Math.floor(Math.random() * choices);
+      if (newChoice === current[sIdx]) {
+        newChoice = (newChoice + 1) % choices;
+      }
+
+      const candidate = current.slice();
+      candidate[sIdx] = newChoice;
+      const candidateEval = evaluateSolution(candidate, problem, opts);
+      const moveKey = keyForMove(sIdx, newChoice);
+      const tabuUntil = tabuMap.get(moveKey) || -1;
+      const isTabu = tabuUntil > it;
+      const aspiration = candidateEval.fitness > best.eval.fitness;
+
+      if (!isTabu || aspiration) {
+        neighborhood.push({ candidate, eval: candidateEval, moveKey, sIdx, newChoice });
+      }
+    }
+
+    if (neighborhood.length === 0) continue;
+
+    neighborhood.sort((a, b) => b.eval.fitness - a.eval.fitness);
+    const selected = neighborhood[0];
+
+    current = selected.candidate;
+    currentEval = selected.eval;
+
+    tabuMap.set(selected.moveKey, it + tabuTenure);
+
+    if (currentEval.fitness > best.eval.fitness) {
+      best = { sol: current.slice(), eval: currentEval };
+    }
+  }
+
+  return { bestSolution: best.sol, ...best.eval };
+}
+
+export default { buildProblem, evaluateSolution, runGA, runPSO, runACO, runTabu };
