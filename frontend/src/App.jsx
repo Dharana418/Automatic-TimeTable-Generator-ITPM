@@ -50,15 +50,7 @@ function App() {
     fetchUser();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
-        <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-sm font-medium tracking-wide backdrop-blur">
-          Loading dashboard...
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <div className="flex min-h-screen items-center justify-center text-lg font-semibold text-slate-700">Loading...</div>;
 
   return (
     <Router>
@@ -73,7 +65,7 @@ function App() {
             isAuthenticated ? (
               <Navigate to="/dashboard" replace />
             ) : (
-              <section className="auth-wrapper">
+              <section className="flex min-h-screen items-center justify-center bg-zinc-600 p-5">
                 <Login apiBase={API_BASE} onAuthSuccess={handleAuthSuccess} />
               </section>
             )
@@ -86,7 +78,7 @@ function App() {
             isAuthenticated ? (
               <Navigate to="/dashboard" replace />
             ) : (
-              <section className="auth-wrapper">
+              <section className="flex min-h-screen items-center justify-center bg-zinc-600 p-5">
                 <Register apiBase={API_BASE} onAuthSuccess={handleAuthSuccess} />
               </section>
             )

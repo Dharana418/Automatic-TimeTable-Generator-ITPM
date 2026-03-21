@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import sliitLogo from "../src/assets/SLIIT_LOGO.png";
-import "./login.css";
 
 const Register = ({ apiBase, onAuthSuccess }) => {
   const [form, setForm] = useState({
@@ -100,13 +99,14 @@ const Register = ({ apiBase, onAuthSuccess }) => {
   };
 
   return (
-    <div className="auth-card">
-      <img className="auth-logo" src={sliitLogo} alt="SLIIT logo" />
-      <h2 style={{ color: 'black' }}>Register</h2>
-      <form className="form" onSubmit={handleSubmit}>
-        <label className="form__label" htmlFor="name">Full Name</label>
+    <div className="w-full max-w-md rounded-3xl border border-white/50 bg-white/95 px-8 py-10 text-center shadow-[0_24px_60px_rgba(15,23,42,0.22)] backdrop-blur-md">
+      <img className="mx-auto mb-5 block w-20 drop-shadow-sm" src={sliitLogo} alt="SLIIT logo" />
+      <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-indigo-500">Create Account</p>
+      <h2 className="mb-6 text-3xl text-slate-900">Register</h2>
+      <form className="flex flex-col gap-3 text-left" onSubmit={handleSubmit}>
+        <label className="mb-1 text-sm font-semibold text-slate-700" htmlFor="name">Full Name</label>
         <input
-          className="form__input"
+          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-800 outline-none ring-indigo-500 transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2"
           type="text"
           name="name"
           id="name"
@@ -115,11 +115,11 @@ const Register = ({ apiBase, onAuthSuccess }) => {
           required
           placeholder=""
         />
-        {fieldErrors.name && <span className="error-message">{fieldErrors.name}</span>}
+        {fieldErrors.name && <span className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-center text-sm text-red-600">{fieldErrors.name}</span>}
 
-        <label className="form__label" htmlFor="email">Email Address</label>
+        <label className="mb-1 mt-1 text-sm font-semibold text-slate-700" htmlFor="email">Email Address</label>
         <input
-          className="form__input"
+          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-800 outline-none ring-indigo-500 transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2"
           type="email"
           name="email"
           id="email"
@@ -128,11 +128,11 @@ const Register = ({ apiBase, onAuthSuccess }) => {
           required
           placeholder=""
         />
-        {fieldErrors.email && <span className="error-message">{fieldErrors.email}</span>}
+        {fieldErrors.email && <span className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-center text-sm text-red-600">{fieldErrors.email}</span>}
 
-        <label className="form__label" htmlFor="role">Your Role</label>
+        <label className="mb-1 mt-1 text-sm font-semibold text-slate-700" htmlFor="role">Your Role</label>
         <select
-          className="form__input"
+          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-800 outline-none ring-indigo-500 transition focus:border-indigo-400 focus:ring-2"
           name="role"
           id="role"
           value={form.role}
@@ -146,12 +146,12 @@ const Register = ({ apiBase, onAuthSuccess }) => {
           <option value="Lecturer/Senior Lecturer">Lecturer/Senior Lecturer</option>
           <option value="LIC">LIC</option>
         </select>
-        {fieldErrors.role && <span className="error-message">{fieldErrors.role}</span>}
+        {fieldErrors.role && <span className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-center text-sm text-red-600">{fieldErrors.role}</span>}
 
-        <label className="form__label" htmlFor="password">Password</label>
-        <div className="input-wrapper">
+        <label className="mb-1 mt-1 text-sm font-semibold text-slate-700" htmlFor="password">Password</label>
+        <div className="relative w-full">
           <input
-            className="form__input"
+            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 pr-11 text-slate-800 outline-none ring-indigo-500 transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2"
             type={showPassword ? "text" : "password"}
             name="password"
             id="password"
@@ -162,7 +162,7 @@ const Register = ({ apiBase, onAuthSuccess }) => {
           />
           <button
             type="button"
-            className="input-toggle"
+            className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md border-none bg-transparent p-0 text-indigo-950 transition hover:bg-indigo-50"
             aria-label={showPassword ? "Hide password" : "Show password"}
             onClick={() => setShowPassword((s) => !s)}
           >
@@ -181,12 +181,12 @@ const Register = ({ apiBase, onAuthSuccess }) => {
             )}
           </button>
         </div>
-        {fieldErrors.password && <span className="error-message">{fieldErrors.password}</span>}
+        {fieldErrors.password && <span className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-center text-sm text-red-600">{fieldErrors.password}</span>}
 
-        <label className="form__label" htmlFor="confirmPassword">Confirm Password</label>
-        <div className="input-wrapper">
+        <label className="mb-1 mt-1 text-sm font-semibold text-slate-700" htmlFor="confirmPassword">Confirm Password</label>
+        <div className="relative w-full">
           <input
-            className="form__input"
+            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 pr-11 text-slate-800 outline-none ring-indigo-500 transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2"
             type={showConfirmPassword ? "text" : "password"}
             name="confirmPassword"
             id="confirmPassword"
@@ -197,7 +197,7 @@ const Register = ({ apiBase, onAuthSuccess }) => {
           />
           <button
             type="button"
-            className="input-toggle"
+            className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md border-none bg-transparent p-0 text-indigo-950 transition hover:bg-indigo-50"
             aria-label={showConfirmPassword ? "Hide password" : "Show password"}
             onClick={() => setShowConfirmPassword((s) => !s)}
           >
@@ -216,11 +216,11 @@ const Register = ({ apiBase, onAuthSuccess }) => {
             )}
           </button>
         </div>
-        {fieldErrors.confirmPassword && <span className="error-message">{fieldErrors.confirmPassword}</span>}
+        {fieldErrors.confirmPassword && <span className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-center text-sm text-red-600">{fieldErrors.confirmPassword}</span>}
 
-        <label className="form__label" htmlFor="phonenumber">Phone Number</label>
+        <label className="mb-1 mt-1 text-sm font-semibold text-slate-700" htmlFor="phonenumber">Phone Number</label>
         <input
-          className="form__input"
+          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-800 outline-none ring-indigo-500 transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2"
           type="tel"
           name="phonenumber"
           id="phonenumber"
@@ -228,13 +228,13 @@ const Register = ({ apiBase, onAuthSuccess }) => {
           onChange={handleChange}
           placeholder=""
         />
-        {fieldErrors.phonenumber && <span className="error-message">{fieldErrors.phonenumber}</span>}
+        {fieldErrors.phonenumber && <span className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-center text-sm text-red-600">{fieldErrors.phonenumber}</span>}
 
-        {error && <div className="error-message">{error}</div>}
-        {success && <div className="error-message" style={{ color: '#51cf66', background: 'rgba(81,207,102,0.1)', border: '1px solid #51cf66' }}>{success}</div>}
+        {error && <div className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-center text-sm text-red-600">{error}</div>}
+        {success && <div className="rounded-xl border border-emerald-500 bg-emerald-50 px-3 py-2 text-center text-sm text-emerald-600">{success}</div>}
 
         <button
-          className="form__btn"
+          className="mt-2 rounded-xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-slate-900 px-4 py-3 font-bold text-white shadow-lg shadow-indigo-500/30 transition hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
           type="submit"
           disabled={loading}
         >
@@ -245,9 +245,9 @@ const Register = ({ apiBase, onAuthSuccess }) => {
           )}
         </button>
       </form>
-      <div className="auth-footer">
+      <div className="mt-5 text-center text-sm text-slate-700">
         <span>Already have an account?</span>
-        <Link to="/login" className="register-link">Sign in here</Link>
+        <Link to="/login" className="ml-1 font-semibold text-indigo-600 hover:underline">Sign in here</Link>
       </div>
     </div>
   );
