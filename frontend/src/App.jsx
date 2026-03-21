@@ -50,7 +50,15 @@ function App() {
     fetchUser();
   }, []);
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
+        <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-sm font-medium tracking-wide backdrop-blur">
+          Loading dashboard...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Router>
