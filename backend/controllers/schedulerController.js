@@ -76,6 +76,87 @@ export const listItems = async (req, res) => {
   }
 };
 
+export const updateItem = async (req, res) => {
+  try {
+    const { type, id } = req.params;
+    const payload = req.body || {};
+
+    if (!allowedTypes.includes(type)) {
+      return res.status(400).json({ error: 'Invalid data type' });
+    }
+
+    if (!id) {
+      return res.status(400).json({ error: 'Item id is required' });
+    }
+
+    if (type === 'halls') {
+      const { name = null, capacity = null, features = null } = payload;
+      const { rows, rowCount } = await pool.query(
+        `UPDATE halls SET name=$1, capacity=$2, features=$3 WHERE id=$4 RETURNING *`,
+        [name, capacity, features ? JSON.stringify(features) : null, id]
+      );
+      if (!rowCount) return res.status(404).json({ error: 'Item not found' });
+      return res.json({ success: true, item: rows[0] });
+    }
+
+    if (type === 'modules') {
+      const { code = null, name = null, credits = null, lectures_per_week = null, details = null, batch_size = null, day_type = null } = payload;
+      const { rows, rowCount } = await pool.query(
+        `UPDATE modules SET code=$1, name=$2, batch_size=$3, day_type=$4, credits=$5, lectures_per_week=$6, details=$7 WHERE id=$8 RETURNING *`,
+        [code, name, batch_size, day_type, credits, lectures_per_week, details ? JSON.stringify(details) : null, id]
+      );
+      if (!rowCount) return res.status(404).json({ error: 'Item not found' });
+      return res.json({ success: true, item: rows[0] });
+    }
+
+    if (type === 'lics') {
+      const { name = null, department = null, details = null } = payload;
+      const { rows, rowCount } = await pool.query(
+        `UPDATE lics SET name=$1, department=$2, details=$3 WHERE id=$4 RETURNING *`,
+        [name, department, details ? JSON.stringify(details) : null, id]
+      );
+      if (!rowCount) return res.status(404).json({ error: 'Item not found' });
+      return res.json({ success: true, item: rows[0] });
+    }
+
+    if (type === 'instructors') {
+      const { name = null, email = null, department = null, availabilities = null, details = null } = payload;
+      const { rows, rowCount } = await pool.query(
+        `UPDATE instructors SET name=$1, email=$2, department=$3, availabilities=$4, details=$5 WHERE id=$6 RETURNING *`,
+        [name, email, department, availabilities ? JSON.stringify(availabilities) : null, details ? JSON.stringify(details) : null, id]
+      );
+      if (!rowCount) return res.status(404).json({ error: 'Item not found' });
+      return res.json({ success: true, item: rows[0] });
+    }
+
+    return res.status(400).json({ error: 'Unhandled type' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+export const deleteItem = async (req, res) => {
+  try {
+    const { type, id } = req.params;
+
+    if (!allowedTypes.includes(type)) {
+      return res.status(400).json({ error: 'Invalid data type' });
+    }
+
+    if (!id) {
+      return res.status(400).json({ error: 'Item id is required' });
+    }
+
+    const { rowCount } = await pool.query(`DELETE FROM ${type} WHERE id=$1`, [id]);
+    if (!rowCount) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
 export const getLicsWithInstructors = async (req, res) => {
   try {
     const q = `
@@ -167,6 +248,42 @@ export const deleteModuleAssignment = async (req, res) => {
   }
 };
 
+export const updateModuleAssignment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      moduleId,
+      lecturerId,
+      licId,
+      academicYear,
+      semester = null,
+    } = req.body;
+
+    if (!moduleId || !lecturerId || !licId || !academicYear) {
+      return res.status(400).json({ error: 'moduleId, lecturerId, licId and academicYear are required' });
+    }
+
+    const { rows, rowCount } = await pool.query(
+      `UPDATE module_assignments
+       SET module_id=$1, lecturer_id=$2, lic_id=$3, academic_year=$4, semester=$5
+       WHERE id=$6
+       RETURNING *`,
+      [moduleId, lecturerId, licId, academicYear, semester, id]
+    );
+
+    if (!rowCount) {
+      return res.status(404).json({ error: 'Assignment not found' });
+    }
+
+    return res.json({ success: true, item: rows[0] });
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Assignment already exists' });
+    }
+    return res.status(500).json({ error: err.message });
+  }
+};
+
 
 export const resetData = async (req, res) => {
   try {
@@ -181,6 +298,7 @@ export const resetData = async (req, res) => {
 export const runScheduler = async (req, res) => {
   try {
     const { algorithms = ['hybrid'], options = {} } = req.body;
+    const normalizedAlgorithms = (algorithms || []).map((a) => String(a || '').toLowerCase());
 
     // gather data from DB
     const hallsRes = await pool.query('SELECT * FROM halls');
@@ -193,21 +311,34 @@ export const runScheduler = async (req, res) => {
     const lics = licsRes.rows;
     const instructors = instructorsRes.rows;
 
+    if (!halls.length) {
+      return res.status(400).json({
+        error: 'No halls available. Please add halls before running the scheduler engine.',
+      });
+    }
+
     const constraints = { halls, modules, lics, instructors, options };
 
     const results = {};
 
-    if (algorithms.includes('pso')) {
-      results.pso = psoScheduler(constraints);
+    if (normalizedAlgorithms.includes('pso')) {
+      results.pso = psoScheduler(constraints, options);
     }
-    if (algorithms.includes('ant') || algorithms.includes('antcolony')) {
-      results.ant = antColonyScheduler(constraints);
+    if (
+      normalizedAlgorithms.includes('ant') ||
+      normalizedAlgorithms.includes('antcolony') ||
+      normalizedAlgorithms.includes('anticolony')
+    ) {
+      results.ant = antColonyScheduler(constraints, options);
     }
-    if (algorithms.includes('genetic')) {
-      results.genetic = geneticScheduler(constraints);
+    if (normalizedAlgorithms.includes('genetic')) {
+      results.genetic = geneticScheduler(constraints, options);
     }
-    if (algorithms.includes('hybrid')) {
-      results.hybrid = hybridScheduler(constraints);
+    if (normalizedAlgorithms.includes('tabu') || normalizedAlgorithms.includes('tabusearch')) {
+      results.tabu = tabuScheduler(constraints, options);
+    }
+    if (normalizedAlgorithms.includes('hybrid')) {
+      results.hybrid = hybridScheduler(constraints, options);
     }
     if (algorithms.includes('tabu') || algorithms.includes('tabusearch')) {
       results.tabu = tabuScheduler(constraints, options);

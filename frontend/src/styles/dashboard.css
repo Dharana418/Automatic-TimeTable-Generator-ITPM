@@ -172,37 +172,6 @@
   text-align: center;
 }
 
-.ac-3d-card {
-  max-width: 1200px;
-  margin: 2rem auto 0 auto;
-}
-
-.ac-3d-controls {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-  align-items: end;
-}
-
-.ac-3d-controls label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  font-size: 0.85rem;
-  color: #3f4a65;
-  font-weight: 600;
-}
-
-.ac-3d-controls input[type='range'] {
-  width: 100%;
-}
-
-.ac-view-btn {
-  align-self: stretch;
-  text-align: center;
-}
-
 .ac-type-pill {
   display: inline-block;
   background: rgba(102, 126, 234, 0.12);
@@ -213,96 +182,227 @@
   font-weight: 600;
 }
 
-.ac-3d-scene-wrap {
-  width: 100%;
-  min-height: 360px;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #f8fbff 0%, #eef3ff 100%);
-  overflow: auto;
-  padding: 1rem;
+.batch-panel {
+  background: linear-gradient(180deg, #ffffff 0%, #fafbff 100%);
 }
 
-.ac-3d-scene {
-  position: relative;
+.batch-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.8rem;
+}
+
+.batch-count {
+  font-size: 0.85rem;
+  color: #475569;
+  background: #f3f6ff;
+  border: 1px solid #e7ecff;
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+}
+
+.batch-filter-row {
+  margin-bottom: 0.8rem;
+}
+
+.batch-panel .search {
   width: 100%;
-  min-width: 720px;
-  min-height: 320px;
-  perspective: 900px;
-  transform-style: preserve-3d;
+  border: 1px solid #dbe6ff;
   border-radius: 10px;
-  background:
-    linear-gradient(90deg, rgba(118, 128, 162, 0.1) 1px, transparent 1px),
-    linear-gradient(rgba(118, 128, 162, 0.1) 1px, transparent 1px);
-  background-size: 36px 36px;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.9rem;
+  outline: none;
 }
 
-.ac-3d-camera {
-  position: relative;
+.batch-panel .search:focus {
+  border-color: #7b8cff;
+  box-shadow: 0 0 0 3px rgba(123, 140, 255, 0.18);
+}
+
+.batch-summary-row {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.9rem;
+}
+
+.batch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.batch-card {
+  border-radius: 12px;
+  padding: 0.75rem;
+  border: 1px solid #ecf0ff;
+  background: linear-gradient(135deg, #ffffff, #f8faff);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
+}
+
+.batch-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.batch-id {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #1e2a4a;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.batch-mode {
+  font-size: 0.7rem;
+  border-radius: 999px;
+  padding: 0.18rem 0.5rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.batch-mode.weekend {
+  background: #eef8ff;
+  color: #0f4c81;
+  border-color: #d7eeff;
+}
+
+.batch-mode.weekday {
+  background: #f2f3ff;
+  color: #453f94;
+  border-color: #e1e4ff;
+}
+
+.batch-meta-row {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.batch-meta-row span {
+  font-size: 0.72rem;
+  color: #425168;
+  background: #f6f8ff;
+  border: 1px solid #e8edff;
+  border-radius: 999px;
+  padding: 0.15rem 0.45rem;
+}
+
+.batch-load-row {
+  margin-top: 0.65rem;
+}
+
+.batch-load-label {
+  display: flex;
+  justify-content: space-between;
+  color: #475569;
+  font-size: 0.75rem;
+  margin-bottom: 0.3rem;
+}
+
+.batch-load-track {
   width: 100%;
-  min-height: 320px;
-  transform-style: preserve-3d;
-  transform-origin: center 75%;
-  transform: rotateX(var(--rx, 10deg)) rotateZ(var(--rz, -18deg)) scale(var(--zoom, 1));
-  transition: transform 0.2s ease;
+  height: 7px;
+  border-radius: 999px;
+  background: #edf2ff;
+  overflow: hidden;
 }
 
-.ac-3d-empty {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 45%;
-  text-align: center;
-  color: #667;
-  font-weight: 500;
+.batch-load-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #5f85ff, #7c5cff);
 }
 
-.ac-3d-block {
-  position: absolute;
-  width: 56px;
-  height: var(--h);
-  left: var(--x);
-  bottom: calc(30px + var(--z));
-  transform: rotateX(57deg) rotateZ(40deg);
-  transform-style: preserve-3d;
+.ac-dnd-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.7rem;
+  margin-bottom: 1rem;
 }
 
-.ac-3d-block::before,
-.ac-3d-block::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 6px;
+.ac-dnd-board {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
 }
 
-.ac-3d-block::before {
-  background: linear-gradient(135deg, hsl(var(--hue), 75%, 72%), hsl(var(--hue), 70%, 55%));
-  box-shadow: 0 8px 15px rgba(30, 40, 80, 0.18);
-  transform: translateZ(18px);
+.ac-dnd-column {
+  border: 1px solid #ecedf8;
+  border-radius: 12px;
+  padding: 0.8rem;
+  background: #fbfcff;
 }
 
-.ac-3d-block::after {
-  background: linear-gradient(135deg, hsl(var(--hue), 60%, 45%), hsl(var(--hue), 62%, 34%));
-  transform: translateX(14px) translateY(12px) rotateY(90deg);
-  opacity: 0.95;
+.ac-dnd-column h3 {
+  margin: 0 0 0.6rem 0;
+  font-size: 1rem;
+  color: #2d3d73;
 }
 
-.ac-3d-label {
-  position: absolute;
-  left: 64px;
-  top: -2px;
-  min-width: 175px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid #e8ebf4;
-  border-radius: 8px;
-  padding: 0.45rem 0.55rem;
+.ac-dnd-list {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
-  font-size: 0.78rem;
-  color: #2b3658;
-  box-shadow: 0 4px 14px rgba(13, 29, 67, 0.12);
+  gap: 0.6rem;
+  max-height: 360px;
+  overflow: auto;
 }
 
-.ac-3d-label strong {
+.ac-dnd-card {
+  border: 1px solid #dfe4ff;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 0.55rem 0.65rem;
+  cursor: grab;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.82rem;
+  color: #4a577c;
+}
+
+.ac-dnd-card strong {
+  font-size: 0.9rem;
+  color: #233157;
+}
+
+.ac-dnd-card-dragging {
+  opacity: 0.55;
+}
+
+.ac-dnd-dropzone {
+  border: 1px dashed #c8d2ff;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-height: 86px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.ac-dnd-dropzone strong {
+  font-size: 0.9rem;
+  color: #1f2e58;
+}
+
+.ac-dnd-dropzone span {
   font-size: 0.8rem;
+  color: #4e5d86;
+}
+
+.ac-dnd-dropzone-active {
+  border-color: #627dfb;
+  background: #f1f5ff;
+}
+
+@media (max-width: 900px) {
+  .ac-dnd-board {
+    grid-template-columns: 1fr;
+  }
 }

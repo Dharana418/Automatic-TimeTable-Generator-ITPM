@@ -9,9 +9,12 @@ async function request(path, opts = {}) {
 
 export const addItem = (type, payload) => request(`/api/scheduler/${type}`, { method: 'POST', body: JSON.stringify(payload) });
 export const listItems = (type) => request(`/api/scheduler/${type}`, { method: 'GET' });
+export const updateItem = (type, id, payload) => request(`/api/scheduler/${type}/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+export const deleteItem = (type, id) => request(`/api/scheduler/${type}/${id}`, { method: 'DELETE' });
 export const getLicsWithInstructors = () => request(`/api/scheduler/lics-with-instructors`, { method: 'GET' });
 export const listAssignments = () => request(`/api/scheduler/assignments`, { method: 'GET' });
 export const createAssignment = (payload) => request(`/api/scheduler/assignments`, { method: 'POST', body: JSON.stringify(payload) });
+export const updateAssignment = (id, payload) => request(`/api/scheduler/assignments/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
 export const deleteAssignment = (id) => request(`/api/scheduler/assignments/${id}`, { method: 'DELETE' });
 export const runScheduler = (algorithms = ['hybrid'], options = {}) => request('/api/scheduler/run', { method: 'POST', body: JSON.stringify({ algorithms, options }) });
 export const resetSchedulerData = () => request('/api/scheduler/reset', { method: 'POST' });
@@ -19,9 +22,12 @@ export const resetSchedulerData = () => request('/api/scheduler/reset', { method
 export default {
   addItem,
   listItems,
+  updateItem,
+  deleteItem,
   getLicsWithInstructors,
   listAssignments,
   createAssignment,
+  updateAssignment,
   deleteAssignment,
   runScheduler,
   resetSchedulerData,
