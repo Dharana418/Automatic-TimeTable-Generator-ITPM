@@ -29,8 +29,6 @@ const FacultyCoordinatorDashboard = ({ user }) => {
   const [loadingResources, setLoadingResources] = useState(false);
   const navigate = useNavigate();
 
-  const totalInstructors = resources.reduce((acc, item) => acc + (item.instructors?.length || 0), 0);
-
   useEffect(() => {
     let mounted = true;
     async function load() {
@@ -58,25 +56,6 @@ const FacultyCoordinatorDashboard = ({ user }) => {
       </div>
 
       <div className="dashboard-main">
-        <div className="left-col">
-          <div className="action-card">
-            <div>
-              <h3>Timetable Management</h3>
-              <p>Create and manage timetables for your faculty</p>
-            </div>
-            <button className="action-btn">Manage</button>
-          </div>
-          <div className="action-card">
-            <div>
-              <h3>Resource Allocation</h3>
-              <p>Allocate rooms, instructors, and resources</p>
-            </div>
-            <button className="action-btn">Allocate</button>
-          </div>
-
-          <BatchList />
-        </div>
-
         <div className="grid gap-6 lg:grid-cols-[2fr,1fr]">
           <div className="space-y-6">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -122,21 +101,21 @@ const FacultyCoordinatorDashboard = ({ user }) => {
                       {(lic.instructors || []).length === 0 && (
                         <span className="rounded-full bg-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600">No instructors</span>
                       )}
-                      {(lic.instructors || []).slice(0,6).map((ins) => (
+                      {(lic.instructors || []).slice(0, 6).map((ins) => (
                         <button key={ins.id} className="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-medium text-indigo-700">
                           {ins.name || ins.email || ins.id}
                         </button>
                       ))}
                       {(lic.instructors || []).length > 6 && (
-                        <span className="text-xs text-slate-500">+{(lic.instructors||[]).length - 6} more</span>
+                        <span className="text-xs text-slate-500">+{(lic.instructors || []).length - 6} more</span>
                       )}
                     </div>
                   </div>
                 ))}
               </div>
             )}
-          </div>
-        </aside>
+          </aside>
+        </div>
       </div>
     </div>
   );
