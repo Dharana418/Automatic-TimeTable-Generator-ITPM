@@ -1,6 +1,33 @@
 import React, { useMemo, useState } from 'react';
 import batches from '../data/batches.js';
 
+const STREAMS = ['IT', 'SE', 'DS', 'Engineering'];
+
+const getDepartmentLane = (department) => {
+  if (department === 'IT' || department === 'SE' || department === 'DS') {
+    return department;
+  }
+  return 'Engineering';
+};
+
+const getBatchMeta = (batchId) => {
+  const parts = batchId.split('.');
+  const year = parts[0] || 'Y?';
+  const semester = parts[1] || 'S?';
+  const mode = parts[2] || '';
+  const department = parts[3] || 'GEN';
+  const group = parts[4] || '--';
+
+  return {
+    year,
+    semester,
+    mode,
+    department,
+    group,
+    isWeekend: mode === 'WE',
+  };
+};
+
 export default function BatchList({ initialQuery = '' }) {
   const [query, setQuery] = useState(initialQuery);
 
@@ -10,23 +37,95 @@ export default function BatchList({ initialQuery = '' }) {
     return batches.filter(b => b.id.toLowerCase().includes(q));
   }, [query]);
 
+  const streamBuckets = useMemo(() => {
+    const seeded = STREAMS.reduce((acc, stream) => {
+      acc[stream] = [];
+      return acc;
+    }, {});
+
+    list.forEach((batch) => {
+      const meta = getBatchMeta(batch.id);
+      const lane = getDepartmentLane(meta.department);
+      seeded[lane].push(batch);
+    });
+
+    return seeded;
+  }, [list]);
+
   return (
-    <div className="panel">
-      <h4>Batches</h4>
-      <div style={{display:'flex',gap:8,marginBottom:12}}>
-        <input className="search" placeholder="Search batch (e.g. Y2.S2)" value={query} onChange={e=>setQuery(e.target.value)} />
-        <div style={{minWidth:120,alignSelf:'center',color:'#475569'}}>{list.length} shown</div>
+    <div className="panel batch-panel">
+      <div className="batch-panel-head">
+        <h4>Batch Studio</h4>
+        <div className="batch-count">{list.length} shown</div>
       </div>
 
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:8}}>
-        {list.map(b => (
-          <div key={b.id} style={{background:'#fff',padding:10,borderRadius:8,boxShadow:'0 4px 12px rgba(15,23,42,0.04)'}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-              <div style={{fontWeight:700}}>{b.id}</div>
-              <div style={{fontSize:12,color:'#64748b'}}>{b.capacity} cap</div>
-            </div>
-          </div>
+      <div className="batch-filter-row">
+        <input
+          className="search"
+          placeholder="Search batch (e.g. Y2.S2.WE)"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </div>
+
+      <div className="batch-summary-row">
+        {STREAMS.map((stream) => (
+          <span key={stream} className="chip">{stream}: {streamBuckets[stream].length}</span>
         ))}
+      </div>
+
+      <div className="batch-lanes">
+        {STREAMS.map((stream) => (
+          <section key={stream} className="batch-lane">
+            <div className="batch-lane-head">
+              <h5>{stream} Batches</h5>
+              <span>{streamBuckets[stream].length}</span>
+            </div>
+
+            <div className="batch-grid">
+              {streamBuckets[stream].map((batch) => {
+                const meta = getBatchMeta(batch.id);
+                const occupancyPercent = Math.min(100, Math.round((batch.capacity / 120) * 100));
+
+                return (
+                  <div key={batch.id} className="batch-card">
+                    <div className="batch-card-head">
+                      <div className="batch-id">{batch.id}</div>
+                      <span className={`batch-mode ${meta.isWeekend ? 'weekend' : 'weekday'}`}>
+                        {meta.isWeekend ? 'Weekend' : 'Weekday'}
+                      </span>
+                    </div>
+
+                    <div className="batch-meta-row">
+                      <span>{meta.year}</span>
+                      <span>{meta.semester}</span>
+                      <span>{meta.department}</span>
+                      <span>G{meta.group}</span>
+                    </div>
+
+                    <div className="batch-load-row">
+                      <div className="batch-load-label">
+                        <span>Capacity</span>
+                        <span>{batch.capacity}</span>
+                      </div>
+                      <div className="batch-load-track">
+                        <div className="batch-load-bar" style={{ width: `${occupancyPercent}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {streamBuckets[stream].length === 0 && (
+                <div className="muted">No {stream} batches for this filter.</div>
+              )}
+            </div>
+          </section>
+        ))}
+
+        {list.length === 0 && (
+          <div className="muted">No batches match your search.</div>
+        )}
       </div>
     </div>
   );
