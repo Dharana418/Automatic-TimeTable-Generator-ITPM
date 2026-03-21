@@ -3,37 +3,45 @@ import pool from '../config/db.js';
 // Get dashboard statistics
 export const getDashboardStats = async (req, res) => {
     try {
-        // Get timetables count by status
         const timetablesQuery = `
             SELECT 
-                COALESCE(ta.status, 'pending') as status,
-                COUNT(*) as count
+                COUNT(*) as total_timetables,
+                COUNT(CASE WHEN ta.status = 'pending' OR ta.status IS NULL THEN 1 END) as pending_approvals,
+                COUNT(CASE WHEN ta.status = 'approved' THEN 1 END) as approved_timetables,
+                COUNT(CASE WHEN ta.status = 'rejected' THEN 1 END) as rejected_timetables
             FROM timetables t
             LEFT JOIN timetable_approvals ta ON t.id = ta.timetable_id
-            GROUP BY ta.status
-            UNION ALL
-            SELECT 'total' as status, COUNT(*) as count FROM timetables
         `;
         
-        // Get conflicts count
         const conflictsQuery = `
             SELECT 
                 COUNT(*) as total_conflicts,
+                COUNT(CASE WHEN severity = 'high' AND resolved = false THEN 1 END) as high_severity_active,
                 COUNT(CASE WHEN resolved = false THEN 1 END) as active_conflicts,
                 COUNT(CASE WHEN resolved = true THEN 1 END) as resolved_conflicts
             FROM scheduling_conflicts
         `;
         
-        const [timetablesResult, conflictsResult] = await Promise.all([
+        const resourcesQuery = `
+            SELECT 
+                COUNT(*) as total_resources,
+                COUNT(CASE WHEN features::text ILIKE '%lab%' THEN 1 END) as labs,
+                COUNT(CASE WHEN features::text ILIKE '%hall%' THEN 1 END) as halls
+            FROM halls
+        `;
+        
+        const [timetables, conflicts, resources] = await Promise.all([
             pool.query(timetablesQuery),
-            pool.query(conflictsQuery)
+            pool.query(conflictsQuery),
+            pool.query(resourcesQuery)
         ]);
         
         res.json({
             success: true,
             data: {
-                timetables: timetablesResult.rows,
-                conflicts: conflictsResult.rows[0]
+                timetables: timetables.rows[0],
+                conflicts: conflicts.rows[0],
+                resources: resources.rows[0]
             }
         });
     } catch (error) {
@@ -115,7 +123,6 @@ export const approveTimetable = async (req, res) => {
         
         await client.query('BEGIN');
         
-        // Check if timetable exists
         const timetableCheck = await client.query(
             'SELECT id, name FROM timetables WHERE id = $1',
             [id]
@@ -129,7 +136,6 @@ export const approveTimetable = async (req, res) => {
             });
         }
         
-        // Check if already approved
         const existingApproval = await client.query(
             'SELECT status FROM timetable_approvals WHERE timetable_id = $1',
             [id]
@@ -143,7 +149,6 @@ export const approveTimetable = async (req, res) => {
             });
         }
         
-        // Update or insert approval
         const approvalResult = await client.query(
             `INSERT INTO timetable_approvals (timetable_id, coordinator_id, status, comments, approved_at)
              VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
@@ -157,7 +162,6 @@ export const approveTimetable = async (req, res) => {
             [id, req.user.id, 'approved', comments]
         );
         
-        // Update timetable status
         await client.query(
             'UPDATE timetables SET status = $1 WHERE id = $2',
             ['approved', id]
@@ -199,7 +203,6 @@ export const rejectTimetable = async (req, res) => {
         
         await client.query('BEGIN');
         
-        // Check if timetable exists
         const timetableCheck = await client.query(
             'SELECT id, name FROM timetables WHERE id = $1',
             [id]
@@ -359,24 +362,20 @@ export const getScheduleReports = async (req, res) => {
                 SELECT 
                     COUNT(DISTINCT t.id) as total_timetables,
                     COUNT(DISTINCT CASE WHEN ta.status = 'approved' THEN t.id END) as approved_timetables,
-                    COUNT(DISTINCT CASE WHEN ta.status = 'pending' THEN t.id END) as pending_timetables,
+                    COUNT(DISTINCT CASE WHEN ta.status = 'pending' OR ta.status IS NULL THEN t.id END) as pending_timetables,
                     COUNT(DISTINCT CASE WHEN ta.status = 'rejected' THEN t.id END) as rejected_timetables,
                     COUNT(DISTINCT sc.id) as total_conflicts,
                     COUNT(DISTINCT CASE WHEN sc.resolved = true THEN sc.id END) as resolved_conflicts,
-                    COUNT(DISTINCT CASE WHEN sc.resolved = false THEN sc.id END) as active_conflicts,
                     ROUND(COUNT(DISTINCT CASE WHEN ta.status = 'approved' THEN t.id END)::numeric / 
-                          NULLIF(COUNT(DISTINCT t.id), 0) * 100, 2) as approval_rate,
-                    ROUND(COUNT(DISTINCT CASE WHEN sc.resolved = true THEN sc.id END)::numeric / 
-                          NULLIF(COUNT(DISTINCT sc.id), 0) * 100, 2) as resolution_rate
+                          NULLIF(COUNT(DISTINCT t.id), 0) * 100, 2) as approval_rate
                 FROM timetables t
                 LEFT JOIN timetable_approvals ta ON t.id = ta.timetable_id
                 LEFT JOIN scheduling_conflicts sc ON t.id = sc.timetable_id
                 WHERE ($1::date IS NULL OR t.created_at >= $1::date)
                 AND ($2::date IS NULL OR t.created_at <= $2::date)
             `;
-            
             result = await pool.query(query, [start_date || null, end_date || null]);
-        } else if (report_type === 'detailed') {
+        } else {
             const query = `
                 SELECT 
                     t.id as timetable_id,
@@ -386,8 +385,7 @@ export const getScheduleReports = async (req, res) => {
                     t.created_at,
                     ta.status as approval_status,
                     ta.approved_at,
-                    COUNT(DISTINCT sc.id) as conflict_count,
-                    COUNT(DISTINCT CASE WHEN sc.resolved = true THEN sc.id END) as resolved_conflicts
+                    COUNT(DISTINCT sc.id) as conflict_count
                 FROM timetables t
                 LEFT JOIN timetable_approvals ta ON t.id = ta.timetable_id
                 LEFT JOIN scheduling_conflicts sc ON t.id = sc.timetable_id
@@ -395,8 +393,8 @@ export const getScheduleReports = async (req, res) => {
                 AND ($2::date IS NULL OR t.created_at <= $2::date)
                 GROUP BY t.id, t.name, t.semester, t.year, t.created_at, ta.status, ta.approved_at
                 ORDER BY t.created_at DESC
+                LIMIT 50
             `;
-            
             result = await pool.query(query, [start_date || null, end_date || null]);
         }
         
@@ -406,7 +404,7 @@ export const getScheduleReports = async (req, res) => {
                 report_type,
                 period: { start_date, end_date },
                 generated_at: new Date(),
-                ...result.rows[0]
+                ...(result.rows[0] || {})
             }
         });
     } catch (error) {
@@ -475,7 +473,6 @@ export const createAcademicEvent = async (req, res) => {
     try {
         const { event_name, event_type, start_date, end_date, academic_year, semester } = req.body;
         
-        // Validation
         if (!event_name || !event_type || !start_date || !end_date || !academic_year) {
             return res.status(400).json({ 
                 success: false, 
@@ -591,7 +588,6 @@ export const overrideConstraint = async (req, res) => {
             });
         }
         
-        // Log the override (you can store in a separate table if needed)
         console.log(`[OVERRIDE] ${new Date().toISOString()} - User ${req.user.id} overrode ${constraint_type}: ${reason}`);
         
         res.json({

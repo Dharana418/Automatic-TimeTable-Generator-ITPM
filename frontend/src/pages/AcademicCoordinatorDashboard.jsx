@@ -13,7 +13,6 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   const [assignments, setAssignments] = useState([]);
   const [timetables, setTimetables] = useState([]);
   const [conflicts, setConflicts] = useState([]);
-  const [stats, setStats] = useState(null);
   const [academicCalendar, setAcademicCalendar] = useState([]);
   
   // Form states
@@ -70,7 +69,6 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
         loadAssignments(),
         loadTimetables(),
         loadConflicts(),
-        loadStats(),
         loadAcademicCalendar()
       ]);
     } catch (err) {
@@ -154,20 +152,6 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
     }
   };
 
-  const loadStats = async () => {
-    try {
-      const response = await fetch(`${apiBase}/api/academic-coordinator/stats`, {
-        credentials: 'include'
-      });
-      const data = await response.json();
-      if (data.success) {
-        setStats(data.data);
-      }
-    } catch (err) {
-      console.error('Failed to load stats:', err);
-    }
-  };
-
   const loadAcademicCalendar = async () => {
     try {
       const response = await fetch(`${apiBase}/api/academic-coordinator/calendar`, {
@@ -191,6 +175,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       showMessage('Lecturer added successfully');
       await loadLecturers();
     } catch (err) {
+      console.error('Add lecturer error:', err);
       showMessage(err.message || 'Failed to add lecturer', 'error');
     }
   };
@@ -203,18 +188,30 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       showMessage('LIC added successfully');
       await loadLics();
     } catch (err) {
+      console.error('Add LIC error:', err);
       showMessage(err.message || 'Failed to add LIC', 'error');
     }
   };
 
   const addModule = async (e) => {
     e.preventDefault();
+    
+    if (!moduleForm.code || !moduleForm.name) {
+      showMessage('Module code and name are required', 'error');
+      return;
+    }
+    
+    console.log('Submitting module:', moduleForm);
+    
     try {
-      await schedulerApi.addItem('modules', moduleForm);
+      const response = await schedulerApi.addItem('modules', moduleForm);
+      console.log('Module added response:', response);
+      
       setModuleForm({ code: '', name: '', batch_size: '', credits: '', lectures_per_week: '' });
       showMessage('Module added successfully');
       await loadModules();
     } catch (err) {
+      console.error('Add module error:', err);
       showMessage(err.message || 'Failed to add module', 'error');
     }
   };
@@ -395,10 +392,17 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       .filter((value) => value !== null && value !== undefined && value !== '')
   ).size;
 
-  // Calculate statistics
   const pendingApprovals = timetables.filter(t => t.approval_status === 'pending' || !t.approval_status).length;
   const activeConflicts = conflicts.filter(c => !c.resolved).length;
   const highSeverityConflicts = conflicts.filter(c => c.severity === 'high' && !c.resolved).length;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-lg text-gray-600">Loading dashboard...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="dashboard-container ac-dashboard">
@@ -486,11 +490,19 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
               <div className="ac-table-wrapper">
                 <table className="ac-table">
                   <thead>
-                    <tr><th>Name</th><th>Semester</th><th>Year</th><th>Status</th><th>Actions</th></tr>
+                    <tr>
+                      <th>Name</th>
+                      <th>Semester</th>
+                      <th>Year</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
                   </thead>
                   <tbody>
                     {timetables.length === 0 && (
-                      <tr><td colSpan="5" className="ac-empty-row">No timetables available</td></tr>
+                      <tr>
+                        <td colSpan="5" className="ac-empty-row">No timetables available</td>
+                      </tr>
                     )}
                     {timetables.map((timetable) => (
                       <tr key={timetable.id}>
@@ -523,18 +535,26 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
             <div className="panel">
               <h3>⚠️ Scheduling Conflicts</h3>
               {highSeverityConflicts > 0 && (
-                <div style={{ background: '#fee2e2', color: '#dc2626', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
+                <div className="bg-red-50 text-red-700 p-3 rounded-lg mb-4 border border-red-200">
                   ⚠️ {highSeverityConflicts} high severity conflicts require immediate attention!
                 </div>
               )}
               <div className="ac-table-wrapper">
                 <table className="ac-table">
                   <thead>
-                    <tr><th>Type</th><th>Description</th><th>Severity</th><th>Timetable</th><th>Action</th></tr>
+                    <tr>
+                      <th>Type</th>
+                      <th>Description</th>
+                      <th>Severity</th>
+                      <th>Timetable</th>
+                      <th>Action</th>
+                    </tr>
                   </thead>
                   <tbody>
                     {conflicts.length === 0 && (
-                      <tr><td colSpan="5" className="ac-empty-row">No conflicts found</td></tr>
+                      <tr>
+                        <td colSpan="5" className="ac-empty-row">No conflicts found</td>
+                      </tr>
                     )}
                     {conflicts.map((conflict) => (
                       <tr key={conflict.id}>
@@ -563,7 +583,13 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
               <div className="ac-table-wrapper">
                 <table className="ac-table">
                   <thead>
-                    <tr><th>Name</th><th>Type</th><th>Building</th><th>Floor</th><th>Capacity</th></tr>
+                    <tr>
+                      <th>Name</th>
+                      <th>Type</th>
+                      <th>Building</th>
+                      <th>Floor</th>
+                      <th>Capacity</th>
+                    </tr>
                   </thead>
                   <tbody>
                     {campusStructures.map((structure) => (
@@ -584,7 +610,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
           {/* Calendar Tab Content */}
           {activeTab === 'calendar' && (
             <div className="panel">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+              <div className="flex justify-between items-center mb-4">
                 <h3>📆 Academic Calendar</h3>
                 <button className="primary" onClick={() => setShowCalendarForm(!showCalendarForm)}>
                   {showCalendarForm ? 'Cancel' : '+ Add Event'}
@@ -592,10 +618,10 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
               </div>
               
               {showCalendarForm && (
-                <form onSubmit={addCalendarEvent} style={{ marginBottom: '20px', padding: '15px', background: '#f9fafb', borderRadius: '8px' }}>
-                  <input className="ac-input" placeholder="Event Name" value={calendarEventForm.event_name}
+                <form onSubmit={addCalendarEvent} className="mb-5 p-4 bg-gray-50 rounded-lg">
+                  <input className="ac-input mb-2" placeholder="Event Name" value={calendarEventForm.event_name}
                     onChange={(e) => setCalendarEventForm({ ...calendarEventForm, event_name: e.target.value })} required />
-                  <select className="ac-input" value={calendarEventForm.event_type}
+                  <select className="ac-input mb-2" value={calendarEventForm.event_type}
                     onChange={(e) => setCalendarEventForm({ ...calendarEventForm, event_type: e.target.value })}>
                     <option value="semester_start">Semester Start</option>
                     <option value="semester_end">Semester End</option>
@@ -603,11 +629,11 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
                     <option value="holiday">Holiday</option>
                     <option value="special_event">Special Event</option>
                   </select>
-                  <input className="ac-input" type="date" placeholder="Start Date" value={calendarEventForm.start_date}
+                  <input className="ac-input mb-2" type="date" placeholder="Start Date" value={calendarEventForm.start_date}
                     onChange={(e) => setCalendarEventForm({ ...calendarEventForm, start_date: e.target.value })} required />
-                  <input className="ac-input" type="date" placeholder="End Date" value={calendarEventForm.end_date}
+                  <input className="ac-input mb-2" type="date" placeholder="End Date" value={calendarEventForm.end_date}
                     onChange={(e) => setCalendarEventForm({ ...calendarEventForm, end_date: e.target.value })} required />
-                  <button className="dashboard-btn" type="submit">Add Event</button>
+                  <button className="dashboard-btn w-full" type="submit">Add Event</button>
                 </form>
               )}
 
@@ -679,10 +705,14 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
               <button type="button" className="dashboard-btn ac-inline-btn" onClick={applyCatalogModule}>
                 Use Selected
               </button>
-              <input className="ac-input" placeholder="Module code" value={moduleForm.code}
+              <input className="ac-input" placeholder="Module code (required)" value={moduleForm.code}
                 onChange={(e) => setModuleForm({ ...moduleForm, code: e.target.value })} required />
-              <input className="ac-input" placeholder="Module name" value={moduleForm.name}
+              <input className="ac-input" placeholder="Module name (required)" value={moduleForm.name}
                 onChange={(e) => setModuleForm({ ...moduleForm, name: e.target.value })} required />
+              <input className="ac-input" placeholder="Credits (optional)" value={moduleForm.credits}
+                onChange={(e) => setModuleForm({ ...moduleForm, credits: e.target.value })} />
+              <input className="ac-input" placeholder="Lectures per week (optional)" value={moduleForm.lectures_per_week}
+                onChange={(e) => setModuleForm({ ...moduleForm, lectures_per_week: e.target.value })} />
               <button className="dashboard-btn" type="submit">Add Module</button>
             </form>
           </div>
@@ -729,7 +759,12 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
             <div className="ac-table-wrapper">
               <table className="ac-table">
                 <thead>
-                  <tr><th>Module</th><th>Lecturer</th><th>Year/Sem</th><th></th></tr>
+                  <tr>
+                    <th>Module</th>
+                    <th>Lecturer</th>
+                    <th>Year/Sem</th>
+                    <th></th>
+                  </tr>
                 </thead>
                 <tbody>
                   {assignments.slice(0, 5).map((assignment) => (

@@ -37,26 +37,27 @@ const Login = ({ apiBase, onAuthSuccess }) => {
   };
 
   return (
-    <div className="w-full max-w-md rounded-3xl border border-slate-300/50 bg-white/90 px-8 py-10 text-center shadow-2xl backdrop-blur-md">
-      <img src={sliitLogo} alt="SLIIT Logo" className="mx-auto mb-5 block w-20" />
+    <div className="w-full max-w-md rounded-3xl border border-white/50 bg-white/95 px-8 py-10 text-center shadow-[0_24px_60px_rgba(15,23,42,0.22)] backdrop-blur-md">
+      <img src={sliitLogo} alt="SLIIT Logo" className="mx-auto mb-5 block w-20 drop-shadow-sm" />
+      <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-indigo-500">Welcome Back</p>
       <h2 className="mb-6 text-3xl text-slate-900">Sign In</h2>
 
       <form className="flex flex-col gap-3 text-left" onSubmit={handleSubmit}>
-        <label className="mb-1 font-semibold text-indigo-950">Email</label>
+        <label className="mb-1 text-sm font-semibold text-slate-700">Email</label>
         <input
           type="email"
-          className="w-full rounded-md border border-slate-300 bg-white px-3 py-3 text-slate-800 outline-none ring-indigo-500 transition focus:ring-2"
+          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-800 outline-none ring-indigo-500 transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2"
           placeholder="Enter your email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
         />
 
-        <label className="mb-1 mt-1 font-semibold text-indigo-950">Password</label>
+        <label className="mb-1 mt-1 text-sm font-semibold text-slate-700">Password</label>
         <div className="relative w-full">
           <input
             type={showPassword ? "text" : "password"}
-            className="w-full rounded-md border border-slate-300 bg-white px-3 py-3 pr-11 text-slate-800 outline-none ring-indigo-500 transition focus:ring-2"
+            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 pr-11 text-slate-800 outline-none ring-indigo-500 transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2"
             placeholder="Enter your password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -64,7 +65,7 @@ const Login = ({ apiBase, onAuthSuccess }) => {
           />
           <button
             type="button"
-            className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center border-none bg-transparent p-0 text-indigo-950"
+            className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md border-none bg-transparent p-0 text-indigo-950 transition hover:bg-indigo-50"
             aria-label={showPassword ? "Hide password" : "Show password"}
             onClick={() => setShowPassword((s) => !s)}
           >
@@ -84,15 +85,15 @@ const Login = ({ apiBase, onAuthSuccess }) => {
           </button>
         </div>
 
-        {error && <div className="rounded-lg border border-red-300 bg-red-100 px-3 py-2 text-center text-red-500">{error}</div>}
+        {error && <div className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-center text-sm text-red-600">{error}</div>}
 
-        <button type="submit" className="mt-1 rounded-xl bg-gradient-to-br from-indigo-400 to-indigo-950 px-4 py-3 font-bold text-white transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70" disabled={loading}>
+        <button type="submit" className="mt-2 rounded-xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-slate-900 px-4 py-3 font-bold text-white shadow-lg shadow-indigo-500/30 transition hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70" disabled={loading}>
           {loading ? "Signing In..." : "Sign In"}
         </button>
       </form>
 
-      <div className="mt-5 text-center text-indigo-950">
-        Don’t have an account? <Link to="/register">Register</Link>
+      <div className="mt-5 text-center text-sm text-slate-700">
+        Don’t have an account? <Link to="/register" className="font-semibold text-indigo-600 hover:underline">Register</Link>
       </div>
     </div>
   );
