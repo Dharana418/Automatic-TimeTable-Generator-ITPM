@@ -1,5 +1,4 @@
 import React from 'react';
-import '../styles/dashboard.css';
 
 const DashboardCards = ({ cards }) => (
   <div className="dashboard-grid">

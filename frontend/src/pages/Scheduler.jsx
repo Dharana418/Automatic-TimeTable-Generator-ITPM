@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import schedulerApi from '../api/scheduler.js';
-import '../styles/dashboard.css';
 
 const types = ['halls','modules','instructors','lics'];
 
