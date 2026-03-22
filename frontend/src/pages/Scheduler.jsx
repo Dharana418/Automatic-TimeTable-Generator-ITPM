@@ -31,7 +31,7 @@ export default function Scheduler() {
   async function handleRun(){
     setLoading(true); setResult(null);
     try{
-      const res = await schedulerApi.runScheduler(['pso','ant','genetic','hybrid'], { iterations: 80 });
+      const res = await schedulerApi.runScheduler(['pso','anticolony','genetic','tabu','hybrid'], { iterations: 80 });
       setResult(res.results);
     }catch(err){ alert(err.message); }
     setLoading(false);
@@ -72,6 +72,11 @@ export default function Scheduler() {
                 <h4>{k.toUpperCase()}</h4>
                 <div>Coverage: {result[k].stats?.coverage?.toFixed?.(2) || '-' } ({result[k].stats?.scheduled}/{result[k].stats?.totalRequired})</div>
                 <div>Conflicts: {result[k].conflicts?.length || 0}</div>
+                <div>Halls: fetched {result[k].stats?.hallsFetched ?? '-'} • used {result[k].stats?.hallsUsed ?? '-'}</div>
+                <details>
+                  <summary>Hall usage ({result[k].stats?.hallUsage?.length || 0})</summary>
+                  <pre style={{whiteSpace:'pre-wrap'}}>{JSON.stringify(result[k].stats?.hallUsage || [], null, 2)}</pre>
+                </details>
                 <details>
                   <summary>Schedule preview ({result[k].schedule?.length || 0})</summary>
                   <pre style={{whiteSpace:'pre-wrap'}}>{JSON.stringify(result[k].schedule?.slice(0,100),null,2)}</pre>
