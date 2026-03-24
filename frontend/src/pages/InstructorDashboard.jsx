@@ -13,7 +13,7 @@ const InstructorDashboard = ({ user }) => {
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 rounded-3xl border border-white/10 bg-gradient-to-r from-slate-900 via-indigo-900 to-violet-900 p-6 shadow-2xl shadow-indigo-900/40 md:p-8">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-200">Teaching Center</p>
-          <h1 className="mt-2 text-3xl font-bold text-white md:text-4xl">Instructor Dashboard</h1>
+          <h1 className="mt-2 text-3xl font-black text-white md:text-4xl">Instructor Dashboard</h1>
           <p className="mt-2 text-slate-200">Welcome, {user?.username || 'User'}</p>
         </div>
 
