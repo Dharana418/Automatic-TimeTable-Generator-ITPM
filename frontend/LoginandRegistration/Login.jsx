@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
 import sliitLogo from "../src/assets/SLIIT_LOGO.png";
+import { showError, showSuccess, showWarning } from "../src/utils/alerts.js";
 
 const Login = ({ apiBase, onAuthSuccess }) => {
   const [email, setEmail] = useState("");
@@ -11,6 +11,20 @@ const Login = ({ apiBase, onAuthSuccess }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!email.trim()) {
+      showWarning("Validation required", "Email is required.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showWarning("Validation required", "Please enter a valid email address.");
+      return;
+    }
+    if (!password) {
+      showWarning("Validation required", "Password is required.");
+      return;
+    }
+
     setLoading(true);
     setError("");
 
@@ -28,9 +42,11 @@ const Login = ({ apiBase, onAuthSuccess }) => {
         throw new Error(data.message || "Login failed");
       }
 
+      showSuccess("Login successful", "Welcome back.");
       onAuthSuccess(data.user);
     } catch (err) {
       setError(err.message);
+      showError("Login failed", err.message || "Unable to sign in");
     } finally {
       setLoading(false);
     }
@@ -91,10 +107,6 @@ const Login = ({ apiBase, onAuthSuccess }) => {
           {loading ? "Signing In..." : "Sign In"}
         </button>
       </form>
-
-      <div className="mt-5 text-center text-sm text-slate-700">
-        Don’t have an account? <Link to="/register" className="font-semibold text-indigo-600 hover:underline">Register</Link>
-      </div>
     </div>
   );
 };

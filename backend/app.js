@@ -96,9 +96,18 @@ const startServer = async () => {
     
     // 404 handler
     app.use((req, res) => {
+        const methodHint =
+            req.originalUrl === '/api/auth/bootstrap-admin'
+                ? 'Use POST /api/auth/bootstrap-admin'
+                : req.originalUrl === '/api/auth/admin/users'
+                    ? 'Use POST /api/auth/admin/users'
+                    : null;
+
         res.status(404).json({
             success: false,
-            message: `Route ${req.originalUrl} not found`
+            message: `Route ${req.originalUrl} not found`,
+            method: req.method,
+            ...(methodHint ? { hint: methodHint } : {}),
         });
     });
     

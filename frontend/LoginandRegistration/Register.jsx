@@ -1,6 +1,10 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import sliitLogo from "../src/assets/SLIIT_LOGO.png";
+import { showError, showSuccess, showWarning } from "../src/utils/alerts.js";
+
+const NAME_SPECIAL_CHARS = /[~!@#$%^&*()_+]/;
+const PASSWORD_SPECIAL_CHARS = /[^A-Za-z0-9]/;
 
 const Register = ({ apiBase, onAuthSuccess }) => {
   const [form, setForm] = useState({
@@ -9,7 +13,6 @@ const Register = ({ apiBase, onAuthSuccess }) => {
     password: "",
     confirmPassword: "",
     phonenumber: "",
-    role: "",
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -24,6 +27,8 @@ const Register = ({ apiBase, onAuthSuccess }) => {
       errors.name = "Full name is required";
     } else if (form.name.trim().length < 3) {
       errors.name = "Name must be at least 3 characters";
+    } else if (NAME_SPECIAL_CHARS.test(form.name.trim())) {
+      errors.name = "Name cannot contain ~!@#$%^&*()_+";
     }
     if (!form.email.trim()) {
       errors.email = "Email is required";
@@ -34,14 +39,13 @@ const Register = ({ apiBase, onAuthSuccess }) => {
       errors.password = "Password is required";
     } else if (form.password.length < 6) {
       errors.password = "Password must be at least 6 characters";
+    } else if (PASSWORD_SPECIAL_CHARS.test(form.password)) {
+      errors.password = "Password can contain letters and numbers only";
     }
     if (!form.confirmPassword) {
       errors.confirmPassword = "Please confirm your password";
     } else if (form.password !== form.confirmPassword) {
       errors.confirmPassword = "Passwords do not match";
-    }
-    if (!form.role) {
-      errors.role = "Please select a role";
     }
     if (form.phonenumber) {
       const digits = form.phonenumber.replace(/\D/g, '');
@@ -67,6 +71,7 @@ const Register = ({ apiBase, onAuthSuccess }) => {
     const errors = validateForm();
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
+      showWarning("Validation required", Object.values(errors)[0]);
       return;
     }
     setFieldErrors({});
@@ -83,16 +88,21 @@ const Register = ({ apiBase, onAuthSuccess }) => {
       if (response.ok) {
         const data = await response.json();
         setSuccess("Account created successfully! Redirecting to dashboard...");
+        showSuccess("Registration successful", "Account created successfully.");
         setTimeout(() => {
           onAuthSuccess?.(data.user ?? null);
         }, 1500);
       } else {
         const errorData = await response.json();
-        setError(errorData.error || "Registration failed. Please try again.");
+        const errorMessage = errorData.error || "Registration failed. Please try again.";
+        setError(errorMessage);
+        showError("Registration failed", errorMessage);
       }
     } catch (error) {
       console.error(error);
-      setError(error.message || "An error occurred during registration. Please try again.");
+      const errorMessage = error.message || "An error occurred during registration. Please try again.";
+      setError(errorMessage);
+      showError("Registration failed", errorMessage);
     } finally {
       setLoading(false);
     }
@@ -129,24 +139,6 @@ const Register = ({ apiBase, onAuthSuccess }) => {
           placeholder=""
         />
         {fieldErrors.email && <span className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-center text-sm text-red-600">{fieldErrors.email}</span>}
-
-        <label className="mb-1 mt-1 text-sm font-semibold text-slate-700" htmlFor="role">Your Role</label>
-        <select
-          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-800 outline-none ring-indigo-500 transition focus:border-indigo-400 focus:ring-2"
-          name="role"
-          id="role"
-          value={form.role}
-          onChange={handleChange}
-          required
-        >
-          <option value="">Select your role...</option>
-          <option value="Faculty Coordinator">Faculty Coordinator</option>
-          <option value="Academic Coordinator">Academic Coordinator</option>
-          <option value="Instructor">Instructor</option>
-          <option value="Lecturer/Senior Lecturer">Lecturer/Senior Lecturer</option>
-          <option value="LIC">LIC</option>
-        </select>
-        {fieldErrors.role && <span className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-center text-sm text-red-600">{fieldErrors.role}</span>}
 
         <label className="mb-1 mt-1 text-sm font-semibold text-slate-700" htmlFor="password">Password</label>
         <div className="relative w-full">

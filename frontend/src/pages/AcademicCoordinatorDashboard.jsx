@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react';
 import schedulerApi from '../api/scheduler.js';
 import moduleCatalog from '../data/moduleCatalog.js';
 import HallAllocation from '../components/HallAllocation.jsx';
+import { askForText, confirmDelete, showError, showSuccess, showWarning } from '../utils/alerts.js';
+
+const FORBIDDEN_SPECIAL_CHARS = /[~!@#$%^&*()_+]/;
 
 const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -171,26 +174,52 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   // CRUD Operations
   const addLecturer = async (e) => {
     e.preventDefault();
+    if (!lecturerForm.name.trim()) {
+      showWarning('Validation required', 'Lecturer name is required.');
+      return;
+    }
+    if (FORBIDDEN_SPECIAL_CHARS.test(lecturerForm.name.trim()) || FORBIDDEN_SPECIAL_CHARS.test(lecturerForm.department.trim())) {
+      showWarning('Validation required', 'Lecturer name/department cannot contain ~!@#$%^&*()_+');
+      return;
+    }
+    if (lecturerForm.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lecturerForm.email)) {
+      showWarning('Validation required', 'Please provide a valid lecturer email address.');
+      return;
+    }
+
     try {
       await schedulerApi.addItem('instructors', lecturerForm);
       setLecturerForm({ name: '', department: '', email: '' });
       showMessage('Lecturer added successfully');
+      showSuccess('Lecturer added');
       await loadLecturers();
     } catch (err) {
       console.error('Add lecturer error:', err);
+      showError('Add lecturer failed', err.message || 'Failed to add lecturer');
       showMessage(err.message || 'Failed to add lecturer', 'error');
     }
   };
 
   const addLic = async (e) => {
     e.preventDefault();
+    if (!licForm.name.trim()) {
+      showWarning('Validation required', 'LIC name is required.');
+      return;
+    }
+    if (FORBIDDEN_SPECIAL_CHARS.test(licForm.name.trim()) || FORBIDDEN_SPECIAL_CHARS.test(licForm.department.trim())) {
+      showWarning('Validation required', 'LIC name/department cannot contain ~!@#$%^&*()_+');
+      return;
+    }
+
     try {
       await schedulerApi.addItem('lics', licForm);
       setLicForm({ name: '', department: '' });
       showMessage('LIC added successfully');
+      showSuccess('LIC added');
       await loadLics();
     } catch (err) {
       console.error('Add LIC error:', err);
+      showError('Add LIC failed', err.message || 'Failed to add LIC');
       showMessage(err.message || 'Failed to add LIC', 'error');
     }
   };
@@ -199,7 +228,12 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
     e.preventDefault();
     
     if (!moduleForm.code || !moduleForm.name) {
+      showWarning('Validation required', 'Module code and name are required.');
       showMessage('Module code and name are required', 'error');
+      return;
+    }
+    if (FORBIDDEN_SPECIAL_CHARS.test(moduleForm.code.trim()) || FORBIDDEN_SPECIAL_CHARS.test(moduleForm.name.trim())) {
+      showWarning('Validation required', 'Module code/name cannot contain ~!@#$%^&*()_+');
       return;
     }
     
@@ -211,9 +245,11 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       
       setModuleForm({ code: '', name: '', batch_size: '', credits: '', lectures_per_week: '' });
       showMessage('Module added successfully');
+      showSuccess('Module added');
       await loadModules();
     } catch (err) {
       console.error('Add module error:', err);
+      showError('Add module failed', err.message || 'Failed to add module');
       showMessage(err.message || 'Failed to add module', 'error');
     }
   };
@@ -226,6 +262,19 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
   const addCampusStructure = async (e) => {
     e.preventDefault();
+    if (!campusForm.name.trim()) {
+      showWarning('Validation required', 'Campus structure name is required.');
+      return;
+    }
+    if (FORBIDDEN_SPECIAL_CHARS.test(campusForm.name.trim())) {
+      showWarning('Validation required', 'Campus structure name cannot contain ~!@#$%^&*()_+');
+      return;
+    }
+    if (campusForm.capacity && Number(campusForm.capacity) < 1) {
+      showWarning('Validation required', 'Capacity must be at least 1.');
+      return;
+    }
+
     try {
       await schedulerApi.addItem('halls', {
         name: campusForm.name,
@@ -238,8 +287,10 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       });
       setCampusForm({ name: '', capacity: '', building: '', floor: '', roomType: '' });
       showMessage('Campus structure added successfully');
+      showSuccess('Campus structure added');
       await loadCampusStructures();
     } catch (err) {
+      showError('Add structure failed', err.message || 'Failed to add campus structure');
       showMessage(err.message || 'Failed to add campus structure', 'error');
     }
   };
@@ -247,26 +298,37 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   const addAssignment = async (e) => {
     e.preventDefault();
     if (!assignmentForm.moduleId || !assignmentForm.lecturerId || !assignmentForm.licId) {
+      showWarning('Validation required', 'Please fill all required assignment fields.');
       showMessage('Please fill all required fields', 'error');
       return;
     }
     try {
       await schedulerApi.createAssignment(assignmentForm);
       showMessage('Module assignment created');
+      showSuccess('Assignment created');
       setAssignmentForm({ moduleId: '', lecturerId: '', licId: '', academicYear: '1', semester: '1' });
       await loadAssignments();
     } catch (err) {
+      showError('Create assignment failed', err.message || 'Failed to create assignment');
       showMessage(err.message || 'Failed to create assignment', 'error');
     }
   };
 
   const removeAssignment = async (id) => {
-    if (!window.confirm('Are you sure you want to remove this assignment?')) return;
+    const confirmed = await confirmDelete({
+      title: 'Remove assignment?',
+      text: 'This assignment will be permanently removed.',
+      confirmButtonText: 'Remove assignment',
+    });
+    if (!confirmed) return;
+
     try {
       await schedulerApi.deleteAssignment(id);
       showMessage('Assignment removed');
+      showSuccess('Assignment removed');
       await loadAssignments();
     } catch (err) {
+      showError('Remove assignment failed', err.message || 'Failed to remove assignment');
       showMessage(err.message || 'Failed to remove assignment', 'error');
     }
   };
@@ -282,8 +344,10 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       const data = await response.json();
       if (data.success) {
         showMessage('Timetable approved successfully');
+        showSuccess('Timetable approved');
         await loadTimetables();
       } else {
+        showError('Approve failed', data.message || 'Failed to approve timetable');
         showMessage(data.message || 'Failed to approve', 'error');
       }
     } catch (err) {
@@ -292,7 +356,13 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   };
 
   const rejectTimetable = async (id) => {
-    const reason = prompt('Please provide a reason for rejection:');
+    const reason = await askForText({
+      title: 'Reject timetable',
+      inputLabel: 'Reason for rejection',
+      inputPlaceholder: 'Enter rejection reason',
+      confirmButtonText: 'Reject',
+      validationMessage: 'Reason is required to reject the timetable.',
+    });
     if (!reason) return;
     try {
       const response = await fetch(`${apiBase}/api/academic-coordinator/timetables/${id}/reject`, {
@@ -304,8 +374,10 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       const data = await response.json();
       if (data.success) {
         showMessage('Timetable rejected');
+        showSuccess('Timetable rejected');
         await loadTimetables();
       } else {
+        showError('Reject failed', data.message || 'Failed to reject timetable');
         showMessage(data.message || 'Failed to reject', 'error');
       }
     } catch (err) {
@@ -314,7 +386,13 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   };
 
   const resolveConflict = async (id) => {
-    const resolution = prompt('How was this conflict resolved?');
+    const resolution = await askForText({
+      title: 'Resolve conflict',
+      inputLabel: 'Resolution notes',
+      inputPlaceholder: 'Describe how this conflict was resolved',
+      confirmButtonText: 'Resolve',
+      validationMessage: 'Resolution notes are required.',
+    });
     if (!resolution) return;
     try {
       const response = await fetch(`${apiBase}/api/academic-coordinator/conflicts/${id}/resolve`, {
@@ -326,8 +404,10 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       const data = await response.json();
       if (data.success) {
         showMessage('Conflict resolved');
+        showSuccess('Conflict resolved');
         await loadConflicts();
       } else {
+        showError('Resolve failed', data.message || 'Failed to resolve conflict');
         showMessage(data.message || 'Failed to resolve', 'error');
       }
     } catch (err) {
@@ -347,6 +427,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       const data = await response.json();
       if (data.success) {
         showMessage('Calendar event added');
+        showSuccess('Calendar event added');
         setCalendarEventForm({
           event_name: '',
           event_type: 'semester_start',
@@ -358,6 +439,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
         setShowCalendarForm(false);
         await loadAcademicCalendar();
       } else {
+        showError('Add event failed', data.message || 'Failed to add event');
         showMessage(data.message || 'Failed to add event', 'error');
       }
     } catch (err) {
