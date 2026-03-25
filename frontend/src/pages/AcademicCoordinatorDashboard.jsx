@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import schedulerApi from '../api/scheduler.js';
 import moduleCatalog from '../data/moduleCatalog.js';
+import HallAllocation from '../components/HallAllocation.jsx';
 import { askForText, confirmDelete, showError, showSuccess, showWarning } from '../utils/alerts.js';
 
 const FORBIDDEN_SPECIAL_CHARS = /[~!@#$%^&*()_+]/;
@@ -17,6 +18,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   const [timetables, setTimetables] = useState([]);
   const [conflicts, setConflicts] = useState([]);
   const [academicCalendar, setAcademicCalendar] = useState([]);
+  const [mainView, setMainView] = useState('lectures');
   
   // Form states
   const [lecturerForm, setLecturerForm] = useState({ name: '', department: '', email: '' });
@@ -349,8 +351,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
         showMessage(data.message || 'Failed to approve', 'error');
       }
     } catch (err) {
-      showError('Approve failed', 'Failed to approve timetable');
-      showMessage('Failed to approve timetable', 'error');
+      showMessage('Failed to approve timetable', 'error',err);
     }
   };
 
@@ -380,8 +381,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
         showMessage(data.message || 'Failed to reject', 'error');
       }
     } catch (err) {
-      showError('Reject failed', 'Failed to reject timetable');
-      showMessage('Failed to reject timetable', 'error');
+      showMessage('Failed to reject timetable', 'error',err);
     }
   };
 
@@ -411,8 +411,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
         showMessage(data.message || 'Failed to resolve', 'error');
       }
     } catch (err) {
-      showError('Resolve failed', 'Failed to resolve conflict');
-      showMessage('Failed to resolve conflict', 'error');
+      showMessage('Failed to resolve conflict', 'error', err);
     }
   };
 
@@ -444,8 +443,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
         showMessage(data.message || 'Failed to add event', 'error');
       }
     } catch (err) {
-      showError('Add event failed', 'Failed to add calendar event');
-      showMessage('Failed to add calendar event', 'error');
+      showMessage('Failed to add calendar event', 'error',err);
     }
   };
 
@@ -529,7 +527,25 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
           {message.text}
         </div>
       )}
+      {/* Top Menu */}
+      <div className="ac-main-menu-wrap">
+        <div className="ac-main-menu" role="tablist" aria-label="Main dashboard views">
+          <button
+            onClick={() => setMainView('lectures')}
+            className={`ac-main-menu-btn ${mainView === 'lectures' ? 'is-active' : ''}`}
+          >
+            📚 Lectures
+          </button>
 
+          <button
+            onClick={() => setMainView('hallAllocation')}
+            className={`ac-main-menu-btn ${mainView === 'hallAllocation' ? 'is-active' : ''}`}
+          >
+            🏛️ Hall Allocation
+          </button>
+        </div>
+      </div>
+{mainView === 'lectures' && (
       <div className="dashboard-main">
         <div className="left-col">
           {/* Overview Tab Content */}
@@ -867,7 +883,10 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
           </div>
         </div>
       </div>
-
+)}
+{mainView === 'hallAllocation' && (
+  <HallAllocation apiBase={apiBase} />
+)}
       {/* 3D Visualization Section */}
       <div className="ac-3d-card">
         <h2>🏗️ 3D Campus Visualization</h2>

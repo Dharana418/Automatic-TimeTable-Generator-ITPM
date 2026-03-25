@@ -138,6 +138,30 @@
     @apply flex flex-wrap gap-2;
   }
 
+  .ac-main-menu-wrap {
+    @apply mx-auto mb-8 mt-2 max-w-7xl;
+  }
+
+  .ac-main-menu {
+    @apply flex w-full overflow-hidden rounded-xl border border-indigo-300 shadow-sm;
+  }
+
+  .ac-main-menu-btn {
+    @apply flex-1 border-0 px-7 py-3 text-center text-sm font-semibold transition;
+  }
+
+  .ac-main-menu-btn + .ac-main-menu-btn {
+    @apply border-l border-indigo-300;
+  }
+
+  .ac-main-menu-btn:not(.is-active) {
+    @apply bg-white text-indigo-700 hover:bg-gradient-to-r hover:from-indigo-500 hover:to-violet-600 hover:text-white;
+  }
+
+  .ac-main-menu-btn.is-active {
+    @apply bg-gradient-to-r from-indigo-500 to-violet-600 text-white shadow-inner;
+  }
+
   .chip {
     @apply cursor-pointer rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-100;
   }
