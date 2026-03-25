@@ -285,7 +285,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
         showMessage(data.message || 'Failed to approve', 'error');
       }
     } catch (err) {
-      showMessage('Failed to approve timetable', 'error');
+      showMessage('Failed to approve timetable', 'error',err);
     }
   };
 
@@ -307,7 +307,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
         showMessage(data.message || 'Failed to reject', 'error');
       }
     } catch (err) {
-      showMessage('Failed to reject timetable', 'error');
+      showMessage('Failed to reject timetable', 'error',err);
     }
   };
 
@@ -329,7 +329,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
         showMessage(data.message || 'Failed to resolve', 'error');
       }
     } catch (err) {
-      showMessage('Failed to resolve conflict', 'error');
+      showMessage('Failed to resolve conflict', 'error', err);
     }
   };
 
@@ -359,7 +359,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
         showMessage(data.message || 'Failed to add event', 'error');
       }
     } catch (err) {
-      showMessage('Failed to add calendar event', 'error');
+      showMessage('Failed to add calendar event', 'error',err);
     }
   };
 
