@@ -4,35 +4,68 @@ import {
     createModuleAssignment,
     deleteModuleAssignment,
     deleteItem,
+    getLicDailyTimetable,
     getLicsWithInstructors,
+    getSoftConstraints,
     listItems,
     listModuleAssignments,
     resetData,
     runScheduler,
     updateItem,
+    runSchedulerBySegments,
+    upsertSoftConstraints,
+    updateModuleAssignment,
 } from '../controllers/schedulerController.js';
 import protect from '../middlewares/auth.js';
 import authorize from '../middlewares/authorize.js';
 
 const router = express.Router();
 
-// Protect all scheduler routes and allow faculty coordinator and academic coordinator
+// Protect all scheduler routes and allow authorized academic roles
 router.use(protect);
-router.use(authorize('facultycoordinator', 'academiccoordinator', 'Faculty Coordinator', 'Academic Coordinator'));
+router.use(
+    authorize(
+        'admin',
+        'facultycoordinator',
+        'academiccoordinator',
+        'lic',
+        'instructor',
+        'professor',
+        'lecturer',
+        'assistantlecturer',
+        'seniorlecturer',
+        'lecturerseniorlecturer',
+        'Admin',
+        'Faculty Coordinator',
+        'Academic Coordinator',
+        'LIC',
+        'Instructor',
+        'Professor',
+        'Lecturer',
+        'Assistant Lecturer',
+        'Senior Lecturer',
+        'Lecturer/Senior Lecturer'
+    )
+);
 
 // Specific helpers
 router.get('/lics-with-instructors', getLicsWithInstructors);
+router.get('/lic/daily-timetable', getLicDailyTimetable);
+router.get('/soft-constraints', getSoftConstraints);
+router.post('/soft-constraints', upsertSoftConstraints);
 router.get('/assignments', listModuleAssignments);
-router.post('/assignments', createModuleAssignment);
-router.delete('/assignments/:id', deleteModuleAssignment);
+router.post('/assignments', authorize('admin', 'academiccoordinator', 'facultycoordinator', 'lic', 'Admin', 'Academic Coordinator', 'Faculty Coordinator', 'LIC'), createModuleAssignment);
+router.put('/assignments/:id', authorize('admin', 'academiccoordinator', 'facultycoordinator', 'lic', 'Admin', 'Academic Coordinator', 'Faculty Coordinator', 'LIC'), updateModuleAssignment);
+router.delete('/assignments/:id', authorize('admin', 'academiccoordinator', 'facultycoordinator', 'lic', 'Admin', 'Academic Coordinator', 'Faculty Coordinator', 'LIC'), deleteModuleAssignment);
 
-router.post('/run', runScheduler);
-router.post('/reset', resetData);
+router.post('/run', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), runScheduler);
+router.post('/run-by-segments', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), runSchedulerBySegments);
+router.post('/reset', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), resetData);
 
 // CRUD operations
-router.post('/:type', addItem);
+router.post('/:type', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), addItem);
 router.get('/:type', listItems);
-router.put('/:type/:id', updateItem);
-router.delete('/:type/:id', deleteItem);
+router.put('/:type/:id', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), updateItem);
+router.delete('/:type/:id', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), deleteItem);
 
 export default router;

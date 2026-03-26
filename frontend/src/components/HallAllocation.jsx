@@ -374,7 +374,7 @@ const HallAllocation = ({ apiBase }) => {
         <h2 className="text-2xl font-bold">🏛️ Hall Allocation</h2>
         <button
           type="button"
-          className="dashboard-btn"
+          className="dashboard-btn hall-primary-btn"
           onClick={() => {
             setHallForm({
               hallId: '',
@@ -504,14 +504,14 @@ const HallAllocation = ({ apiBase }) => {
               <div className="mt-2 flex gap-2">
                 <button
                   type="button"
-                  className="px-3 py-1 rounded border text-sm"
+                  className="hall-action-btn"
                   onClick={() => openEditHallModal(hall)}
                 >
                   Edit
                 </button>
                 <button
                   type="button"
-                  className="px-3 py-1 rounded border border-red-300 text-red-700 text-sm"
+                  className="hall-action-btn hall-action-btn--danger"
                   disabled={deletingHallId === hall.id}
                   onClick={() => requestDeleteHall(hall.id)}
                 >
@@ -519,7 +519,7 @@ const HallAllocation = ({ apiBase }) => {
                 </button>
                 <button
                   type="button"
-                  className="px-3 py-1 rounded border border-orange-300 text-orange-700 text-sm"
+                  className="hall-action-btn hall-action-btn--warning"
                   onClick={() => {
                     setMaintenanceHallId(hall.id);
                     setEditHallForm({
