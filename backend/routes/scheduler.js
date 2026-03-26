@@ -11,6 +11,7 @@ import {
     listModuleAssignments,
     resetData,
     runScheduler,
+    updateItem,
     runSchedulerBySegments,
     upsertSoftConstraints,
     updateModuleAssignment,
@@ -64,6 +65,7 @@ router.post('/reset', authorize('admin', 'facultycoordinator', 'academiccoordina
 // CRUD operations
 router.post('/:type', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), addItem);
 router.get('/:type', listItems);
+router.put('/:type/:id', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), updateItem);
 router.delete('/:type/:id', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), deleteItem);
 
 export default router;
