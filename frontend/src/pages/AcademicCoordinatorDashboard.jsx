@@ -14,40 +14,45 @@ import {
   listItems,
   updateItem,
 } from '../api/scheduler';
+import Building2DView from '../components/Building2DView';
 
 const pageStyle = {
   display: 'flex',
   minHeight: '100vh',
-  background: '#f6f8fc',
+  background: '#f8fafc', // Softer, cooler gray background
   color: '#0f172a',
   fontFamily:
-    'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
 };
 
 const sidebarStyle = {
-  width: 250,
+  width: 260,
   background: '#ffffff',
   borderRight: '1px solid #e2e8f0',
-  padding: '24px 16px',
+  padding: '28px 20px',
   position: 'fixed',
   left: 0,
   top: 0,
   bottom: 0,
+  boxShadow: '1px 0 10px rgba(0, 0, 0, 0.02)', // Subtle shadow separating sidebar
 };
 
 const contentWrapStyle = {
-  marginLeft: 250,
-  width: 'calc(100% - 250px)',
-  padding: 28,
+  marginLeft: 260,
+  width: 'calc(100% - 260px)',
+  padding: '36px 48px',
+  maxWidth: '1440px', // Prevent it from stretching infinitely on ultrawide
+  margin: '0 auto',
+  marginLeft: '260px',
 };
 
 const cardStyle = {
   background: '#ffffff',
-  border: '1px solid #e9edf5',
-  borderRadius: 14,
-  padding: 18,
+  border: '1px solid #e2e8f0', // Sharper border color
+  borderRadius: 16, // Smoother rounding
+  padding: 24, // More breathing room
   transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-  boxShadow: '0 4px 12px rgba(15, 23, 42, 0.04)',
+  boxShadow: '0 2px 8px rgba(15, 23, 42, 0.03)',
 };
 
 const navItems = [
@@ -75,26 +80,28 @@ function UtilizationBar({ used, total }) {
           justifyContent: 'space-between',
           marginBottom: 8,
           fontSize: 13,
-          color: '#475569',
+          color: '#64748b', // Lighter text for the label
+          fontWeight: 500,
         }}
       >
-        <span>Resource Utilization</span>
-        <strong style={{ color: '#0f172a' }}>{percentage}%</strong>
+        <span style={{ textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '11px' }}>Resource Utilization</span>
+        <strong style={{ color: '#0f172a', fontSize: '13px' }}>{percentage}%</strong>
       </div>
       <div
         style={{
-          height: 10,
+          height: 8, // Slimmer progress bar
           borderRadius: 999,
-          background: '#e2e8f0',
+          background: '#f1f5f9', // Blends better with cards
           overflow: 'hidden',
+          border: '1px solid #e2e8f0'
         }}
       >
         <div
           style={{
             width: `${percentage}%`,
             height: '100%',
-            background: 'linear-gradient(90deg, #2563eb, #7c3aed)',
-            transition: 'width 0.25s ease',
+            background: 'linear-gradient(90deg, #3b82f6, #6366f1)', // More modern corporate blue-to-indigo
+            transition: 'width 0.5s cubic-bezier(0.4, 0, 0.2, 1)', // Smoother transition
           }}
         />
       </div>
@@ -114,6 +121,16 @@ const AcademicCoordinatorDashboard = () => {
   const [success, setSuccess] = useState('');
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState('');
+  const [selectedHallId, setSelectedHallId] = useState('');
+
+  const buildingLayout = useMemo(() => 
+    halls.map((hall, index) => ({
+      id: hall.id || `hall-${index}`,
+      name: hall.name || `Hall ${index + 1}`,
+      capacity: Number(hall.capacity || 0),
+      status: Number(hall.capacity || 0) > 0 ? 'available' : 'inactive',
+    })),
+  [halls]);
 
   const loadHalls = async () => {
     setLoading(true);
@@ -303,7 +320,7 @@ const AcademicCoordinatorDashboard = () => {
           <h2 style={{ margin: '8px 0 0', fontSize: 18, fontWeight: 800 }}>Academic Coordinator</h2>
         </div>
 
-        <nav style={{ display: 'grid', gap: 8 }}>
+        <nav style={{ display: 'grid', gap: 6 }}>
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -315,20 +332,34 @@ const AcademicCoordinatorDashboard = () => {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 10,
+                  gap: 12,
                   width: '100%',
-                  border: 'none',
-                  borderRadius: 10,
-                  padding: '10px 12px',
+                  border: '1px solid transparent',
+                  borderRadius: 12,
+                  padding: '12px 16px',
                   textAlign: 'left',
                   cursor: 'pointer',
                   fontWeight: 600,
-                  color: isActive ? '#1d4ed8' : '#334155',
-                  background: isActive ? '#e0e7ff' : 'transparent',
-                  transition: 'background-color 0.2s ease, color 0.2s ease',
+                  fontSize: 14,
+                  color: isActive ? '#4f46e5' : '#64748b', // Indigo active state, muted slate inactive
+                  background: isActive ? '#eef2ff' : 'transparent',
+                  transition: 'all 0.2s',
+                  boxShadow: isActive ? 'inset 2px 0 0 0 #4f46e5' : 'none' // Sidebar active accent line
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.background = '#f8fafc';
+                    e.currentTarget.style.color = '#334155';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = '#64748b';
+                  }
                 }}
               >
-                <Icon size={17} />
+                <Icon size={18} strokeWidth={isActive ? 2.5 : 2} />
                 {item.label}
               </button>
             );
@@ -361,8 +392,8 @@ const AcademicCoordinatorDashboard = () => {
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-            gap: 14,
-            marginBottom: 16,
+            gap: 20,
+            marginBottom: 24,
           }}
         >
           {[{
@@ -374,18 +405,18 @@ const AcademicCoordinatorDashboard = () => {
           }].map((item) => (
             <div
               key={item.label}
-              style={cardStyle}
+              style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: 6 }}
               onMouseEnter={(event) => {
-                event.currentTarget.style.transform = 'translateY(-2px)';
-                event.currentTarget.style.boxShadow = '0 8px 20px rgba(15, 23, 42, 0.08)';
+                event.currentTarget.style.transform = 'translateY(-3px)';
+                event.currentTarget.style.boxShadow = '0 10px 25px rgba(15, 23, 42, 0.06)';
               }}
               onMouseLeave={(event) => {
                 event.currentTarget.style.transform = 'translateY(0)';
-                event.currentTarget.style.boxShadow = '0 4px 12px rgba(15, 23, 42, 0.04)';
+                event.currentTarget.style.boxShadow = '0 2px 8px rgba(15, 23, 42, 0.03)';
               }}
             >
-              <div style={{ fontSize: 13, color: '#64748b', marginBottom: 8 }}>{item.label}</div>
-              <div style={{ fontSize: 28, fontWeight: 800 }}>{item.value}</div>
+              <div style={{ fontSize: 13, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{item.label}</div>
+              <div style={{ fontSize: 32, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>{item.value}</div>
             </div>
           ))}
         </section>
@@ -394,55 +425,59 @@ const AcademicCoordinatorDashboard = () => {
           style={{
             display: 'grid',
             gridTemplateColumns: 'minmax(0, 1.5fr) minmax(0, 1fr)',
-            gap: 14,
-            marginBottom: 14,
+            gap: 20,
+            marginBottom: 24,
           }}
         >
           <div style={cardStyle}>
-            <h3 style={{ marginTop: 0, fontSize: 16, fontWeight: 700 }}>Hall CRUD</h3>
-            <form onSubmit={onSubmit} style={{ display: 'grid', gap: 10 }}>
+            <h3 style={{ marginTop: 0, fontSize: 18, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em', marginBottom: 20 }}>Hall Management Form</h3>
+            <form onSubmit={onSubmit} style={{ display: 'grid', gap: 14 }}>
               <input
                 placeholder="Hall ID (optional)"
                 value={form.id}
                 onChange={(e) => setForm((prev) => ({ ...prev, id: e.target.value }))}
                 disabled={Boolean(editingId)}
-                style={{ padding: 10, borderRadius: 10, border: '1px solid #cbd5e1' }}
+                style={{ padding: '12px 14px', borderRadius: 10, border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: 14 }}
               />
               <input
-                placeholder="Hall Name"
+                placeholder="Hall Name (e.g., F14-01 or Lab 305)"
                 value={form.name}
                 onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                style={{ padding: 10, borderRadius: 10, border: '1px solid #cbd5e1' }}
+                style={{ padding: '12px 14px', borderRadius: 10, border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: 14 }}
               />
               <input
-                placeholder="Capacity"
+                placeholder="Capacity (Number of Seats)"
                 value={form.capacity}
                 onChange={(e) => setForm((prev) => ({ ...prev, capacity: e.target.value }))}
-                style={{ padding: 10, borderRadius: 10, border: '1px solid #cbd5e1' }}
+                style={{ padding: '12px 14px', borderRadius: 10, border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: 14 }}
               />
               <input
-                placeholder="Features (comma separated)"
+                placeholder="Features (comma separated: projector, wifi)"
                 value={form.features}
                 onChange={(e) => setForm((prev) => ({ ...prev, features: e.target.value }))}
-                style={{ padding: 10, borderRadius: 10, border: '1px solid #cbd5e1' }}
+                style={{ padding: '12px 14px', borderRadius: 10, border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: 14 }}
               />
 
-              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+              <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
                 <button
                   type="submit"
                   disabled={saving}
                   style={{
                     border: 'none',
                     borderRadius: 10,
-                    background: '#2563eb',
+                    background: '#0f172a',
                     color: '#fff',
-                    padding: '10px 14px',
+                    padding: '12px 20px',
                     cursor: 'pointer',
                     fontWeight: 600,
+                    fontSize: 14,
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 8,
+                    transition: 'background 0.2s',
                   }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = '#1e293b')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = '#0f172a')}
                 >
                   <Plus size={16} /> {editingId ? 'Update Hall' : 'Add Hall'}
                 </button>
@@ -472,6 +507,32 @@ const AcademicCoordinatorDashboard = () => {
             <UtilizationBar used={stats.utilizationSeed} total={Math.max(stats.totalCapacity, 1)} />
           </div>
         </section>
+
+        {(activeTab === 'overview' || activeTab === 'resources') && (
+          <section style={{ marginBottom: 14 }}>
+            <div style={cardStyle}>
+              <h3 style={{ marginTop: 0, fontSize: 16, fontWeight: 700 }}>2D Building View</h3>
+              <Building2DView
+                halls={buildingLayout}
+                selectedHallId={selectedHallId}
+                onSelectHall={(hall) => {
+                  setSelectedHallId(hall.id);
+                  setActiveTab('halls');
+                  const found = halls.find((h) => h.id === hall.id);
+                  if (found) {
+                    setForm({
+                      id: found.id || '',
+                      name: found.name || '',
+                      capacity: String(found.capacity ?? ''),
+                      features: Array.isArray(found.features) ? found.features.join(', ') : '',
+                    });
+                    setEditingId(found.id || '');
+                  }
+                }}
+              />
+            </div>
+          </section>
+        )}
 
         {(activeTab === 'overview' || activeTab === 'halls') && renderTable()}
 
