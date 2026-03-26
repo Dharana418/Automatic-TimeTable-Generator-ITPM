@@ -149,6 +149,101 @@ export const listItems = async (req, res) => {
   }
 };
 
+export const updateItem = async (req, res) => {
+  try {
+    const { type, id } = req.params;
+    const payload = req.body;
+
+    if (!allowedTypes.includes(type)) {
+      return res.status(400).json({ error: 'Invalid data type' });
+    }
+
+    if (type === 'halls') {
+      const { name = null, capacity = null, features = null } = payload;
+      const { rows } = await pool.query(
+        `UPDATE halls
+         SET name = $1,
+             capacity = $2,
+             features = $3
+         WHERE id = $4
+         RETURNING *`,
+        [name, capacity, features ? JSON.stringify(features) : null, id]
+      );
+
+      if (!rows[0]) return res.status(404).json({ error: 'Item not found' });
+      return res.json({ success: true, item: rows[0] });
+    }
+
+    if (type === 'modules') {
+      const {
+        code = null,
+        name = null,
+        credits = null,
+        lectures_per_week = null,
+        details = null,
+        batch_size = null,
+        day_type = null,
+      } = payload;
+
+      const { rows } = await pool.query(
+        `UPDATE modules
+         SET code = $1,
+             name = $2,
+             batch_size = $3,
+             day_type = $4,
+             credits = $5,
+             lectures_per_week = $6,
+             details = $7
+         WHERE id = $8
+         RETURNING *`,
+        [code, name, batch_size, day_type, credits, lectures_per_week, details ? JSON.stringify(details) : null, id]
+      );
+
+      if (!rows[0]) return res.status(404).json({ error: 'Item not found' });
+      return res.json({ success: true, item: rows[0] });
+    }
+
+    if (type === 'lics') {
+      const { name = null, department = null, details = null } = payload;
+      const { rows } = await pool.query(
+        `UPDATE lics
+         SET name = $1,
+             department = $2,
+             details = $3
+         WHERE id = $4
+         RETURNING *`,
+        [name, department, details ? JSON.stringify(details) : null, id]
+      );
+
+      if (!rows[0]) return res.status(404).json({ error: 'Item not found' });
+      return res.json({ success: true, item: rows[0] });
+    }
+
+    if (type === 'instructors') {
+      const { name = null, email = null, department = null, availabilities = null, details = null } = payload;
+      const { rows } = await pool.query(
+        `UPDATE instructors
+         SET name = $1,
+             email = $2,
+             department = $3,
+             availabilities = $4,
+             details = $5
+         WHERE id = $6
+         RETURNING *`,
+        [name, email, department, availabilities ? JSON.stringify(availabilities) : null, details ? JSON.stringify(details) : null, id]
+      );
+
+      if (!rows[0]) return res.status(404).json({ error: 'Item not found' });
+      return res.json({ success: true, item: rows[0] });
+    }
+
+    return res.status(400).json({ error: 'Unhandled type' });
+  } catch (err) {
+    console.error(`Error updating ${req.params.type}:`, err);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
 export const deleteItem = async (req, res) => {
   try {
     const { type, id } = req.params;

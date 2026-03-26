@@ -9,6 +9,7 @@ import {
     listModuleAssignments,
     resetData,
     runScheduler,
+    updateItem,
 } from '../controllers/schedulerController.js';
 import protect from '../middlewares/auth.js';
 import authorize from '../middlewares/authorize.js';
@@ -31,6 +32,7 @@ router.post('/reset', resetData);
 // CRUD operations
 router.post('/:type', addItem);
 router.get('/:type', listItems);
+router.put('/:type/:id', updateItem);
 router.delete('/:type/:id', deleteItem);
 
 export default router;
