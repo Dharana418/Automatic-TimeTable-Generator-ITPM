@@ -56,6 +56,8 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
   useEffect(() => {
     loadAllData();
+    // loadAllData is intentionally called only on first mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const showMessage = (text, type = 'success') => {
@@ -260,7 +262,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
     setModuleForm({ ...moduleForm, code, name });
   };
 
-  const addCampusStructure = async (e) => {
+  const _addCampusStructure = async (e) => {
     e.preventDefault();
     if (!campusForm.name.trim()) {
       showWarning('Validation required', 'Campus structure name is required.');
@@ -556,7 +558,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
                   <h3>➕ Add Lecturer</h3>
                   <p>Add professors and lecturers with department details</p>
                 </div>
-                <button className="action-btn" onClick={() => document.getElementById('lecturerForm').scrollIntoView({ behavior: 'smooth' })}>Add Now</button>
+                <button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('lecturerForm').scrollIntoView({ behavior: 'smooth' })}>Add Now</button>
               </div>
               
               <div className="action-card">
@@ -564,7 +566,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
                   <h3>👔 Add LIC</h3>
                   <p>Create module leadership records for allocation</p>
                 </div>
-                <button className="action-btn" onClick={() => document.getElementById('licForm').scrollIntoView({ behavior: 'smooth' })}>Add Now</button>
+                <button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('licForm').scrollIntoView({ behavior: 'smooth' })}>Add Now</button>
               </div>
               
               <div className="action-card">
@@ -572,7 +574,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
                   <h3>📚 Add Module</h3>
                   <p>Add new modules from catalog or custom</p>
                 </div>
-                <button className="action-btn" onClick={() => document.getElementById('moduleForm').scrollIntoView({ behavior: 'smooth' })}>Add Now</button>
+                <button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('moduleForm').scrollIntoView({ behavior: 'smooth' })}>Add Now</button>
               </div>
               
               <div className="action-card">
@@ -580,7 +582,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
                   <h3>🔗 Assign Module</h3>
                   <p>Map modules to lecturers and LICs</p>
                 </div>
-                <button className="action-btn" onClick={() => document.getElementById('assignmentForm').scrollIntoView({ behavior: 'smooth' })}>Assign Now</button>
+                <button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('assignmentForm').scrollIntoView({ behavior: 'smooth' })}>Assign Now</button>
               </div>
             </>
           )}
