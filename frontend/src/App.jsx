@@ -7,7 +7,7 @@ import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import FacultyCoordinatorDashboard from "./pages/FacultyCoordinatorDashboard.jsx";
 import FacultyBatchesPage from "./pages/FacultyBatchesPage.jsx";
 import LICDashboard from "./pages/LICDashboard.jsx";
-import AcademicCoordinatorDashboard from "./pages/AcademicCoordinatorDashboard.jsx";
+import AcademicCoordinatorDashboard from "./pages/AC_before_merge.jsx";
 import InstructorDashboard from "./pages/InstructorDashboard.jsx";
 import LecturerDashboard from "./pages/LecturerDashboard.jsx";
 import CommonDashboard from "./pages/CommonDashboard.jsx";
