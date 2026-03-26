@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { 
   Users, BookOpen, Link2, Trash2, PlusCircle,
   LayoutDashboard, Calendar,
@@ -35,7 +35,7 @@ const LICDashboard = ({ user }) => {
   const [instructorForm, setInstructorForm] = useState({ name: '', email: '', department: '' });
   const [assignmentForm, setAssignmentForm] = useState({ moduleId: '', lecturerId: '', academicYear: '1', semester: '1' });
 
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
     setLoading(true);
     try {
       const [instRes, modRes, asgnRes] = await Promise.all([
@@ -51,9 +51,9 @@ const LICDashboard = ({ user }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { loadAll(); }, []);
+  useEffect(() => { loadAll(); }, [loadAll]);
 
   const scopedAssignments = assignments.filter(
     (item) =>

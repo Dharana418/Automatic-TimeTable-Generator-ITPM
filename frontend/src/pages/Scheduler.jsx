@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import schedulerApi from '../api/scheduler.js';
 import { showError, showSuccess, showWarning } from '../utils/alerts.js';
 
@@ -49,14 +49,19 @@ export default function Scheduler() {
   const [selectedBlock, setSelectedBlock] = useState(null);
   const [activeNav, setActiveNav] = useState('weekly');
 
-  useEffect(()=>{ fetchList(activeType); }, [activeType]);
-
-  async function fetchList(t){
-    try{
+  const fetchList = useCallback(async (t) => {
+    try {
       const res = await schedulerApi.listItems(t);
       setItems(res.items || []);
-    }catch(e){ console.error(e); setItems([]); }
-  }
+    } catch (e) {
+      console.error(e);
+      setItems([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchList(activeType);
+  }, [activeType, fetchList]);
 
   async function handleAdd(e){
     e.preventDefault();
