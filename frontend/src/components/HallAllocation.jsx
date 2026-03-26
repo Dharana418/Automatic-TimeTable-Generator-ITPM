@@ -1,5 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ToastMessage from './ToastMessage.jsx';
+import HallResourcesPanel from './HallResourcesPanel.jsx';
+import HallRatingsPanel from './HallRatingsPanel.jsx';
+import ActivityLogPanel from './ActivityLogPanel.jsx';
+import SmartRecommendationsPanel from './SmartRecommendationsPanel.jsx';
 
 const AMENITIES = [
   { id: 'projector', label: 'Projector', icon: '🎬' },
@@ -61,6 +65,8 @@ const HallAllocation = ({ apiBase }) => {
   const [compareSelection, setCompareSelection] = useState([]);
   const [similarCapacity, setSimilarCapacity] = useState('');
   const [capacityTolerance, setCapacityTolerance] = useState('15');
+  const [selectedHall, setSelectedHall] = useState(null);
+  const [showRecommendationsModal, setShowRecommendationsModal] = useState(false);
   const pageSize = 8;
 
   const normalizeHall = useCallback((hall) => {
@@ -541,27 +547,36 @@ const HallAllocation = ({ apiBase }) => {
     <div className="hall-allocation-container p-4">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold">🏛️ Hall Allocation</h2>
-        <button
-          type="button"
-          className="dashboard-btn hall-primary-btn"
-          onClick={() => {
-            setHallForm({
-              hallId: '',
-              hallType: '',
-              capacity: '',
-              building: '',
-              floor: '',
-              amenities: {},
-              status: 'available',
-              maintenanceStart: '',
-              maintenanceEnd: '',
-            });
-            setHallError('');
-            setShowAddHallModal(true);
-          }}
-        >
-          + Add Hall
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="dashboard-btn hall-primary-btn"
+            onClick={() => setShowRecommendationsModal(true)}
+          >
+            🎯 Get Recommendations
+          </button>
+          <button
+            type="button"
+            className="dashboard-btn hall-primary-btn"
+            onClick={() => {
+              setHallForm({
+                hallId: '',
+                hallType: '',
+                capacity: '',
+                building: '',
+                floor: '',
+                amenities: {},
+                status: 'available',
+                maintenanceStart: '',
+                maintenanceEnd: '',
+              });
+              setHallError('');
+              setShowAddHallModal(true);
+            }}
+          >
+            + Add Hall
+          </button>
+        </div>
       </div>
 
       {toast && <ToastMessage message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
@@ -803,6 +818,14 @@ const HallAllocation = ({ apiBase }) => {
                         }}
                       >
                         Set Maintenance
+                      </button>
+                      <button
+                        type="button"
+                        className="hall-action-btn"
+                        style={{ backgroundColor: '#8b5cf6', color: 'white' }}
+                        onClick={() => setSelectedHall(hall)}
+                      >
+                        📋 Details
                       </button>
                     </div>
                   </div>
@@ -1410,6 +1433,109 @@ const HallAllocation = ({ apiBase }) => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Hall Detail View Modal */}
+      {selectedHall && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl mt-4 mb-4">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-2xl font-bold text-slate-800">
+                🏛️ {selectedHall.name || selectedHall.id}
+              </h2>
+              <button
+                onClick={() => setSelectedHall(null)}
+                className="text-2xl text-slate-600 hover:text-slate-900 font-light"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[calc(100vh-200px)]">
+              {/* Basic Info */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 p-4 bg-slate-50 rounded-lg">
+                <div>
+                  <div className="text-xs text-slate-600">Capacity</div>
+                  <div className="text-lg font-bold text-slate-800">{selectedHall.capacity}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-600">Type</div>
+                  <div className="text-lg font-bold text-slate-800">{selectedHall.features?.hallType || 'N/A'}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-600">Building</div>
+                  <div className="text-lg font-bold text-slate-800">{selectedHall.features?.building || 'N/A'}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-600">Status</div>
+                  <div className={`text-sm font-bold px-2 py-1 rounded inline-block ${getHallAvailability(selectedHall).color}`}>
+                    {getHallAvailability(selectedHall).label}
+                  </div>
+                </div>
+              </div>
+
+              {/* New Feature Panels */}
+              <div className="space-y-4">
+                <HallResourcesPanel 
+                  hallId={selectedHall.id} 
+                  apiBase={apiBase}
+                  onRefresh={() => loadData()}
+                />
+                
+                <HallRatingsPanel 
+                  hallId={selectedHall.id} 
+                  apiBase={apiBase}
+                />
+                
+                <ActivityLogPanel 
+                  hallId={selectedHall.id} 
+                  apiBase={apiBase}
+                />
+              </div>
+            </div>
+
+            <div className="p-4 border-t flex justify-end gap-2">
+              <button
+                onClick={() => setSelectedHall(null)}
+                className="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Smart Recommendations Modal */}
+      {showRecommendationsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl my-6">
+            <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white z-10">
+              <h2 className="text-2xl font-bold text-slate-800">
+                🎯 Smart Hall Recommendations
+              </h2>
+              <button
+                onClick={() => setShowRecommendationsModal(false)}
+                className="text-2xl text-slate-600 hover:text-slate-900 font-light"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[calc(100vh-200px)]">
+              <SmartRecommendationsPanel apiBase={apiBase} />
+            </div>
+
+            <div className="p-4 border-t flex justify-end gap-2 bg-gray-50">
+              <button
+                onClick={() => setShowRecommendationsModal(false)}
+                className="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 font-medium"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
