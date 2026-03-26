@@ -14,7 +14,26 @@ const app = express();
 
 // CORS configuration
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:5174'],
+    origin: (origin, callback) => {
+        if (!origin) {
+            return callback(null, true);
+        }
+
+        const allowedOrigins = [
+            'http://localhost:5173',
+            'http://localhost:5174',
+            'http://127.0.0.1:5173',
+            'http://127.0.0.1:5174',
+        ];
+
+        const isLocalhostPort = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
+
+        if (allowedOrigins.includes(origin) || isLocalhostPort) {
+            return callback(null, true);
+        }
+
+        return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
@@ -96,9 +115,18 @@ const startServer = async () => {
     
     // 404 handler
     app.use((req, res) => {
+        const methodHint =
+            req.originalUrl === '/api/auth/bootstrap-admin'
+                ? 'Use POST /api/auth/bootstrap-admin'
+                : req.originalUrl === '/api/auth/admin/users'
+                    ? 'Use POST /api/auth/admin/users'
+                    : null;
+
         res.status(404).json({
             success: false,
-            message: `Route ${req.originalUrl} not found`
+            message: `Route ${req.originalUrl} not found`,
+            method: req.method,
+            ...(methodHint ? { hint: methodHint } : {}),
         });
     });
     

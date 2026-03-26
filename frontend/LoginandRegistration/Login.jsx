@@ -1,16 +1,35 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import sliitLogo from "../src/assets/SLIIT_LOGO.png";
+import { showError, showSuccess, showWarning } from "../src/utils/alerts.js";
+import { getDashboardPathByRole } from "../src/utils/roleToDashboard.js";
+import { requestPasswordReset } from "../src/api/auth.js";
 
 const Login = ({ apiBase, onAuthSuccess }) => {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!email.trim()) {
+      showWarning("Validation required", "Email is required.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showWarning("Validation required", "Please enter a valid email address.");
+      return;
+    }
+    if (!password) {
+      showWarning("Validation required", "Password is required.");
+      return;
+    }
+
     setLoading(true);
     setError("");
 
@@ -28,11 +47,37 @@ const Login = ({ apiBase, onAuthSuccess }) => {
         throw new Error(data.message || "Login failed");
       }
 
+      showSuccess("Login successful", "Welcome back.");
       onAuthSuccess(data.user);
+      navigate(getDashboardPathByRole(data?.user?.role), { replace: true });
     } catch (err) {
       setError(err.message);
+      showError("Login failed", err.message || "Unable to sign in");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      showWarning("Email required", "Enter your email first, then click Forgot Password.");
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showWarning("Invalid email", "Please enter a valid email address.");
+      return;
+    }
+
+    setForgotLoading(true);
+    try {
+      const data = await requestPasswordReset(email.trim());
+      const resetHint = data?.resetLink ? `\n\nDev reset link: ${data.resetLink}` : "";
+      showSuccess("Reset requested", `${data?.message || "If the account exists, a reset token was created."}${resetHint}`);
+    } catch (err) {
+      showError("Request failed", err.message || "Unable to process forgot password request.");
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -87,14 +132,19 @@ const Login = ({ apiBase, onAuthSuccess }) => {
 
         {error && <div className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-center text-sm text-red-600">{error}</div>}
 
+        <button
+          type="button"
+          onClick={handleForgotPassword}
+          disabled={forgotLoading}
+          className="text-right text-sm font-semibold text-indigo-700 transition hover:text-indigo-900 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {forgotLoading ? "Requesting reset..." : "Forgot Password?"}
+        </button>
+
         <button type="submit" className="mt-2 rounded-xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-slate-900 px-4 py-3 font-bold text-white shadow-lg shadow-indigo-500/30 transition hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70" disabled={loading}>
           {loading ? "Signing In..." : "Sign In"}
         </button>
       </form>
-
-      <div className="mt-5 text-center text-sm text-slate-700">
-        Don’t have an account? <Link to="/register" className="font-semibold text-indigo-600 hover:underline">Register</Link>
-      </div>
     </div>
   );
 };

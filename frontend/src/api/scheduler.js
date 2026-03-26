@@ -16,7 +16,11 @@ export const listAssignments = () => request(`/api/scheduler/assignments`, { met
 export const createAssignment = (payload) => request(`/api/scheduler/assignments`, { method: 'POST', body: JSON.stringify(payload) });
 export const updateAssignment = (id, payload) => request(`/api/scheduler/assignments/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
 export const deleteAssignment = (id) => request(`/api/scheduler/assignments/${id}`, { method: 'DELETE' });
+export const getSoftConstraints = () => request(`/api/scheduler/soft-constraints`, { method: 'GET' });
+export const saveSoftConstraints = (payload) => request(`/api/scheduler/soft-constraints`, { method: 'POST', body: JSON.stringify(payload) });
+export const getLicDailyTimetable = (day = '') => request(`/api/scheduler/lic/daily-timetable${day ? `?day=${encodeURIComponent(day)}` : ''}`, { method: 'GET' });
 export const runScheduler = (algorithms = ['hybrid'], options = {}) => request('/api/scheduler/run', { method: 'POST', body: JSON.stringify({ algorithms, options }) });
+export const runSchedulerBySegments = (algorithms = ['hybrid'], options = {}) => request('/api/scheduler/run-by-segments', { method: 'POST', body: JSON.stringify({ algorithms, options }) });
 export const resetSchedulerData = () => request('/api/scheduler/reset', { method: 'POST' });
 
 export default {
@@ -29,6 +33,10 @@ export default {
   createAssignment,
   updateAssignment,
   deleteAssignment,
+  getSoftConstraints,
+  saveSoftConstraints,
+  getLicDailyTimetable,
   runScheduler,
+  runSchedulerBySegments,
   resetSchedulerData,
 };

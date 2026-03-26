@@ -1,6 +1,48 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import sliitLogo from "../src/assets/SLIIT_LOGO.png";
+import { showError, showGlassSuccess, showGlassValidationError } from "../src/utils/alerts.js";
+
+const FULL_NAME_REGEX = /^[A-Za-z\s]{3,}$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+
+const validateRegistrationFields = ({ name, email, password, confirmPassword, phonenumber }) => {
+  const errors = {};
+
+  if (!name.trim()) {
+    errors.name = "Full Name is required";
+  } else if (!FULL_NAME_REGEX.test(name.trim())) {
+    errors.name = "Full Name must be at least 3 characters and contain alphabets only";
+  }
+
+  if (!email.trim()) {
+    errors.email = "Email is required";
+  } else if (!EMAIL_REGEX.test(email.trim())) {
+    errors.email = "Please enter a valid email address";
+  }
+
+  if (!password) {
+    errors.password = "Password is required";
+  } else if (!PASSWORD_REGEX.test(password)) {
+    errors.password = "Password must be 8+ chars with 1 uppercase, 1 number, and 1 special character";
+  }
+
+  if (!confirmPassword) {
+    errors.confirmPassword = "Please confirm your password";
+  } else if (password !== confirmPassword) {
+    errors.confirmPassword = "Passwords do not match";
+  }
+
+  if (phonenumber) {
+    const digits = phonenumber.replace(/\D/g, '');
+    if (digits.length < 10) {
+      errors.phonenumber = "Please enter a valid phone number";
+    }
+  }
+
+  return errors;
+};
 
 const Register = ({ apiBase, onAuthSuccess }) => {
   const [form, setForm] = useState({
@@ -9,7 +51,6 @@ const Register = ({ apiBase, onAuthSuccess }) => {
     password: "",
     confirmPassword: "",
     phonenumber: "",
-    role: "",
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -17,40 +58,6 @@ const Register = ({ apiBase, onAuthSuccess }) => {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
-
-  const validateForm = () => {
-    const errors = {};
-    if (!form.name.trim()) {
-      errors.name = "Full name is required";
-    } else if (form.name.trim().length < 3) {
-      errors.name = "Name must be at least 3 characters";
-    }
-    if (!form.email.trim()) {
-      errors.email = "Email is required";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      errors.email = "Please enter a valid email address";
-    }
-    if (!form.password) {
-      errors.password = "Password is required";
-    } else if (form.password.length < 6) {
-      errors.password = "Password must be at least 6 characters";
-    }
-    if (!form.confirmPassword) {
-      errors.confirmPassword = "Please confirm your password";
-    } else if (form.password !== form.confirmPassword) {
-      errors.confirmPassword = "Passwords do not match";
-    }
-    if (!form.role) {
-      errors.role = "Please select a role";
-    }
-    if (form.phonenumber) {
-      const digits = form.phonenumber.replace(/\D/g, '');
-      if (digits.length < 10) {
-        errors.phonenumber = "Please enter a valid phone number";
-      }
-    }
-    return errors;
-  };
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -64,9 +71,13 @@ const Register = ({ apiBase, onAuthSuccess }) => {
     event.preventDefault();
     setError("");
     setSuccess("");
-    const errors = validateForm();
+    const errors = validateRegistrationFields(form);
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
+      showGlassValidationError({
+        title: 'Error',
+        text: Object.values(errors)[0],
+      });
       return;
     }
     setFieldErrors({});
@@ -83,16 +94,26 @@ const Register = ({ apiBase, onAuthSuccess }) => {
       if (response.ok) {
         const data = await response.json();
         setSuccess("Account created successfully! Redirecting to dashboard...");
+        const preferToast = localStorage.getItem('alertPreference') === 'toast';
+        showGlassSuccess({
+          title: 'Success',
+          text: 'Account created successfully.',
+          preferToast,
+        });
         setTimeout(() => {
           onAuthSuccess?.(data.user ?? null);
         }, 1500);
       } else {
         const errorData = await response.json();
-        setError(errorData.error || "Registration failed. Please try again.");
+        const errorMessage = errorData.error || "Registration failed. Please try again.";
+        setError(errorMessage);
+        showError("Registration failed", errorMessage);
       }
     } catch (error) {
       console.error(error);
-      setError(error.message || "An error occurred during registration. Please try again.");
+      const errorMessage = error.message || "An error occurred during registration. Please try again.";
+      setError(errorMessage);
+      showError("Registration failed", errorMessage);
     } finally {
       setLoading(false);
     }
@@ -129,24 +150,6 @@ const Register = ({ apiBase, onAuthSuccess }) => {
           placeholder=""
         />
         {fieldErrors.email && <span className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-center text-sm text-red-600">{fieldErrors.email}</span>}
-
-        <label className="mb-1 mt-1 text-sm font-semibold text-slate-700" htmlFor="role">Your Role</label>
-        <select
-          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-800 outline-none ring-indigo-500 transition focus:border-indigo-400 focus:ring-2"
-          name="role"
-          id="role"
-          value={form.role}
-          onChange={handleChange}
-          required
-        >
-          <option value="">Select your role...</option>
-          <option value="Faculty Coordinator">Faculty Coordinator</option>
-          <option value="Academic Coordinator">Academic Coordinator</option>
-          <option value="Instructor">Instructor</option>
-          <option value="Lecturer/Senior Lecturer">Lecturer/Senior Lecturer</option>
-          <option value="LIC">LIC</option>
-        </select>
-        {fieldErrors.role && <span className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-center text-sm text-red-600">{fieldErrors.role}</span>}
 
         <label className="mb-1 mt-1 text-sm font-semibold text-slate-700" htmlFor="password">Password</label>
         <div className="relative w-full">

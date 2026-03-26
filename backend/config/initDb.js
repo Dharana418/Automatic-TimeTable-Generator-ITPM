@@ -64,6 +64,33 @@ export async function initDb() {
         `);
         console.log('✓ instructors table ready');
 
+        await pool.query(`ALTER TABLE modules ADD COLUMN IF NOT EXISTS lic_id TEXT REFERENCES lics(id) ON DELETE SET NULL`);
+        await pool.query(`ALTER TABLE instructors ADD COLUMN IF NOT EXISTS lic_id TEXT REFERENCES lics(id) ON DELETE SET NULL`);
+        console.log('✓ LIC ownership columns ensured');
+
+        // Create departments table
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS departments (
+                id TEXT PRIMARY KEY,
+                code TEXT,
+                name TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+        console.log('✓ departments table ready');
+
+        // Create batches table
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS batches (
+                id TEXT PRIMARY KEY,
+                name TEXT,
+                department_id TEXT,
+                capacity INTEGER,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+        console.log('✓ batches table ready');
+
         // Create module_assignments table
         await pool.query(`
             CREATE TABLE IF NOT EXISTS module_assignments (
@@ -78,6 +105,20 @@ export async function initDb() {
         `);
         console.log('✓ module_assignments table ready');
 
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS faculty_soft_constraints (
+                id SERIAL PRIMARY KEY,
+                coordinator_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+                preferred_days TEXT[] DEFAULT ARRAY[]::TEXT[],
+                preferred_time_slots TEXT[] DEFAULT ARRAY[]::TEXT[],
+                w5_weight NUMERIC,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+        console.log('✓ faculty_soft_constraints table ready');
+
         // Create users table (for auth)
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
@@ -89,10 +130,45 @@ export async function initDb() {
                 birthday DATE,
                 phonenumber TEXT,
                 role TEXT DEFAULT 'user',
+                role_assigned_by UUID REFERENCES users(id) ON DELETE SET NULL,
+                role_assigned_at TIMESTAMP DEFAULT NOW(),
+                role_assignment_note TEXT,
                 created_at TIMESTAMP DEFAULT NOW()
             )
         `);
         console.log('✓ users table ready');
+
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role_assigned_by UUID REFERENCES users(id) ON DELETE SET NULL`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role_assigned_at TIMESTAMP DEFAULT NOW()`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role_assignment_note TEXT`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_token_hash TEXT`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_expires_at TIMESTAMP`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_requested_at TIMESTAMP`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_consumed_at TIMESTAMP`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_url TEXT`);
+        console.log('✓ users role assignment metadata ensured');
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS role_assignment_history (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                target_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                assigned_role TEXT NOT NULL,
+                assigned_by UUID REFERENCES users(id) ON DELETE SET NULL,
+                assignment_note TEXT,
+                password_hash TEXT,
+                password_encrypted TEXT,
+                password_encryption_iv TEXT,
+                password_encryption_tag TEXT,
+                assigned_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+        console.log('✓ role_assignment_history table ready');
+
+        await pool.query(`ALTER TABLE role_assignment_history ADD COLUMN IF NOT EXISTS password_hash TEXT`);
+        await pool.query(`ALTER TABLE role_assignment_history ADD COLUMN IF NOT EXISTS password_encrypted TEXT`);
+        await pool.query(`ALTER TABLE role_assignment_history ADD COLUMN IF NOT EXISTS password_encryption_iv TEXT`);
+        await pool.query(`ALTER TABLE role_assignment_history ADD COLUMN IF NOT EXISTS password_encryption_tag TEXT`);
+        console.log('✓ role_assignment_history password snapshot columns ensured');
 
         // Create timetables table
         await pool.query(`
@@ -162,6 +238,14 @@ export async function initDb() {
             CREATE INDEX IF NOT EXISTS idx_module_assignments_module_id ON module_assignments(module_id);
             CREATE INDEX IF NOT EXISTS idx_module_assignments_lecturer_id ON module_assignments(lecturer_id);
             CREATE INDEX IF NOT EXISTS idx_module_assignments_lic_id ON module_assignments(lic_id);
+            CREATE INDEX IF NOT EXISTS idx_modules_lic_id ON modules(lic_id);
+            CREATE INDEX IF NOT EXISTS idx_instructors_lic_id ON instructors(lic_id);
+            CREATE INDEX IF NOT EXISTS idx_faculty_soft_constraints_coordinator ON faculty_soft_constraints(coordinator_id);
+            CREATE INDEX IF NOT EXISTS idx_batches_department_id ON batches(department_id);
+            CREATE INDEX IF NOT EXISTS idx_users_role_assigned_by ON users(role_assigned_by);
+            CREATE INDEX IF NOT EXISTS idx_role_history_target_user ON role_assignment_history(target_user_id);
+            CREATE INDEX IF NOT EXISTS idx_role_history_assigned_by ON role_assignment_history(assigned_by);
+            CREATE INDEX IF NOT EXISTS idx_role_history_assigned_at ON role_assignment_history(assigned_at DESC);
             CREATE INDEX IF NOT EXISTS idx_timetables_status ON timetables(status);
             CREATE INDEX IF NOT EXISTS idx_timetable_approvals_status ON timetable_approvals(status);
             CREATE INDEX IF NOT EXISTS idx_scheduling_conflicts_resolved ON scheduling_conflicts(resolved);

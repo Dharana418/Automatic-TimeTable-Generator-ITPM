@@ -1,36 +1,61 @@
-// Hybrid Scheduler (Genetic + Ant Colony + PSO + Tabu) for Faculty Coordinator
-
-import psoScheduler from './psoScheduler.js';
-import antColonyScheduler from './antColonyScheduler.js';
-import geneticScheduler from './geneticScheduler.js';
-import tabuScheduler from './tabuScheduler.js';
+import optimizer from './optimizer.js';
 
 export default function hybridScheduler(constraints, options = {}) {
-    const results = {
-        pso: psoScheduler(constraints, options),
-        ant: antColonyScheduler(constraints, options),
-        genetic: geneticScheduler(constraints, options),
-        tabu: tabuScheduler(constraints, options),
-    };
+    const problem = optimizer.buildProblem(constraints, options);
 
-    const scoreOf = (r) => {
-        if (!r) return Number.NEGATIVE_INFINITY;
-        const coverage = Number(r.stats?.coverage || 0);
-        const conflicts = Number(r.conflicts?.length || 0);
-        const fitness = Number(r.fitness ?? 0);
-        return fitness + coverage - conflicts * 0.05;
-    };
+    const aco = optimizer.runACO(problem, {
+        ...options,
+        ants: options.ants || 40,
+        iterations: options.acoIterations || Math.max(40, Math.floor((options.iterations || 120) * 0.4)),
+    });
 
-    const ranked = Object.entries(results).sort((a, b) => scoreOf(b[1]) - scoreOf(a[1]));
-    const [bestAlgorithm, chosen] = ranked[0];
+    const initialPopulation = [aco.bestSolution];
+    const ga = optimizer.runGA(problem, {
+        ...options,
+        iterations: options.gaIterations || Math.max(80, options.iterations || 120),
+        initialPopulation,
+    });
+
+    const tabu = optimizer.runTabu(problem, {
+        ...options,
+        initialSolution: ga.bestSolution,
+        iterations: options.tabuIterations || Math.max(120, options.iterations || 160),
+        tabuTenure: options.tabuTenure,
+        stagnationLimit: options.stagnationLimit,
+        probabilisticFallbackRate: options.probabilisticFallbackRate ?? 0.25,
+    });
+
+    const chain = {
+        aco: {
+            fitness: aco.fitness,
+            objective: aco.objective,
+            stats: aco.stats,
+            penaltyBreakdown: aco.penaltyBreakdown,
+        },
+        ga: {
+            fitness: ga.fitness,
+            objective: ga.objective,
+            stats: ga.stats,
+            penaltyBreakdown: ga.penaltyBreakdown,
+        },
+        tabu: {
+            fitness: tabu.fitness,
+            objective: tabu.objective,
+            stats: tabu.stats,
+            penaltyBreakdown: tabu.penaltyBreakdown,
+            meta: tabu.meta,
+        },
+    };
 
     return {
         algorithm: 'hybrid',
-        bestAlgorithm,
-        schedule: chosen.schedule,
-        stats: chosen.stats,
-        conflicts: chosen.conflicts,
-        fitness: chosen.fitness,
-        all: results,
+        bestAlgorithm: 'tabu_refined_from_ga_seeded_by_aco',
+        schedule: tabu.schedule,
+        stats: tabu.stats,
+        conflicts: tabu.conflicts,
+        fitness: tabu.fitness,
+        objective: tabu.objective,
+        penaltyBreakdown: tabu.penaltyBreakdown,
+        all: chain,
     };
 }

@@ -1,19 +1,21 @@
 import React from 'react';
+import { ArrowRight, Zap } from 'lucide-react';
 
 const DashboardCards = ({ cards }) => (
   <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
     {cards.map((card, idx) => (
       <div
-        className="group rounded-2xl border border-white/30 bg-white/90 p-6 shadow-lg shadow-indigo-500/10 transition hover:-translate-y-1 hover:shadow-xl"
+        className="group rounded-2xl border-2 border-black bg-white/90 backdrop-blur-sm p-6 shadow-lg transition-all duration-200 transform hover:scale-[1.02] hover:shadow-2xl"
         key={idx}
       >
-        <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-100 text-lg text-indigo-600">
-          ✦
+        <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+          <Zap size={20} strokeWidth={2.5} />
         </div>
-        <h2 className="text-xl font-semibold text-slate-900">{card.title}</h2>
-        <p className="mt-2 min-h-12 text-sm text-slate-600">{card.description}</p>
-        <button className="mt-5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition group-hover:bg-indigo-700">
+        <h2 className="text-xl font-black text-slate-900">{card.title}</h2>
+        <p className="mt-2 min-h-12 text-sm text-slate-700 font-medium">{card.description}</p>
+        <button className="mt-5 w-full inline-flex items-center justify-center gap-2 rounded-xl border-2 border-black bg-blue-600 px-4 py-2 text-sm font-black text-white transition-all duration-200 transform hover:bg-blue-700 active:scale-95">
           {card.button}
+          <ArrowRight size={16} strokeWidth={3} />
         </button>
       </div>
     ))}
@@ -37,15 +39,15 @@ const CommonDashboard = ({ user, role }) => {
       ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-700 via-violet-700 to-slate-900 p-4 md:p-8">
-      <div className="mx-auto max-w-7xl rounded-3xl border border-white/20 bg-white/10 p-6 backdrop-blur-md md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50 to-slate-50 p-4 md:p-8">
+      <div className="mx-auto max-w-7xl rounded-3xl border-2 border-black bg-white/90 backdrop-blur-sm p-6 shadow-2xl md:p-8">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-100">TimeTable Hub</p>
-            <h1 className="mt-2 text-3xl font-bold text-white md:text-4xl">{role} Dashboard</h1>
-            <p className="mt-2 text-indigo-100">Welcome, {user?.username || 'User'}</p>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-700">TimeTable Hub — Academic Scheduler</p>
+            <h1 className="mt-2 text-3xl font-black text-slate-900 md:text-4xl">{role} Dashboard</h1>
+            <p className="mt-2 text-slate-700 font-semibold">Welcome, {user?.username || 'User'}</p>
           </div>
-          <span className="rounded-full border border-white/30 bg-white/20 px-4 py-2 text-sm font-medium text-white">
+          <span className="rounded-full border-2 border-black bg-white px-4 py-2 text-sm font-black text-slate-900">
             Active Session
           </span>
         </div>

@@ -50,8 +50,8 @@ html, body {
 .home-hero {
   text-align: center;
   color: #fff;
-  backdrop-filter: blur(40px);
   -webkit-backdrop-filter: blur(40px);
+  backdrop-filter: blur(40px);
   padding: 30px 40px;
   border-radius: 20px;
   max-width: 600px;

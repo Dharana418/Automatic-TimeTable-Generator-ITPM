@@ -1,6 +1,50 @@
 import React, { useEffect, useState } from 'react';
+import { Users, BookOpen, Building2, FileText, AlertCircle, Calendar, Check, X, Pencil, Trash2 } from 'lucide-react';
 import schedulerApi from '../api/scheduler.js';
 import moduleCatalog from '../data/moduleCatalog.js';
+
+const HALL_ALLOCATION_PRESET = [
+  'A401', 'A402', 'A403', 'A404', 'A405',
+  'B401', 'B402', 'B403', 'B404', 'B405',
+  'E401', 'E402', 'E403',
+  'F401', 'F402', 'F403', 'F404',
+  'G401', 'G402', 'G403',
+  'Smart Classroom 1', 'Smart Classroom 2',
+  'Network Lab 1', 'Programming Lab 1',
+];
+
+const PenaltyBreakdownChart = ({ breakdown }) => {
+  if (!breakdown || typeof breakdown !== 'object') {
+    return <div className="ac-empty-row">No penalty data available.</div>;
+  }
+
+  const entries = Object.entries(breakdown)
+    .filter(([, value]) => Number.isFinite(Number(value)))
+    .map(([key, value]) => ({ key, value: Number(value) }));
+
+  if (entries.length === 0) {
+    return <div className="ac-empty-row">No penalty data available.</div>;
+  }
+
+  const maxValue = Math.max(...entries.map((entry) => entry.value), 1);
+
+  return (
+    <div className="ac-penalty-list">
+      {entries.map((entry) => {
+        const widthPercent = Math.max(4, Math.round((entry.value / maxValue) * 100));
+        return (
+          <div key={entry.key} className="ac-penalty-row">
+            <div className="ac-penalty-label">{entry.key}</div>
+            <div className="ac-penalty-track">
+              <div className="ac-penalty-bar" style={{ width: `${widthPercent}%` }} />
+            </div>
+            <div className="ac-penalty-value">{entry.value}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 
 const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -46,38 +90,67 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   // UI states
   const [message, setMessage] = useState({ text: '', type: '' });
   const [loading, setLoading] = useState(false);
+  const [penaltyLoading, setPenaltyLoading] = useState(false);
+  const [penaltyBreakdown, setPenaltyBreakdown] = useState(null);
+  const [importingHalls, setImportingHalls] = useState(false);
+  const [dragLecturerId, setDragLecturerId] = useState(null);
+  const [hoveredAssignmentId, setHoveredAssignmentId] = useState(null);
   const [view3d, setView3d] = useState({ rotateX: 10, rotateZ: -18, zoom: 1 });
   const [showCalendarForm, setShowCalendarForm] = useState(false);
-
-  useEffect(() => {
-    loadAllData();
-  }, []);
 
   const showMessage = (text, type = 'success') => {
     setMessage({ text, type });
     setTimeout(() => setMessage({ text: '', type: '' }), 5000);
   };
 
-  const loadAllData = async () => {
-    setLoading(true);
-    try {
-      await Promise.all([
-        loadLecturers(),
-        loadLics(),
-        loadModules(),
-        loadCampusStructures(),
-        loadAssignments(),
-        loadTimetables(),
-        loadConflicts(),
-        loadAcademicCalendar()
-      ]);
-    } catch (err) {
-      console.error('Failed to load some data:', err);
-      showMessage('Failed to load some data', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    const loadAllData = async () => {
+      setLoading(true);
+      try {
+        const loadTimetablesInitial = async () => {
+          const response = await fetch(`${apiBase}/api/academic-coordinator/timetables`, {
+            credentials: 'include'
+          });
+          const data = await response.json();
+          if (data.success) setTimetables(data.data || []);
+        };
+
+        const loadConflictsInitial = async () => {
+          const response = await fetch(`${apiBase}/api/academic-coordinator/conflicts?resolved=false`, {
+            credentials: 'include'
+          });
+          const data = await response.json();
+          if (data.success) setConflicts(data.data || []);
+        };
+
+        const loadAcademicCalendarInitial = async () => {
+          const response = await fetch(`${apiBase}/api/academic-coordinator/calendar`, {
+            credentials: 'include'
+          });
+          const data = await response.json();
+          if (data.success) setAcademicCalendar(data.data || []);
+        };
+
+        await Promise.all([
+          loadLecturers(),
+          loadLics(),
+          loadModules(),
+          loadCampusStructures(),
+          loadAssignments(),
+          loadTimetablesInitial(),
+          loadConflictsInitial(),
+          loadAcademicCalendarInitial()
+        ]);
+      } catch (err) {
+        console.error('Failed to load some data:', err);
+        showMessage('Failed to load some data', 'error');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadAllData();
+  }, [apiBase]);
 
   const loadLecturers = async () => {
     try {
@@ -222,7 +295,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
     setModuleForm({ ...moduleForm, code, name });
   };
 
-  const addCampusStructure = async (e) => {
+  const _addCampusStructure = async (e) => {
     e.preventDefault();
     try {
       await schedulerApi.addItem('halls', {
@@ -269,6 +342,29 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
     }
   };
 
+  const loadPenaltyBreakdown = async () => {
+    try {
+      setPenaltyLoading(true);
+      const response = await schedulerApi.runScheduler(['hybrid'], { iterations: 40 });
+      setPenaltyBreakdown(response?.results?.hybrid?.penaltyBreakdown || null);
+    } catch (err) {
+      showMessage(err.message || 'Failed to load penalty breakdown', 'error');
+    } finally {
+      setPenaltyLoading(false);
+    }
+  };
+
+  const reassignInstructor = async (assignmentId, lecturerId) => {
+    if (!assignmentId || !lecturerId) return;
+    try {
+      await schedulerApi.updateAssignment(assignmentId, { lecturerId });
+      showMessage('Instructor reassigned successfully');
+      await loadAssignments();
+    } catch (err) {
+      showMessage(err.message || 'Failed to reassign instructor', 'error');
+    }
+  };
+
   const approveTimetable = async (id) => {
     try {
       const response = await fetch(`${apiBase}/api/academic-coordinator/timetables/${id}/approve`, {
@@ -284,7 +380,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       } else {
         showMessage(data.message || 'Failed to approve', 'error');
       }
-    } catch (err) {
+    } catch {
       showMessage('Failed to approve timetable', 'error');
     }
   };
@@ -306,7 +402,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       } else {
         showMessage(data.message || 'Failed to reject', 'error');
       }
-    } catch (err) {
+    } catch {
       showMessage('Failed to reject timetable', 'error');
     }
   };
@@ -328,7 +424,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       } else {
         showMessage(data.message || 'Failed to resolve', 'error');
       }
-    } catch (err) {
+    } catch {
       showMessage('Failed to resolve conflict', 'error');
     }
   };
@@ -358,7 +454,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       } else {
         showMessage(data.message || 'Failed to add event', 'error');
       }
-    } catch (err) {
+    } catch {
       showMessage('Failed to add calendar event', 'error');
     }
   };
@@ -384,6 +480,81 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
     return roomType ? roomType.charAt(0).toUpperCase() + roomType.slice(1) : 'Other';
   };
 
+  const normalizeHallName = (value) =>
+    String(value || '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const inferBuilding = (name) => {
+    const normalized = normalizeHallName(name);
+
+    if (/^[fg]\d|\bf\d|\bg\d/.test(normalized)) return 'New Building';
+    if (/^[ab]\d|\ba\d|\bb\d/.test(normalized)) return 'Main Building';
+    if (/^e\d|\be\d/.test(normalized)) return 'Main Building';
+    return 'Specialized Facilities';
+  };
+
+  const inferFloor = (name) => {
+    const normalized = String(name || '').toUpperCase();
+    const match = normalized.match(/[A-Z](\d{3,4})/);
+    if (!match) return '';
+
+    const code = match[1];
+    return code.length === 3 ? code.charAt(0) : code.slice(0, 2);
+  };
+
+  const inferRoomType = (name) => {
+    const normalized = normalizeHallName(name);
+    if (normalized.includes('smart classroom')) return 'Smart Classroom';
+    if (normalized.includes('lab')) return 'Lab';
+    return 'Hall';
+  };
+
+  const inferCapacity = (name) => {
+    const normalized = normalizeHallName(name);
+    if (normalized.includes('&') || normalized.includes('+')) return 240;
+    if (normalized.includes('smart classroom')) return 80;
+    if (normalized.includes('lab')) return 60;
+    return 120;
+  };
+
+  const importPresetHallAllocations = async () => {
+    try {
+      setImportingHalls(true);
+      const existing = new Set(campusStructures.map((structure) => normalizeHallName(structure.name)));
+
+      const payloads = HALL_ALLOCATION_PRESET
+        .filter((name) => !existing.has(normalizeHallName(name)))
+        .map((name) => ({
+          name,
+          capacity: inferCapacity(name),
+          features: {
+            building: inferBuilding(name),
+            floor: inferFloor(name),
+            roomType: inferRoomType(name),
+          },
+        }));
+
+      if (payloads.length === 0) {
+        showMessage('All preset hall allocations already exist', 'success');
+        return;
+      }
+
+      for (let index = 0; index < payloads.length; index += 15) {
+        const chunk = payloads.slice(index, index + 15);
+        await Promise.all(chunk.map((payload) => schedulerApi.addItem('halls', payload)));
+      }
+
+      await loadCampusStructures();
+      showMessage(`${payloads.length} hall allocations added successfully`);
+    } catch (err) {
+      showMessage(err.message || 'Failed to import hall allocations', 'error');
+    } finally {
+      setImportingHalls(false);
+    }
+  };
+
   const hallCount = campusStructures.filter((item) => getCampusType(item) === 'Hall').length;
   const labCount = campusStructures.filter((item) => getCampusType(item) === 'Lab').length;
   const uniqueFloorCount = new Set(
@@ -391,6 +562,13 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       .map((item) => getFeatureValue(item.features, 'floor'))
       .filter((value) => value !== null && value !== undefined && value !== '')
   ).size;
+
+  const mainBuildingCount = campusStructures.filter(
+    (item) => getFeatureValue(item.features, 'building') === 'Main Building',
+  ).length;
+  const newBuildingCount = campusStructures.filter(
+    (item) => getFeatureValue(item.features, 'building') === 'New Building',
+  ).length;
 
   const pendingApprovals = timetables.filter(t => t.approval_status === 'pending' || !t.approval_status).length;
   const activeConflicts = conflicts.filter(c => !c.resolved).length;
@@ -434,6 +612,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
           <div className="avatar">{user?.name?.charAt(0) || 'A'}</div>
           <div className="quick-actions">
             <button className="primary" onClick={() => setActiveTab('timetables')}>Review Timetables</button>
+            <button className="primary" onClick={() => setActiveTab('reassignment')}>Reassign Instructors</button>
           </div>
         </div>
       </div>
@@ -480,7 +659,74 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
                 </div>
                 <button className="action-btn" onClick={() => document.getElementById('assignmentForm').scrollIntoView({ behavior: 'smooth' })}>Assign Now</button>
               </div>
+
+              <div className="action-card">
+                <div>
+                  <h3>🧩 Post-Generation Instructor Drag & Drop</h3>
+                  <p>Drag lecturers onto generated assignments to rebalance delivery ownership</p>
+                </div>
+                <button className="action-btn" onClick={() => setActiveTab('reassignment')}>Open Board</button>
+              </div>
             </>
+          )}
+
+          {activeTab === 'reassignment' && (
+            <div className="panel">
+              <h3>🧩 Post-Generation Instructor Reassignment</h3>
+              <p className="hero-sub">Drag an instructor onto an assignment to update lecturer allocation after timetable generation.</p>
+              <div className="ac-dnd-board mt-4">
+                <div className="ac-dnd-column">
+                  <h3>Available Instructors</h3>
+                  <div className="ac-dnd-list">
+                    {lecturers.map((lecturer) => (
+                      <div
+                        key={lecturer.id}
+                        className="ac-dnd-card"
+                        draggable
+                        onDragStart={() => setDragLecturerId(lecturer.id)}
+                        onDragEnd={() => {
+                          setDragLecturerId(null);
+                          setHoveredAssignmentId(null);
+                        }}
+                      >
+                        <strong>{lecturer.name}</strong>
+                        <span>{lecturer.department || 'General'}</span>
+                      </div>
+                    ))}
+                    {lecturers.length === 0 && <div className="ac-empty-row">No instructors available</div>}
+                  </div>
+                </div>
+
+                <div className="ac-dnd-column">
+                  <h3>Generated Module Assignments</h3>
+                  <div className="ac-dnd-list">
+                    {assignments.map((assignment) => (
+                      <div
+                        key={assignment.id}
+                        className={`ac-dnd-dropzone ${hoveredAssignmentId === assignment.id ? 'ac-dnd-dropzone-active' : ''}`}
+                        onDragOver={(event) => {
+                          event.preventDefault();
+                          setHoveredAssignmentId(assignment.id);
+                        }}
+                        onDragLeave={() => setHoveredAssignmentId((current) => (current === assignment.id ? null : current))}
+                        onDrop={async (event) => {
+                          event.preventDefault();
+                          await reassignInstructor(assignment.id, dragLecturerId);
+                          setDragLecturerId(null);
+                          setHoveredAssignmentId(null);
+                        }}
+                      >
+                        <strong>{assignment.module_code} - {assignment.module_name}</strong>
+                        <span>Current: {assignment.lecturer_name || 'Unassigned'}</span>
+                        <span>LIC: {assignment.lic_name || '-'}</span>
+                        <span>Year/Sem: Y{assignment.academic_year}/S{assignment.semester || '-'}</span>
+                      </div>
+                    ))}
+                    {assignments.length === 0 && <div className="ac-empty-row">No assignments to reassign</div>}
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
 
           {/* Timetables Tab Content */}
@@ -580,6 +826,16 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
             <div className="panel">
               <h3>🏛️ Campus Resources</h3>
               <p>Halls: {hallCount} • Labs: {labCount} • Floors: {uniqueFloorCount}</p>
+              <p>Main Building (A/B/E): {mainBuildingCount} • New Building (F/G): {newBuildingCount}</p>
+              <div className="mt-3 mb-3">
+                <button
+                  className="dashboard-btn"
+                  onClick={importPresetHallAllocations}
+                  disabled={importingHalls}
+                >
+                  {importingHalls ? 'Importing Hall Allocations...' : 'Import Academic Hall Allocation Structure'}
+                </button>
+              </div>
               <div className="ac-table-wrapper">
                 <table className="ac-table">
                   <thead>
@@ -660,7 +916,18 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
               <div className="chip" onClick={() => setActiveTab('conflicts')}>⚠️ View Conflicts</div>
               <div className="chip" onClick={() => setActiveTab('resources')}>🏛️ Manage Resources</div>
               <div className="chip" onClick={() => setActiveTab('calendar')}>📆 Calendar</div>
+              <div className="chip" onClick={() => setActiveTab('reassignment')}>🧩 Reassign Instructors</div>
             </div>
+          </div>
+
+          <div className="panel">
+            <div className="flex items-center justify-between mb-3">
+              <h3>📊 Penalty Breakdown (w1–w5)</h3>
+              <button className="dashboard-btn" onClick={loadPenaltyBreakdown} disabled={penaltyLoading}>
+                {penaltyLoading ? 'Loading...' : 'Refresh'}
+              </button>
+            </div>
+            <PenaltyBreakdownChart breakdown={penaltyBreakdown} />
           </div>
 
           {/* Add Lecturer Form */}
@@ -780,7 +1047,6 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
             </div>
           </div>
         </div>
-      </div>
 
       {/* 3D Visualization Section */}
       <div className="ac-3d-card">
@@ -827,6 +1093,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 };

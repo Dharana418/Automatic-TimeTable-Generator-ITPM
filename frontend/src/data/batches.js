@@ -1,23 +1,105 @@
-// Batch definitions (Sliit) — each batch has capacity 120 students
 const BATCH_CAPACITY = 120;
 
-const batches = [
-  'Y1.S2.WE.IT.01','Y1.S2.WE.IT.02','Y1.S2.WE.IT.03',
-  'Y1.S2.WD.IT.01','Y1.S2.WD.IT.02','Y1.S2.WD.IT.03','Y1.S2.WD.IT.04','Y1.S2.WD.IT.05','Y1.S2.WD.IT.06','Y1.S2.WD.IT.07','Y1.S2.WD.IT.08','Y1.S2.WD.IT.09','Y1.S2.WD.IT.10','Y1.S2.WD.IT.11','Y1.S2.WD.IT.12','Y1.S2.WD.IT.13','Y1.S2.WD.IT.14','Y1.S2.WD.IT.15','Y1.S2.WD.IT.16','Y1.S2.WD.IT.17','Y1.S2.WD.IT.01.QU',
+export const buildBatches = () => {
+  const items = [];
 
-  'Y2.S1.WD.IT.01',
+  const addSeries = ({ year, semester, mode, department, count }) => {
+    for (let index = 1; index <= count; index += 1) {
+      const serial = String(index).padStart(2, '0');
+      items.push(`Y${year}.S${semester}.${mode}.${department}.${serial}`);
+    }
+  };
 
-  'Y2.S2.WE.IT.01','Y2.S2.WE.IT.02','Y2.S2.WE.IT.03','Y2.S2.WE.IT.04','Y2.S2.WE.CS.01','Y2.S2.WE.ISE.01','Y2.S2.WE.CSNE.01','Y2.S2.WE.SE.01','Y2.S2.WE.IM.01','Y2.S2.WE.DS.01','Y2.S2.WD.IT.01','Y2.S2.WD.IT.02','Y2.S2.WD.IT.03','Y2.S2.WD.IT.04','Y2.S2.WD.IT.05','Y2.S2.WD.IT.06','Y2.S2.WD.IT.07','Y2.S2.WD.DS.01','Y2.S2.WD.DS.01','Y2.S2.WD.CS.01','Y2.S2.WD.CS.02','Y2.S2.WD.ISE.01','Y2.S2.WD.CSNE.01','Y2.S2.WD.IM.01','Y2.S2.WD.SE.01','Y2.S2.WD.SE.02',
+  const plan = [
+    { year: 1, semester: 2, mode: 'WE', department: 'IT', count: 6 },
+    { year: 1, semester: 2, mode: 'WD', department: 'IT', count: 18 },
+    { year: 2, semester: 1, mode: 'WD', department: 'IT', count: 4 },
+    { year: 2, semester: 2, mode: 'WE', department: 'IT', count: 6 },
+    { year: 2, semester: 2, mode: 'WD', department: 'IT', count: 8 },
+    { year: 3, semester: 1, mode: 'WE', department: 'IT', count: 5 },
+    { year: 3, semester: 1, mode: 'WD', department: 'IT', count: 4 },
+    { year: 3, semester: 2, mode: 'WE', department: 'IT', count: 4 },
+    { year: 3, semester: 2, mode: 'WD', department: 'IT', count: 3 },
+    { year: 4, semester: 1, mode: 'WE', department: 'IT', count: 1 },
+    { year: 4, semester: 1, mode: 'WD', department: 'IT', count: 1 },
 
-  'Y3.S1.WE.IT.01','Y3.S1.WE.IT.02','Y3.S1.WE.IT.03','Y3.S1.WE.IT.04','Y3.S1.WE.IT.05','Y3.S1.WE.CS.01','Y3.S1.WE.ISE.01','Y3.S1.WE.CSNE.01','Y3.S1.WE.SE.01','Y3.S1.WE.SE.02','Y3.S1.WE.IM.01','Y3.S1.WE.DS.01','Y3.S1.WE.DS.02','Y3.S1.WD.IT.01','Y3.S1.WD.IT.02','Y3.S1.WD.IT.03','Y3.S1.WD.CSNE.01','Y3.S1.WD.CS.01','Y3.S1.WD.ISE.01','Y3.S1.WD.SE.01','Y3.S1.WD.IM.01','Y3.S1.WD.DS.01',
+    { year: 2, semester: 2, mode: 'WE', department: 'SE', count: 2 },
+    { year: 2, semester: 2, mode: 'WD', department: 'SE', count: 2 },
+    { year: 3, semester: 1, mode: 'WE', department: 'SE', count: 2 },
+    { year: 3, semester: 1, mode: 'WD', department: 'SE', count: 2 },
+    { year: 3, semester: 2, mode: 'WE', department: 'SE', count: 3 },
+    { year: 3, semester: 2, mode: 'WD', department: 'SE', count: 1 },
+    { year: 4, semester: 1, mode: 'WE', department: 'SE', count: 2 },
+    { year: 4, semester: 1, mode: 'WD', department: 'SE', count: 1 },
+    { year: 4, semester: 2, mode: 'WE', department: 'SE', count: 1 },
+    { year: 4, semester: 2, mode: 'WD', department: 'SE', count: 1 },
 
-  'Y3.S2.WE.IT.01','Y3.S2.WE.IT.02','Y3.S2.WE.IT.03','Y3.S2.WE.IT.04','Y3.S2.WE.IT.05','Y3.S2.WE.CSNE.01','Y3.S2.WE.CS.01','Y3.S2.WE.ISE.01','Y3.S2.WE.SE.01','Y3.S2.WE.SE.02','Y3.S2.WE.SE.03','Y3.S2.WE.SE.04','Y3.S2.WE.DS.01','Y3.S2.WE.DS.02','Y3.S2.WE.IM.01','Y3.S2.WD.IT.01','Y3.S2.WD.SE.01','Y3.S2.WD.DS.01','Y3.S2.WD.IM.01','Y3.S2.WD.CS.01','Y3.S2.WD.ISE.01','Y3.S2.WD.CSNE.01',
+    { year: 2, semester: 2, mode: 'WE', department: 'DS', count: 1 },
+    { year: 2, semester: 2, mode: 'WD', department: 'DS', count: 1 },
+    { year: 3, semester: 1, mode: 'WE', department: 'DS', count: 2 },
+    { year: 3, semester: 1, mode: 'WD', department: 'DS', count: 1 },
+    { year: 3, semester: 2, mode: 'WE', department: 'DS', count: 2 },
+    { year: 3, semester: 2, mode: 'WD', department: 'DS', count: 1 },
+    { year: 4, semester: 1, mode: 'WE', department: 'DS', count: 2 },
+    { year: 4, semester: 1, mode: 'WD', department: 'DS', count: 1 },
+    { year: 4, semester: 2, mode: 'WE', department: 'DS', count: 2 },
+    { year: 4, semester: 2, mode: 'WD', department: 'DS', count: 1 },
 
-  'Y4.S1.WE.IT.01','Y4.S1.WE.IT.02','Y4.S1.WE.IT.03','Y4.S1.WE.CS.01','Y4.S1.WE.ISE.01','Y4.S1.WE.IM.01','Y4.S1.WE.DS.01','Y4.S1.WE.SE.01','Y4.S1.WD.IT.01','Y4.S1.WD.CS.01','Y4.S1.WD.ISE.01','Y4.S1.WD.IM.01','Y4.S1.WD.DS.01','Y4.S1.WD.SE.01',
+    { year: 2, semester: 2, mode: 'WE', department: 'CS', count: 1 },
+    { year: 2, semester: 2, mode: 'WD', department: 'CS', count: 1 },
+    { year: 3, semester: 1, mode: 'WE', department: 'CS', count: 1 },
+    { year: 3, semester: 1, mode: 'WD', department: 'CS', count: 1 },
+    { year: 3, semester: 2, mode: 'WE', department: 'CS', count: 1 },
+    { year: 3, semester: 2, mode: 'WD', department: 'CS', count: 1 },
+    { year: 4, semester: 1, mode: 'WE', department: 'CS', count: 1 },
+    { year: 4, semester: 1, mode: 'WD', department: 'CS', count: 1 },
+    { year: 4, semester: 2, mode: 'WE', department: 'CS', count: 1 },
+    { year: 4, semester: 2, mode: 'WD', department: 'CS', count: 1 },
 
-  'Y4.S2.WE.IT.01','Y4.S2.WE.IT.02','Y4.S2.WE.IT.03','Y4.S2.WE.IT.04','Y4.S2.WE.IT.05','Y4.S2.WE.IT.06','Y4.S2.WE.IT.07','Y4.S2.WE.IT.08','Y4.S2.WE.CSNE.01','Y4.S2.WE.CS.01','Y4.S2.WE.ISE.01','Y4.S2.WE.IM.01','Y4.S2.WE.DS.01','Y4.S2.WE.DS.02','Y4.S2.WE.SE.01','Y4.S2.WE.SE.02','Y4.S2.WE.SE.03','Y4.S2.WD.IT.02','Y4.S2.WD.IM.01','Y4.S2.WD.DS.01','Y4.S2.WD.SE.01','Y4.S2.WD.CSNE.01','Y4.S2.WD.CS.01','Y4.S2.WD.ISE.01'
-];
+    { year: 2, semester: 2, mode: 'WE', department: 'ISE', count: 1 },
+    { year: 2, semester: 2, mode: 'WD', department: 'ISE', count: 1 },
+    { year: 3, semester: 1, mode: 'WE', department: 'ISE', count: 1 },
+    { year: 3, semester: 1, mode: 'WD', department: 'ISE', count: 1 },
+    { year: 3, semester: 2, mode: 'WE', department: 'ISE', count: 1 },
+    { year: 3, semester: 2, mode: 'WD', department: 'ISE', count: 1 },
+    { year: 4, semester: 1, mode: 'WE', department: 'ISE', count: 1 },
+    { year: 4, semester: 1, mode: 'WD', department: 'ISE', count: 1 },
+    { year: 4, semester: 2, mode: 'WE', department: 'ISE', count: 1 },
+    { year: 4, semester: 2, mode: 'WD', department: 'ISE', count: 1 },
 
+    { year: 2, semester: 2, mode: 'WE', department: 'IM', count: 1 },
+    { year: 2, semester: 2, mode: 'WD', department: 'IM', count: 1 },
+    { year: 3, semester: 1, mode: 'WE', department: 'IM', count: 1 },
+    { year: 3, semester: 1, mode: 'WD', department: 'IM', count: 1 },
+    { year: 3, semester: 2, mode: 'WE', department: 'IM', count: 1 },
+    { year: 3, semester: 2, mode: 'WD', department: 'IM', count: 1 },
+    { year: 4, semester: 1, mode: 'WE', department: 'IM', count: 1 },
+    { year: 4, semester: 1, mode: 'WD', department: 'IM', count: 1 },
+    { year: 4, semester: 2, mode: 'WE', department: 'IM', count: 1 },
+    { year: 4, semester: 2, mode: 'WD', department: 'IM', count: 1 },
+
+    { year: 2, semester: 2, mode: 'WE', department: 'CSNE', count: 1 },
+    { year: 2, semester: 2, mode: 'WD', department: 'CSNE', count: 1 },
+    { year: 3, semester: 1, mode: 'WE', department: 'CSNE', count: 1 },
+    { year: 3, semester: 1, mode: 'WD', department: 'CSNE', count: 1 },
+    { year: 3, semester: 2, mode: 'WE', department: 'CSNE', count: 1 },
+    { year: 3, semester: 2, mode: 'WD', department: 'CSNE', count: 1 },
+    { year: 4, semester: 1, mode: 'WE', department: 'CSNE', count: 1 },
+    { year: 4, semester: 2, mode: 'WE', department: 'CSNE', count: 1 },
+    { year: 4, semester: 2, mode: 'WD', department: 'CSNE', count: 1 },
+  ];
+
+  plan.forEach(addSeries);
+
+  const unique = new Set(items);
+  if (items.length !== 130 || unique.size !== 130) {
+    throw new Error(`Batch plan must produce exactly 130 unique items. Got ${items.length} total and ${unique.size} unique.`);
+  }
+
+  return items;
+};
+
+const batches = buildBatches();
 const batchObjects = batches.map((id) => ({ id, capacity: BATCH_CAPACITY }));
 
 export default batchObjects;
