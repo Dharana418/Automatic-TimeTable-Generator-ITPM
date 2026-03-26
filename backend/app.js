@@ -15,7 +15,26 @@ const app = express();
 
 // CORS configuration
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:5174'],
+    origin: (origin, callback) => {
+        if (!origin) {
+            return callback(null, true);
+        }
+
+        const allowedOrigins = [
+            'http://localhost:5173',
+            'http://localhost:5174',
+            'http://127.0.0.1:5173',
+            'http://127.0.0.1:5174',
+        ];
+
+        const isLocalhostPort = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
+
+        if (allowedOrigins.includes(origin) || isLocalhostPort) {
+            return callback(null, true);
+        }
+
+        return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']

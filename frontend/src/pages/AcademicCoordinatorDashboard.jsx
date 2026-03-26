@@ -1,10 +1,52 @@
 import React, { useEffect, useState } from 'react';
+import { Users, BookOpen, Building2, FileText, AlertCircle, Calendar, Check, X, Pencil, Trash2 } from 'lucide-react';
 import schedulerApi from '../api/scheduler.js';
 import moduleCatalog from '../data/moduleCatalog.js';
 import HallAllocation from '../components/HallAllocation.jsx';
 import { askForText, confirmDelete, showError, showSuccess, showWarning } from '../utils/alerts.js';
 
-const FORBIDDEN_SPECIAL_CHARS = /[~!@#$%^&*()_+]/;
+const HALL_ALLOCATION_PRESET = [
+  'A401', 'A402', 'A403', 'A404', 'A405',
+  'B401', 'B402', 'B403', 'B404', 'B405',
+  'E401', 'E402', 'E403',
+  'F401', 'F402', 'F403', 'F404',
+  'G401', 'G402', 'G403',
+  'Smart Classroom 1', 'Smart Classroom 2',
+  'Network Lab 1', 'Programming Lab 1',
+];
+
+const PenaltyBreakdownChart = ({ breakdown }) => {
+  if (!breakdown || typeof breakdown !== 'object') {
+    return <div className="ac-empty-row">No penalty data available.</div>;
+  }
+
+  const entries = Object.entries(breakdown)
+    .filter(([, value]) => Number.isFinite(Number(value)))
+    .map(([key, value]) => ({ key, value: Number(value) }));
+
+  if (entries.length === 0) {
+    return <div className="ac-empty-row">No penalty data available.</div>;
+  }
+
+  const maxValue = Math.max(...entries.map((entry) => entry.value), 1);
+
+  return (
+    <div className="ac-penalty-list">
+      {entries.map((entry) => {
+        const widthPercent = Math.max(4, Math.round((entry.value / maxValue) * 100));
+        return (
+          <div key={entry.key} className="ac-penalty-row">
+            <div className="ac-penalty-label">{entry.key}</div>
+            <div className="ac-penalty-track">
+              <div className="ac-penalty-bar" style={{ width: `${widthPercent}%` }} />
+            </div>
+            <div className="ac-penalty-value">{entry.value}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 
 const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -51,6 +93,11 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   // UI states
   const [message, setMessage] = useState({ text: '', type: '' });
   const [loading, setLoading] = useState(false);
+  const [penaltyLoading, setPenaltyLoading] = useState(false);
+  const [penaltyBreakdown, setPenaltyBreakdown] = useState(null);
+  const [importingHalls, setImportingHalls] = useState(false);
+  const [dragLecturerId, setDragLecturerId] = useState(null);
+  const [hoveredAssignmentId, setHoveredAssignmentId] = useState(null);
   const [view3d, setView3d] = useState({ rotateX: 10, rotateZ: -18, zoom: 1 });
   const [showCalendarForm, setShowCalendarForm] = useState(false);
 
@@ -65,26 +112,54 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
     setTimeout(() => setMessage({ text: '', type: '' }), 5000);
   };
 
-  const loadAllData = async () => {
-    setLoading(true);
-    try {
-      await Promise.all([
-        loadLecturers(),
-        loadLics(),
-        loadModules(),
-        loadCampusStructures(),
-        loadAssignments(),
-        loadTimetables(),
-        loadConflicts(),
-        loadAcademicCalendar()
-      ]);
-    } catch (err) {
-      console.error('Failed to load some data:', err);
-      showMessage('Failed to load some data', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    const loadAllData = async () => {
+      setLoading(true);
+      try {
+        const loadTimetablesInitial = async () => {
+          const response = await fetch(`${apiBase}/api/academic-coordinator/timetables`, {
+            credentials: 'include'
+          });
+          const data = await response.json();
+          if (data.success) setTimetables(data.data || []);
+        };
+
+        const loadConflictsInitial = async () => {
+          const response = await fetch(`${apiBase}/api/academic-coordinator/conflicts?resolved=false`, {
+            credentials: 'include'
+          });
+          const data = await response.json();
+          if (data.success) setConflicts(data.data || []);
+        };
+
+        const loadAcademicCalendarInitial = async () => {
+          const response = await fetch(`${apiBase}/api/academic-coordinator/calendar`, {
+            credentials: 'include'
+          });
+          const data = await response.json();
+          if (data.success) setAcademicCalendar(data.data || []);
+        };
+
+        await Promise.all([
+          loadLecturers(),
+          loadLics(),
+          loadModules(),
+          loadCampusStructures(),
+          loadAssignments(),
+          loadTimetablesInitial(),
+          loadConflictsInitial(),
+          loadAcademicCalendarInitial()
+        ]);
+      } catch (err) {
+        console.error('Failed to load some data:', err);
+        showMessage('Failed to load some data', 'error');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadAllData();
+  }, [apiBase]);
 
   const loadLecturers = async () => {
     try {
@@ -176,52 +251,26 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   // CRUD Operations
   const addLecturer = async (e) => {
     e.preventDefault();
-    if (!lecturerForm.name.trim()) {
-      showWarning('Validation required', 'Lecturer name is required.');
-      return;
-    }
-    if (FORBIDDEN_SPECIAL_CHARS.test(lecturerForm.name.trim()) || FORBIDDEN_SPECIAL_CHARS.test(lecturerForm.department.trim())) {
-      showWarning('Validation required', 'Lecturer name/department cannot contain ~!@#$%^&*()_+');
-      return;
-    }
-    if (lecturerForm.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lecturerForm.email)) {
-      showWarning('Validation required', 'Please provide a valid lecturer email address.');
-      return;
-    }
-
     try {
       await schedulerApi.addItem('instructors', lecturerForm);
       setLecturerForm({ name: '', department: '', email: '' });
       showMessage('Lecturer added successfully');
-      showSuccess('Lecturer added');
       await loadLecturers();
     } catch (err) {
       console.error('Add lecturer error:', err);
-      showError('Add lecturer failed', err.message || 'Failed to add lecturer');
       showMessage(err.message || 'Failed to add lecturer', 'error');
     }
   };
 
   const addLic = async (e) => {
     e.preventDefault();
-    if (!licForm.name.trim()) {
-      showWarning('Validation required', 'LIC name is required.');
-      return;
-    }
-    if (FORBIDDEN_SPECIAL_CHARS.test(licForm.name.trim()) || FORBIDDEN_SPECIAL_CHARS.test(licForm.department.trim())) {
-      showWarning('Validation required', 'LIC name/department cannot contain ~!@#$%^&*()_+');
-      return;
-    }
-
     try {
       await schedulerApi.addItem('lics', licForm);
       setLicForm({ name: '', department: '' });
       showMessage('LIC added successfully');
-      showSuccess('LIC added');
       await loadLics();
     } catch (err) {
       console.error('Add LIC error:', err);
-      showError('Add LIC failed', err.message || 'Failed to add LIC');
       showMessage(err.message || 'Failed to add LIC', 'error');
     }
   };
@@ -230,12 +279,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
     e.preventDefault();
     
     if (!moduleForm.code || !moduleForm.name) {
-      showWarning('Validation required', 'Module code and name are required.');
       showMessage('Module code and name are required', 'error');
-      return;
-    }
-    if (FORBIDDEN_SPECIAL_CHARS.test(moduleForm.code.trim()) || FORBIDDEN_SPECIAL_CHARS.test(moduleForm.name.trim())) {
-      showWarning('Validation required', 'Module code/name cannot contain ~!@#$%^&*()_+');
       return;
     }
     
@@ -247,11 +291,9 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       
       setModuleForm({ code: '', name: '', batch_size: '', credits: '', lectures_per_week: '' });
       showMessage('Module added successfully');
-      showSuccess('Module added');
       await loadModules();
     } catch (err) {
       console.error('Add module error:', err);
-      showError('Add module failed', err.message || 'Failed to add module');
       showMessage(err.message || 'Failed to add module', 'error');
     }
   };
@@ -264,19 +306,6 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
   const _addCampusStructure = async (e) => {
     e.preventDefault();
-    if (!campusForm.name.trim()) {
-      showWarning('Validation required', 'Campus structure name is required.');
-      return;
-    }
-    if (FORBIDDEN_SPECIAL_CHARS.test(campusForm.name.trim())) {
-      showWarning('Validation required', 'Campus structure name cannot contain ~!@#$%^&*()_+');
-      return;
-    }
-    if (campusForm.capacity && Number(campusForm.capacity) < 1) {
-      showWarning('Validation required', 'Capacity must be at least 1.');
-      return;
-    }
-
     try {
       await schedulerApi.addItem('halls', {
         name: campusForm.name,
@@ -289,10 +318,8 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       });
       setCampusForm({ name: '', capacity: '', building: '', floor: '', roomType: '' });
       showMessage('Campus structure added successfully');
-      showSuccess('Campus structure added');
       await loadCampusStructures();
     } catch (err) {
-      showError('Add structure failed', err.message || 'Failed to add campus structure');
       showMessage(err.message || 'Failed to add campus structure', 'error');
     }
   };
@@ -300,38 +327,50 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   const addAssignment = async (e) => {
     e.preventDefault();
     if (!assignmentForm.moduleId || !assignmentForm.lecturerId || !assignmentForm.licId) {
-      showWarning('Validation required', 'Please fill all required assignment fields.');
       showMessage('Please fill all required fields', 'error');
       return;
     }
     try {
       await schedulerApi.createAssignment(assignmentForm);
       showMessage('Module assignment created');
-      showSuccess('Assignment created');
       setAssignmentForm({ moduleId: '', lecturerId: '', licId: '', academicYear: '1', semester: '1' });
       await loadAssignments();
     } catch (err) {
-      showError('Create assignment failed', err.message || 'Failed to create assignment');
       showMessage(err.message || 'Failed to create assignment', 'error');
     }
   };
 
   const removeAssignment = async (id) => {
-    const confirmed = await confirmDelete({
-      title: 'Remove assignment?',
-      text: 'This assignment will be permanently removed.',
-      confirmButtonText: 'Remove assignment',
-    });
-    if (!confirmed) return;
-
+    if (!window.confirm('Are you sure you want to remove this assignment?')) return;
     try {
       await schedulerApi.deleteAssignment(id);
       showMessage('Assignment removed');
-      showSuccess('Assignment removed');
       await loadAssignments();
     } catch (err) {
-      showError('Remove assignment failed', err.message || 'Failed to remove assignment');
       showMessage(err.message || 'Failed to remove assignment', 'error');
+    }
+  };
+
+  const loadPenaltyBreakdown = async () => {
+    try {
+      setPenaltyLoading(true);
+      const response = await schedulerApi.runScheduler(['hybrid'], { iterations: 40 });
+      setPenaltyBreakdown(response?.results?.hybrid?.penaltyBreakdown || null);
+    } catch (err) {
+      showMessage(err.message || 'Failed to load penalty breakdown', 'error');
+    } finally {
+      setPenaltyLoading(false);
+    }
+  };
+
+  const reassignInstructor = async (assignmentId, lecturerId) => {
+    if (!assignmentId || !lecturerId) return;
+    try {
+      await schedulerApi.updateAssignment(assignmentId, { lecturerId });
+      showMessage('Instructor reassigned successfully');
+      await loadAssignments();
+    } catch (err) {
+      showMessage(err.message || 'Failed to reassign instructor', 'error');
     }
   };
 
@@ -346,10 +385,8 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       const data = await response.json();
       if (data.success) {
         showMessage('Timetable approved successfully');
-        showSuccess('Timetable approved');
         await loadTimetables();
       } else {
-        showError('Approve failed', data.message || 'Failed to approve timetable');
         showMessage(data.message || 'Failed to approve', 'error');
       }
     } catch (err) {
@@ -358,13 +395,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   };
 
   const rejectTimetable = async (id) => {
-    const reason = await askForText({
-      title: 'Reject timetable',
-      inputLabel: 'Reason for rejection',
-      inputPlaceholder: 'Enter rejection reason',
-      confirmButtonText: 'Reject',
-      validationMessage: 'Reason is required to reject the timetable.',
-    });
+    const reason = prompt('Please provide a reason for rejection:');
     if (!reason) return;
     try {
       const response = await fetch(`${apiBase}/api/academic-coordinator/timetables/${id}/reject`, {
@@ -376,10 +407,8 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       const data = await response.json();
       if (data.success) {
         showMessage('Timetable rejected');
-        showSuccess('Timetable rejected');
         await loadTimetables();
       } else {
-        showError('Reject failed', data.message || 'Failed to reject timetable');
         showMessage(data.message || 'Failed to reject', 'error');
       }
     } catch (err) {
@@ -388,13 +417,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   };
 
   const resolveConflict = async (id) => {
-    const resolution = await askForText({
-      title: 'Resolve conflict',
-      inputLabel: 'Resolution notes',
-      inputPlaceholder: 'Describe how this conflict was resolved',
-      confirmButtonText: 'Resolve',
-      validationMessage: 'Resolution notes are required.',
-    });
+    const resolution = prompt('How was this conflict resolved?');
     if (!resolution) return;
     try {
       const response = await fetch(`${apiBase}/api/academic-coordinator/conflicts/${id}/resolve`, {
@@ -406,10 +429,8 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       const data = await response.json();
       if (data.success) {
         showMessage('Conflict resolved');
-        showSuccess('Conflict resolved');
         await loadConflicts();
       } else {
-        showError('Resolve failed', data.message || 'Failed to resolve conflict');
         showMessage(data.message || 'Failed to resolve', 'error');
       }
     } catch (err) {
@@ -429,7 +450,6 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       const data = await response.json();
       if (data.success) {
         showMessage('Calendar event added');
-        showSuccess('Calendar event added');
         setCalendarEventForm({
           event_name: '',
           event_type: 'semester_start',
@@ -441,11 +461,10 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
         setShowCalendarForm(false);
         await loadAcademicCalendar();
       } else {
-        showError('Add event failed', data.message || 'Failed to add event');
         showMessage(data.message || 'Failed to add event', 'error');
       }
-    } catch (err) {
-      showMessage('Failed to add calendar event', 'error',err);
+    } catch {
+      showMessage('Failed to add calendar event', 'error');
     }
   };
 
@@ -470,6 +489,81 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
     return roomType ? roomType.charAt(0).toUpperCase() + roomType.slice(1) : 'Other';
   };
 
+  const normalizeHallName = (value) =>
+    String(value || '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const inferBuilding = (name) => {
+    const normalized = normalizeHallName(name);
+
+    if (/^[fg]\d|\bf\d|\bg\d/.test(normalized)) return 'New Building';
+    if (/^[ab]\d|\ba\d|\bb\d/.test(normalized)) return 'Main Building';
+    if (/^e\d|\be\d/.test(normalized)) return 'Main Building';
+    return 'Specialized Facilities';
+  };
+
+  const inferFloor = (name) => {
+    const normalized = String(name || '').toUpperCase();
+    const match = normalized.match(/[A-Z](\d{3,4})/);
+    if (!match) return '';
+
+    const code = match[1];
+    return code.length === 3 ? code.charAt(0) : code.slice(0, 2);
+  };
+
+  const inferRoomType = (name) => {
+    const normalized = normalizeHallName(name);
+    if (normalized.includes('smart classroom')) return 'Smart Classroom';
+    if (normalized.includes('lab')) return 'Lab';
+    return 'Hall';
+  };
+
+  const inferCapacity = (name) => {
+    const normalized = normalizeHallName(name);
+    if (normalized.includes('&') || normalized.includes('+')) return 240;
+    if (normalized.includes('smart classroom')) return 80;
+    if (normalized.includes('lab')) return 60;
+    return 120;
+  };
+
+  const importPresetHallAllocations = async () => {
+    try {
+      setImportingHalls(true);
+      const existing = new Set(campusStructures.map((structure) => normalizeHallName(structure.name)));
+
+      const payloads = HALL_ALLOCATION_PRESET
+        .filter((name) => !existing.has(normalizeHallName(name)))
+        .map((name) => ({
+          name,
+          capacity: inferCapacity(name),
+          features: {
+            building: inferBuilding(name),
+            floor: inferFloor(name),
+            roomType: inferRoomType(name),
+          },
+        }));
+
+      if (payloads.length === 0) {
+        showMessage('All preset hall allocations already exist', 'success');
+        return;
+      }
+
+      for (let index = 0; index < payloads.length; index += 15) {
+        const chunk = payloads.slice(index, index + 15);
+        await Promise.all(chunk.map((payload) => schedulerApi.addItem('halls', payload)));
+      }
+
+      await loadCampusStructures();
+      showMessage(`${payloads.length} hall allocations added successfully`);
+    } catch (err) {
+      showMessage(err.message || 'Failed to import hall allocations', 'error');
+    } finally {
+      setImportingHalls(false);
+    }
+  };
+
   const hallCount = campusStructures.filter((item) => getCampusType(item) === 'Hall').length;
   const labCount = campusStructures.filter((item) => getCampusType(item) === 'Lab').length;
   const uniqueFloorCount = new Set(
@@ -477,6 +571,13 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       .map((item) => getFeatureValue(item.features, 'floor'))
       .filter((value) => value !== null && value !== undefined && value !== '')
   ).size;
+
+  const mainBuildingCount = campusStructures.filter(
+    (item) => getFeatureValue(item.features, 'building') === 'Main Building',
+  ).length;
+  const newBuildingCount = campusStructures.filter(
+    (item) => getFeatureValue(item.features, 'building') === 'New Building',
+  ).length;
 
   const pendingApprovals = timetables.filter(t => t.approval_status === 'pending' || !t.approval_status).length;
   const activeConflicts = conflicts.filter(c => !c.resolved).length;
@@ -520,6 +621,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
           <div className="avatar">{user?.name?.charAt(0) || 'A'}</div>
           <div className="quick-actions">
             <button className="primary" onClick={() => setActiveTab('timetables')}>Review Timetables</button>
+            <button className="primary" onClick={() => setActiveTab('reassignment')}>Reassign Instructors</button>
           </div>
         </div>
       </div>
@@ -584,7 +686,74 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
                 </div>
                 <button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('assignmentForm').scrollIntoView({ behavior: 'smooth' })}>Assign Now</button>
               </div>
+
+              <div className="action-card">
+                <div>
+                  <h3>🧩 Post-Generation Instructor Drag & Drop</h3>
+                  <p>Drag lecturers onto generated assignments to rebalance delivery ownership</p>
+                </div>
+                <button className="action-btn" onClick={() => setActiveTab('reassignment')}>Open Board</button>
+              </div>
             </>
+          )}
+
+          {activeTab === 'reassignment' && (
+            <div className="panel">
+              <h3>🧩 Post-Generation Instructor Reassignment</h3>
+              <p className="hero-sub">Drag an instructor onto an assignment to update lecturer allocation after timetable generation.</p>
+              <div className="ac-dnd-board mt-4">
+                <div className="ac-dnd-column">
+                  <h3>Available Instructors</h3>
+                  <div className="ac-dnd-list">
+                    {lecturers.map((lecturer) => (
+                      <div
+                        key={lecturer.id}
+                        className="ac-dnd-card"
+                        draggable
+                        onDragStart={() => setDragLecturerId(lecturer.id)}
+                        onDragEnd={() => {
+                          setDragLecturerId(null);
+                          setHoveredAssignmentId(null);
+                        }}
+                      >
+                        <strong>{lecturer.name}</strong>
+                        <span>{lecturer.department || 'General'}</span>
+                      </div>
+                    ))}
+                    {lecturers.length === 0 && <div className="ac-empty-row">No instructors available</div>}
+                  </div>
+                </div>
+
+                <div className="ac-dnd-column">
+                  <h3>Generated Module Assignments</h3>
+                  <div className="ac-dnd-list">
+                    {assignments.map((assignment) => (
+                      <div
+                        key={assignment.id}
+                        className={`ac-dnd-dropzone ${hoveredAssignmentId === assignment.id ? 'ac-dnd-dropzone-active' : ''}`}
+                        onDragOver={(event) => {
+                          event.preventDefault();
+                          setHoveredAssignmentId(assignment.id);
+                        }}
+                        onDragLeave={() => setHoveredAssignmentId((current) => (current === assignment.id ? null : current))}
+                        onDrop={async (event) => {
+                          event.preventDefault();
+                          await reassignInstructor(assignment.id, dragLecturerId);
+                          setDragLecturerId(null);
+                          setHoveredAssignmentId(null);
+                        }}
+                      >
+                        <strong>{assignment.module_code} - {assignment.module_name}</strong>
+                        <span>Current: {assignment.lecturer_name || 'Unassigned'}</span>
+                        <span>LIC: {assignment.lic_name || '-'}</span>
+                        <span>Year/Sem: Y{assignment.academic_year}/S{assignment.semester || '-'}</span>
+                      </div>
+                    ))}
+                    {assignments.length === 0 && <div className="ac-empty-row">No assignments to reassign</div>}
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
 
           {/* Timetables Tab Content */}
@@ -684,6 +853,16 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
             <div className="panel">
               <h3>🏛️ Campus Resources</h3>
               <p>Halls: {hallCount} • Labs: {labCount} • Floors: {uniqueFloorCount}</p>
+              <p>Main Building (A/B/E): {mainBuildingCount} • New Building (F/G): {newBuildingCount}</p>
+              <div className="mt-3 mb-3">
+                <button
+                  className="dashboard-btn"
+                  onClick={importPresetHallAllocations}
+                  disabled={importingHalls}
+                >
+                  {importingHalls ? 'Importing Hall Allocations...' : 'Import Academic Hall Allocation Structure'}
+                </button>
+              </div>
               <div className="ac-table-wrapper">
                 <table className="ac-table">
                   <thead>
@@ -764,7 +943,18 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
               <div className="chip" onClick={() => setActiveTab('conflicts')}>⚠️ View Conflicts</div>
               <div className="chip" onClick={() => setActiveTab('resources')}>🏛️ Manage Resources</div>
               <div className="chip" onClick={() => setActiveTab('calendar')}>📆 Calendar</div>
+              <div className="chip" onClick={() => setActiveTab('reassignment')}>🧩 Reassign Instructors</div>
             </div>
+          </div>
+
+          <div className="panel">
+            <div className="flex items-center justify-between mb-3">
+              <h3>📊 Penalty Breakdown (w1–w5)</h3>
+              <button className="dashboard-btn" onClick={loadPenaltyBreakdown} disabled={penaltyLoading}>
+                {penaltyLoading ? 'Loading...' : 'Refresh'}
+              </button>
+            </div>
+            <PenaltyBreakdownChart breakdown={penaltyBreakdown} />
           </div>
 
           {/* Add Lecturer Form */}
@@ -934,6 +1124,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 };
