@@ -1,71 +1,74 @@
 import Swal from 'sweetalert2';
 
-const base = {
-  confirmButtonColor: '#2563eb',
+const buildText = (title, text) => {
+  if (typeof text === 'string' && text.trim().length > 0) return text;
+  return '';
 };
 
-export const showSuccess = (title, text = '') => {
-  return Swal.fire({
-    ...base,
+export async function showSuccess(title = 'Success', text = '') {
+  await Swal.fire({
     icon: 'success',
     title,
-    text,
-    timer: 2200,
-    showConfirmButton: false,
+    text: buildText(title, text),
+    confirmButtonText: 'OK',
   });
-};
+}
 
-export const showError = (title, text = '') => {
-  return Swal.fire({
-    ...base,
+export async function showError(title = 'Error', text = '') {
+  await Swal.fire({
     icon: 'error',
     title,
-    text,
+    text: buildText(title, text),
+    confirmButtonText: 'OK',
   });
-};
+}
 
-export const showWarning = (title, text = '') => {
-  return Swal.fire({
-    ...base,
+export async function showWarning(title = 'Warning', text = '') {
+  await Swal.fire({
     icon: 'warning',
     title,
-    text,
+    text: buildText(title, text),
+    confirmButtonText: 'OK',
   });
-};
+}
 
-export const confirmDelete = async ({
-  title = 'Are you sure?',
-  text = 'This action cannot be undone.',
-  confirmButtonText = 'Delete',
-  cancelButtonText = 'Cancel',
-} = {}) => {
+export async function confirmDelete(options = {}) {
+  const {
+    title = 'Are you sure?',
+    text = 'This action cannot be undone.',
+    confirmButtonText = 'Delete',
+    cancelButtonText = 'Cancel',
+  } = options;
+
   const result = await Swal.fire({
-    ...base,
     icon: 'warning',
     title,
     text,
     showCancelButton: true,
-    confirmButtonColor: '#dc2626',
-    cancelButtonColor: '#64748b',
     confirmButtonText,
     cancelButtonText,
+    reverseButtons: true,
+    focusCancel: true,
   });
 
-  return result.isConfirmed;
-};
+  return Boolean(result.isConfirmed);
+}
 
-export const askForText = async ({
-  title = 'Enter value',
-  inputLabel = '',
-  inputPlaceholder = '',
-  confirmButtonText = 'Submit',
-  cancelButtonText = 'Cancel',
-  inputValue = '',
-  validator,
-} = {}) => {
+export async function askForText(options = {}) {
+  const {
+    title = 'Enter value',
+    text = '',
+    inputLabel = '',
+    inputPlaceholder = '',
+    confirmButtonText = 'Submit',
+    cancelButtonText = 'Cancel',
+    inputValue = '',
+    validator,
+  } = options;
+
   const result = await Swal.fire({
-    ...base,
     title,
+    text,
     input: 'text',
     inputLabel,
     inputPlaceholder,
@@ -77,9 +80,13 @@ export const askForText = async ({
       if (typeof validator === 'function') {
         return validator(value);
       }
-      return !value ? 'This field is required' : null;
+      if (!value || !String(value).trim()) {
+        return 'Please enter a value';
+      }
+      return undefined;
     },
   });
 
-  return result.isConfirmed ? result.value : null;
-};
+  if (!result.isConfirmed) return null;
+  return String(result.value ?? '').trim();
+}
