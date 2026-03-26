@@ -48,6 +48,12 @@ An intelligent, automated university timetable scheduling system for SLIIT using
 6. **Core Scheduler** - Basic reference implementation
 7. **Optimizer** - Parameter optimization module
 
+### Hall Management Features (NEW!)
+- ✅ **Resource Assignment** - Track equipment and furniture inventory
+- ✅ **Hall Ratings & Feedback** - User feedback system with statistics
+- ✅ **Activity Logging** - Complete edit/delete history tracking
+- ✅ **Smart Recommendations** - AI-powered hall suggestions based on requirements
+
 ---
 
 ## 🛠️ Tech Stack

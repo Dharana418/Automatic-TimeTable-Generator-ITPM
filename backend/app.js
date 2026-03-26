@@ -6,6 +6,7 @@ import pool from './config/db.js';
 import authRoutes from './routes/auth.js';
 import schedulerRoutes from './routes/scheduler.js';
 import academicCoordinatorRoutes from './routes/academicCoordinator.js';
+import hallRoutes from './routes/halls.js';
 import initDb from './config/initDb.js';
 
 dotenv.config();
@@ -87,6 +88,7 @@ const startServer = async () => {
     app.use('/api/auth', authRoutes);
     app.use('/api/scheduler', schedulerRoutes);
     app.use('/api/academic-coordinator', academicCoordinatorRoutes);
+    app.use('/api/halls', hallRoutes);
     
     // Health check endpoint
     app.get('/api/health', (req, res) => {

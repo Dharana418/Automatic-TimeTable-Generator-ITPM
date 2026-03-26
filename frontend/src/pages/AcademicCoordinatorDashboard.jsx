@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Users, BookOpen, Building2, FileText, AlertCircle, Calendar, Check, X, Pencil, Trash2 } from 'lucide-react';
 import schedulerApi from '../api/scheduler.js';
 import moduleCatalog from '../data/moduleCatalog.js';
+import HallAllocation from '../components/HallAllocation.jsx';
+import { askForText, confirmDelete, showError, showSuccess, showWarning } from '../utils/alerts.js';
 
 const HALL_ALLOCATION_PRESET = [
   'A401', 'A402', 'A403', 'A404', 'A405',
@@ -58,6 +60,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   const [timetables, setTimetables] = useState([]);
   const [conflicts, setConflicts] = useState([]);
   const [academicCalendar, setAcademicCalendar] = useState([]);
+  const [mainView, setMainView] = useState('lectures');
   
   // Form states
   const [lecturerForm, setLecturerForm] = useState({ name: '', department: '', email: '' });
@@ -97,6 +100,12 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   const [hoveredAssignmentId, setHoveredAssignmentId] = useState(null);
   const [view3d, setView3d] = useState({ rotateX: 10, rotateZ: -18, zoom: 1 });
   const [showCalendarForm, setShowCalendarForm] = useState(false);
+
+  useEffect(() => {
+    loadAllData();
+    // loadAllData is intentionally called only on first mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const showMessage = (text, type = 'success') => {
     setMessage({ text, type });
@@ -380,8 +389,8 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       } else {
         showMessage(data.message || 'Failed to approve', 'error');
       }
-    } catch {
-      showMessage('Failed to approve timetable', 'error');
+    } catch (err) {
+      showMessage('Failed to approve timetable', 'error',err);
     }
   };
 
@@ -402,8 +411,8 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       } else {
         showMessage(data.message || 'Failed to reject', 'error');
       }
-    } catch {
-      showMessage('Failed to reject timetable', 'error');
+    } catch (err) {
+      showMessage('Failed to reject timetable', 'error',err);
     }
   };
 
@@ -424,8 +433,8 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       } else {
         showMessage(data.message || 'Failed to resolve', 'error');
       }
-    } catch {
-      showMessage('Failed to resolve conflict', 'error');
+    } catch (err) {
+      showMessage('Failed to resolve conflict', 'error', err);
     }
   };
 
@@ -622,7 +631,25 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
           {message.text}
         </div>
       )}
+      {/* Top Menu */}
+      <div className="ac-main-menu-wrap">
+        <div className="ac-main-menu" role="tablist" aria-label="Main dashboard views">
+          <button
+            onClick={() => setMainView('lectures')}
+            className={`ac-main-menu-btn ${mainView === 'lectures' ? 'is-active' : ''}`}
+          >
+            📚 Lectures
+          </button>
 
+          <button
+            onClick={() => setMainView('hallAllocation')}
+            className={`ac-main-menu-btn ${mainView === 'hallAllocation' ? 'is-active' : ''}`}
+          >
+            🏛️ Hall Allocation
+          </button>
+        </div>
+      </div>
+{mainView === 'lectures' && (
       <div className="dashboard-main">
         <div className="left-col">
           {/* Overview Tab Content */}
@@ -633,7 +660,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
                   <h3>➕ Add Lecturer</h3>
                   <p>Add professors and lecturers with department details</p>
                 </div>
-                <button className="action-btn" onClick={() => document.getElementById('lecturerForm').scrollIntoView({ behavior: 'smooth' })}>Add Now</button>
+                <button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('lecturerForm').scrollIntoView({ behavior: 'smooth' })}>Add Now</button>
               </div>
               
               <div className="action-card">
@@ -641,7 +668,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
                   <h3>👔 Add LIC</h3>
                   <p>Create module leadership records for allocation</p>
                 </div>
-                <button className="action-btn" onClick={() => document.getElementById('licForm').scrollIntoView({ behavior: 'smooth' })}>Add Now</button>
+                <button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('licForm').scrollIntoView({ behavior: 'smooth' })}>Add Now</button>
               </div>
               
               <div className="action-card">
@@ -649,7 +676,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
                   <h3>📚 Add Module</h3>
                   <p>Add new modules from catalog or custom</p>
                 </div>
-                <button className="action-btn" onClick={() => document.getElementById('moduleForm').scrollIntoView({ behavior: 'smooth' })}>Add Now</button>
+                <button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('moduleForm').scrollIntoView({ behavior: 'smooth' })}>Add Now</button>
               </div>
               
               <div className="action-card">
@@ -657,7 +684,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
                   <h3>🔗 Assign Module</h3>
                   <p>Map modules to lecturers and LICs</p>
                 </div>
-                <button className="action-btn" onClick={() => document.getElementById('assignmentForm').scrollIntoView({ behavior: 'smooth' })}>Assign Now</button>
+                <button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('assignmentForm').scrollIntoView({ behavior: 'smooth' })}>Assign Now</button>
               </div>
 
               <div className="action-card">
@@ -1047,7 +1074,11 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
             </div>
           </div>
         </div>
-
+      </div>
+)}
+{mainView === 'hallAllocation' && (
+  <HallAllocation apiBase={apiBase} />
+)}
       {/* 3D Visualization Section */}
       <div className="ac-3d-card">
         <h2>🏗️ 3D Campus Visualization</h2>
