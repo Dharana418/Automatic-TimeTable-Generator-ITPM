@@ -29,3 +29,13 @@ export async function resetPassword(token, password) {
 
   return parseJson(response);
 }
+
+export async function getStaffDirectory() {
+  const response = await fetch(`${API_BASE}/api/auth/staff-directory`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  return parseJson(response);
+}

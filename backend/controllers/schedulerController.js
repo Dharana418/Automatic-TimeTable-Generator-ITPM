@@ -556,9 +556,19 @@ export const updateItem = async (req, res) => {
     }
 
     if (type === 'batches') {
-      const { name = null, department_id = null, capacity = null } = payload;
+      const {
+        name,
+        department_id,
+        capacity,
+      } = payload;
       const { rows, rowCount } = await pool.query(
-        `UPDATE batches SET name=$1, department_id=$2, capacity=$3 WHERE id=$4 RETURNING *`,
+        `UPDATE batches
+         SET
+           name = COALESCE($1, name),
+           department_id = COALESCE($2, department_id),
+           capacity = COALESCE($3, capacity)
+         WHERE id=$4
+         RETURNING *`,
         [name, department_id, capacity, id]
       );
       if (!rowCount) return res.status(404).json({ error: 'Item not found' });

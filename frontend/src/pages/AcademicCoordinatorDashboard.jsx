@@ -2,9 +2,49 @@ import React, { useEffect, useState } from 'react';
 import { Users, BookOpen, Building2, FileText, AlertCircle, Calendar, Check, X, Pencil, Trash2 } from 'lucide-react';
 import schedulerApi from '../api/scheduler.js';
 import moduleCatalog from '../data/moduleCatalog.js';
-import { askForText, confirmDelete, showError, showSuccess, showWarning } from '../utils/alerts.js';
 
-const FORBIDDEN_SPECIAL_CHARS = /[~!@#$%^&*()_+]/;
+const HALL_ALLOCATION_PRESET = [
+  'A401', 'A402', 'A403', 'A404', 'A405',
+  'B401', 'B402', 'B403', 'B404', 'B405',
+  'E401', 'E402', 'E403',
+  'F401', 'F402', 'F403', 'F404',
+  'G401', 'G402', 'G403',
+  'Smart Classroom 1', 'Smart Classroom 2',
+  'Network Lab 1', 'Programming Lab 1',
+];
+
+const PenaltyBreakdownChart = ({ breakdown }) => {
+  if (!breakdown || typeof breakdown !== 'object') {
+    return <div className="ac-empty-row">No penalty data available.</div>;
+  }
+
+  const entries = Object.entries(breakdown)
+    .filter(([, value]) => Number.isFinite(Number(value)))
+    .map(([key, value]) => ({ key, value: Number(value) }));
+
+  if (entries.length === 0) {
+    return <div className="ac-empty-row">No penalty data available.</div>;
+  }
+
+  const maxValue = Math.max(...entries.map((entry) => entry.value), 1);
+
+  return (
+    <div className="ac-penalty-list">
+      {entries.map((entry) => {
+        const widthPercent = Math.max(4, Math.round((entry.value / maxValue) * 100));
+        return (
+          <div key={entry.key} className="ac-penalty-row">
+            <div className="ac-penalty-label">{entry.key}</div>
+            <div className="ac-penalty-track">
+              <div className="ac-penalty-bar" style={{ width: `${widthPercent}%` }} />
+            </div>
+            <div className="ac-penalty-value">{entry.value}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 
 const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -50,6 +90,11 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   // UI states
   const [message, setMessage] = useState({ text: '', type: '' });
   const [loading, setLoading] = useState(false);
+  const [penaltyLoading, setPenaltyLoading] = useState(false);
+  const [penaltyBreakdown, setPenaltyBreakdown] = useState(null);
+  const [importingHalls, setImportingHalls] = useState(false);
+  const [dragLecturerId, setDragLecturerId] = useState(null);
+  const [hoveredAssignmentId, setHoveredAssignmentId] = useState(null);
   const [view3d, setView3d] = useState({ rotateX: 10, rotateZ: -18, zoom: 1 });
   const [showCalendarForm, setShowCalendarForm] = useState(false);
 
@@ -58,52 +103,52 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
     setTimeout(() => setMessage({ text: '', type: '' }), 5000);
   };
 
-  const loadAllData = async () => {
-    setLoading(true);
-    try {
-      const loadTimetablesInitial = async () => {
-        const response = await fetch(`${apiBase}/api/academic-coordinator/timetables`, {
-          credentials: 'include'
-        });
-        const data = await response.json();
-        if (data.success) setTimetables(data.data || []);
-      };
-
-      const loadConflictsInitial = async () => {
-        const response = await fetch(`${apiBase}/api/academic-coordinator/conflicts?resolved=false`, {
-          credentials: 'include'
-        });
-        const data = await response.json();
-        if (data.success) setConflicts(data.data || []);
-      };
-
-      const loadAcademicCalendarInitial = async () => {
-        const response = await fetch(`${apiBase}/api/academic-coordinator/calendar`, {
-          credentials: 'include'
-        });
-        const data = await response.json();
-        if (data.success) setAcademicCalendar(data.data || []);
-      };
-
-      await Promise.all([
-        loadLecturers(),
-        loadLics(),
-        loadModules(),
-        loadCampusStructures(),
-        loadAssignments(),
-        loadTimetablesInitial(),
-        loadConflictsInitial(),
-        loadAcademicCalendarInitial()
-      ]);
-    } catch (err) {
-      console.error('Failed to load some data:', err);
-      showMessage('Failed to load some data', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const loadAllData = async () => {
+      setLoading(true);
+      try {
+        const loadTimetablesInitial = async () => {
+          const response = await fetch(`${apiBase}/api/academic-coordinator/timetables`, {
+            credentials: 'include'
+          });
+          const data = await response.json();
+          if (data.success) setTimetables(data.data || []);
+        };
+
+        const loadConflictsInitial = async () => {
+          const response = await fetch(`${apiBase}/api/academic-coordinator/conflicts?resolved=false`, {
+            credentials: 'include'
+          });
+          const data = await response.json();
+          if (data.success) setConflicts(data.data || []);
+        };
+
+        const loadAcademicCalendarInitial = async () => {
+          const response = await fetch(`${apiBase}/api/academic-coordinator/calendar`, {
+            credentials: 'include'
+          });
+          const data = await response.json();
+          if (data.success) setAcademicCalendar(data.data || []);
+        };
+
+        await Promise.all([
+          loadLecturers(),
+          loadLics(),
+          loadModules(),
+          loadCampusStructures(),
+          loadAssignments(),
+          loadTimetablesInitial(),
+          loadConflictsInitial(),
+          loadAcademicCalendarInitial()
+        ]);
+      } catch (err) {
+        console.error('Failed to load some data:', err);
+        showMessage('Failed to load some data', 'error');
+      } finally {
+        setLoading(false);
+      }
+    };
+
     loadAllData();
   }, [apiBase]);
 

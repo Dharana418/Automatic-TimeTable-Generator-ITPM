@@ -13,6 +13,7 @@ import {
     runScheduler,
     runSchedulerBySegments,
     upsertSoftConstraints,
+    updateItem,
     updateModuleAssignment,
 } from '../controllers/schedulerController.js';
 import protect from '../middlewares/auth.js';
@@ -65,6 +66,7 @@ router.post('/reset', authorize('admin', 'facultycoordinator', 'academiccoordina
 // CRUD operations
 router.post('/:type', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'lic', 'Admin', 'Faculty Coordinator', 'Academic Coordinator', 'LIC', 'LIC Coordinator'), addItem);
 router.get('/:type', listItems);
+router.put('/:type/:id', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'lic', 'Admin', 'Faculty Coordinator', 'Academic Coordinator', 'LIC', 'LIC Coordinator'), updateItem);
 router.delete('/:type/:id', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), deleteItem);
 
 export default router;

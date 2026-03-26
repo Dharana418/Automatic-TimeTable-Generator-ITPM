@@ -7,6 +7,7 @@ import Navigation from "./components/Navigation.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import FacultyCoordinatorDashboard from "./pages/FacultyCoordinatorDashboard.jsx";
 import FacultyBatchesPage from "./pages/FacultyBatchesPage.jsx";
+import FacultyStaffDirectoryPage from "./pages/FacultyStaffDirectoryPage.jsx";
 import LICDashboard from "./pages/LICDashboard.jsx";
 import AcademicCoordinatorDashboard from "./pages/AcademicCoordinatorDashboard.jsx";
 import InstructorDashboard from "./pages/InstructorDashboard.jsx";
@@ -41,31 +42,6 @@ function App() {
 
   const handleUserUpdated = (nextUser) => {
     setUser(nextUser);
-  };
-
-  const renderDashboardByRole = () => {
-    const roleKey = normalizeRoleKey(user?.role);
-
-    if (roleKey === "facultycoordinator") {
-      return <FacultyCoordinatorDashboard apiBase={API_BASE} user={user} />;
-    }
-    if (roleKey === "admin") {
-      return <AdminDashboard apiBase={API_BASE} user={user} />;
-    }
-    if (roleKey === "lic") {
-      return <LICDashboard apiBase={API_BASE} user={user} />;
-    }
-    if (roleKey === "academiccoordinator") {
-      return <AcademicCoordinatorDashboard apiBase={API_BASE} user={user} />;
-    }
-    if (roleKey === "instructor") {
-      return <InstructorDashboard apiBase={API_BASE} user={user} />;
-    }
-    if (["lecturerseniorlecturer", "lecturer", "seniorlecturer", "assistantlecturer", "professor"].includes(roleKey)) {
-      return <LecturerDashboard apiBase={API_BASE} user={user} />;
-    }
-
-    return <CommonDashboard user={user} role={user?.role || 'User'} />;
   };
 
   const roleKey = normalizeRoleKey(user?.role);
@@ -233,9 +209,15 @@ function App() {
           </ProtectedRoute>
         } />
 
+        <Route path="/faculty/staff" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
+            {roleKey === "facultycoordinator" ? <FacultyStaffDirectoryPage /> : <Navigate to="/dashboard" replace />}
+          </ProtectedRoute>
+        } />
+
         <Route path="/admin/role-history" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
-            {user?.role === "Admin" ? <AdminRoleHistoryPage apiBase={API_BASE} user={user} /> : <Navigate to="/dashboard" replace />}
+            {normalizeRoleKey(user?.role) === "admin" ? <AdminRoleHistoryPage apiBase={API_BASE} user={user} /> : <Navigate to="/dashboard" replace />}
           </ProtectedRoute>
         } />
 

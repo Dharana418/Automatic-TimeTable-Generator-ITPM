@@ -9,7 +9,7 @@ async function request(path, opts = {}) {
 
 export const addItem = (type, payload) => request(`/api/scheduler/${type}`, { method: 'POST', body: JSON.stringify(payload) });
 export const listItems = (type) => request(`/api/scheduler/${type}`, { method: 'GET' });
-export const updateItem = (type, id, payload) => request(`/api/scheduler/${type}`, { method: 'POST', body: JSON.stringify({ ...payload, id }) });
+export const updateItem = (type, id, payload) => request(`/api/scheduler/${type}/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
 export const deleteItem = (type, id) => request(`/api/scheduler/${type}/${id}`, { method: 'DELETE' });
 export const getLicsWithInstructors = () => request(`/api/scheduler/lics-with-instructors`, { method: 'GET' });
 export const listAssignments = () => request(`/api/scheduler/assignments`, { method: 'GET' });

@@ -115,10 +115,53 @@ export default function AdminRoleHistoryPage({ apiBase }) {
   };
 
   const handleEditHistory = async (item) => {
+    const nextName = await askForText({
+      title: 'Edit Staff Member',
+      inputLabel: 'Full Name',
+      inputPlaceholder: 'Enter full name',
+      confirmButtonText: 'Next',
+      inputValue: item.name || '',
+      validator: (value) => {
+        if (!value || !String(value).trim()) return 'Full name is required';
+        if (String(value).trim().length < 3) return 'Name must be at least 3 characters';
+        if (/[~!@#$%^&*()_+]/.test(String(value))) return 'Name cannot contain special characters';
+        return undefined;
+      },
+    });
+    if (nextName === null) return;
+
+    const nextEmail = await askForText({
+      title: 'Edit Staff Member',
+      inputLabel: 'Email Address',
+      inputPlaceholder: 'Enter email',
+      confirmButtonText: 'Next',
+      inputValue: item.email || '',
+      validator: (value) => {
+        if (!value || !String(value).trim()) return 'Email is required';
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim())) return 'Invalid email address';
+        return undefined;
+      },
+    });
+    if (nextEmail === null) return;
+
+    const nextPhone = await askForText({
+      title: 'Edit Staff Member',
+      inputLabel: 'Phone Number (10 digits)',
+      inputPlaceholder: 'Enter phone number',
+      confirmButtonText: 'Next',
+      inputValue: item.phonenumber || '',
+      validator: (value) => {
+        if (value && !/^\d+$/.test(String(value))) return 'Phone number must contain only digits';
+        if (value && String(value).length > 10) return 'Phone number must be max 10 digits';
+        return undefined;
+      },
+    });
+    if (nextPhone === null) return;
+
     const nextRole = await askForText({
-      title: 'Edit Role History',
-      inputLabel: 'Assigned role',
-      inputPlaceholder: 'Role',
+      title: 'Edit Staff Member',
+      inputLabel: 'Assigned Role',
+      inputPlaceholder: 'e.g., Instructor, Lecturer, LIC',
       confirmButtonText: 'Next',
       inputValue: item.role || '',
       validator: (value) => {
@@ -129,8 +172,8 @@ export default function AdminRoleHistoryPage({ apiBase }) {
     if (nextRole === null) return;
 
     const nextNote = await askForText({
-      title: 'Edit Role History',
-      inputLabel: 'Assignment note (optional)',
+      title: 'Edit Staff Member',
+      inputLabel: 'Assignment Note (optional)',
       inputPlaceholder: 'Optional note',
       confirmButtonText: 'Update',
       inputValue: item.role_assignment_note || '',
@@ -144,15 +187,18 @@ export default function AdminRoleHistoryPage({ apiBase }) {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          name: String(nextName).trim(),
+          email: String(nextEmail).trim(),
+          phonenumber: String(nextPhone || '').trim() || null,
           role: String(nextRole).trim(),
           roleAssignmentNote: String(nextNote || '').trim() || null,
         }),
       });
 
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || data.message || 'Failed to update role history record');
+      if (!response.ok) throw new Error(data.error || data.message || 'Failed to update staff member');
 
-      showSuccess('Updated', 'Role history record updated successfully');
+      showSuccess('Updated', 'Staff member details updated successfully');
       await fetchAssignments();
     } catch (err) {
       showError('Error', err.message);
@@ -185,16 +231,16 @@ export default function AdminRoleHistoryPage({ apiBase }) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0f172a] via-[#1e1b4b] to-[#581c87] text-white antialiased">
+    <div className="min-h-screen bg-slate-50 text-slate-900 antialiased">
       <div className="mx-auto grid min-h-screen max-w-[1600px] lg:grid-cols-[280px_1fr]">
         
-        {/* Sidebar (Matching Dashboard) */}
-        <aside className="sticky top-0 hidden h-screen border-r border-white/10 bg-white/5 p-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.37)] backdrop-blur-xl lg:flex lg:flex-col">
+        {/* Sidebar (Deep Navy/Slate-900 for Portal Feel) */}
+        <aside className="sticky top-0 hidden h-screen border-r border-slate-200 bg-slate-900 p-6 lg:flex lg:flex-col">
           <div className="mb-10 flex items-center gap-3 px-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-indigo-200 shadow-lg transition-all duration-200 hover:-translate-y-0.5">
-              <KeyRound size={18} className="drop-shadow" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-600 bg-slate-800 text-blue-300 shadow-sm transition-all duration-200">
+              <KeyRound size={18} />
             </div>
-            <h2 className="text-2xl font-extrabold tracking-tight text-white">Nexus<span className="text-indigo-300">.</span></h2>
+            <h2 className="text-2xl font-extrabold tracking-tight text-white">Admin Panel</h2>
           </div>
           <nav className="space-y-1">
             <NavItem to="/dashboard" label="Create Staff" icon="👤" />
@@ -203,43 +249,43 @@ export default function AdminRoleHistoryPage({ apiBase }) {
         </aside>
 
         <main className="p-6 md:p-10 lg:p-16">
-          <header className="mb-8 rounded-3xl border border-white/10 border-t-[1px] border-t-white/20 bg-white/5 p-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.37)] backdrop-blur-xl">
+          <header className="mb-8 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-indigo-200 shadow-lg">
-                <Activity size={26} className="drop-shadow" />
+              <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-slate-200 bg-blue-50 text-blue-700 shadow-sm">
+                <Activity size={26} />
               </div>
               <div>
-                <p className="text-xs font-medium uppercase tracking-[0.1em] text-slate-400">Command Center</p>
-                <h1 className="text-4xl font-extrabold tracking-tight text-white">Assignment Logs</h1>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Command Center</p>
+                <h1 className="text-4xl font-extrabold tracking-tight text-slate-900">Assignment Logs</h1>
               </div>
             </div>
-            <p className="mt-3 text-sm text-slate-300">Comprehensive audit trail of faculty role assignments and security credentials.</p>
+            <p className="mt-3 text-sm text-slate-600">Comprehensive audit trail of faculty role assignments and security credentials.</p>
             <div className="mt-5 flex flex-wrap items-center gap-3">
-              <button onClick={fetchAssignments} className="rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-semibold text-slate-200 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/10 active:scale-95">
+              <button onClick={fetchAssignments} className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-all duration-200 hover:bg-slate-50 active:scale-95">
                 Refresh Grid
               </button>
-              <button onClick={handleCreateHistory} className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow-[0_0_20px_rgba(59,130,246,0.45)] transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 active:scale-95">
+              <button onClick={handleCreateHistory} className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-bold text-white shadow-sm transition-all duration-200 hover:bg-blue-700 active:scale-95">
                 + Manual Entry
               </button>
             </div>
           </header>
 
-          <section className="mb-8 rounded-3xl border border-white/10 border-t-[1px] border-t-white/20 bg-white/5 p-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.37)] backdrop-blur-xl">
+          <section className="mb-8 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-4 flex items-center gap-2">
-              <ShieldCheck size={18} className="text-indigo-200 drop-shadow" />
-              <p className="text-xs font-medium uppercase tracking-[0.1em] text-slate-400">Role Distribution</p>
+              <ShieldCheck size={18} className="text-blue-600" />
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Role Distribution</p>
             </div>
             <div className="space-y-3">
               {groupedAssignments.map(([roleName, roleAssignments]) => {
                 const percentage = Math.max(2, Math.round((roleAssignments.length / totalAssignments) * 100));
                 return (
                   <div key={`distribution-${roleName}`}>
-                    <div className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-300">
+                    <div className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-700">
                       <span>{roleName}</span>
                       <span>{percentage}%</span>
                     </div>
-                    <div className="h-2 rounded-full bg-white/10">
-                      <div className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400" style={{ width: `${percentage}%` }} />
+                    <div className="h-2 rounded-full bg-slate-100">
+                      <div className="h-2 rounded-full bg-blue-600" style={{ width: `${percentage}%` }} />
                     </div>
                   </div>
                 );
@@ -254,73 +300,84 @@ export default function AdminRoleHistoryPage({ apiBase }) {
               <EmptyState />
             ) : (
               groupedAssignments.map(([roleName, roleAssignments]) => (
-                <div key={roleName} className="overflow-hidden rounded-3xl border border-white/10 border-t-[1px] border-t-white/20 bg-white/5 shadow-[0_8px_32px_0_rgba(31,38,135,0.37)] backdrop-blur-xl">
-                  <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-6 py-4">
-                    <h2 className="text-lg font-extrabold text-white">{roleName}</h2>
-                    <span className="rounded-full border border-indigo-300/40 bg-indigo-500/20 px-3 py-1 text-xs font-bold text-indigo-200">
+                <div key={roleName} className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                  <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
+                    <h2 className="text-lg font-extrabold text-slate-900">{roleName}</h2>
+                    <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-800">
                       {roleAssignments.length} {roleAssignments.length === 1 ? 'user' : 'users'}
                     </span>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left border-collapse border-2 border-black">
                       <thead>
-                        <tr className="border-b border-white/10 bg-white/5">
-                          <th className="px-6 py-5 text-xs font-medium uppercase tracking-[0.1em] text-slate-400">Staff Member</th>
-                          <th className="px-6 py-5 text-xs font-medium uppercase tracking-[0.1em] text-slate-400">Role</th>
-                          <th className="px-6 py-5 text-xs font-medium uppercase tracking-[0.1em] text-slate-400">Authorized By</th>
-                          <th className="px-6 py-5 text-xs font-medium uppercase tracking-[0.1em] text-slate-400">Timestamp</th>
-                          <th className="px-6 py-5 text-xs font-medium uppercase tracking-[0.1em] text-center text-slate-400">Security</th>
-                          <th className="px-6 py-5 text-xs font-medium uppercase tracking-[0.1em] text-slate-400">Actions</th>
+                        <tr className="bg-slate-50">
+                          <th className="border-2 border-black px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">Staff Member</th>
+                          <th className="border-2 border-black px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">Email</th>
+                          <th className="border-2 border-black px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">Role</th>
+                          <th className="border-2 border-black px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">Authorized By</th>
+                          <th className="border-2 border-black px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">Timestamp</th>
+                          <th className="border-2 border-black px-6 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-500">Security</th>
+                          <th className="border-2 border-black px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-white/10">
+                      <tbody>
                         {roleAssignments.map((item) => (
-                          <tr key={item.id} className="group transition-all duration-200 hover:bg-white/10">
-                            <td className="px-6 py-5">
+                          <tr key={item.id} className="bg-white transition-colors hover:bg-slate-50">
+                            <td className="border-2 border-black px-6 py-5">
                               <div className="flex items-center gap-4">
-                                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/20 font-bold text-indigo-200">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 font-bold text-blue-700">
                                   {item.name?.[0]?.toUpperCase()}
                                 </div>
-                                <div>
-                                  <p className="font-bold text-white">{item.name}</p>
-                                  <p className="text-xs font-medium text-slate-400">{item.email}</p>
-                                </div>
+                                <p className="font-semibold text-slate-900">{item.name}</p>
                               </div>
                             </td>
-                            <td className="px-6 py-5">
-                              <span className="inline-flex rounded-lg border border-indigo-300/40 bg-indigo-500/20 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-indigo-200">
+                            <td className="border-2 border-black px-6 py-5">
+                              <p className="text-sm font-medium text-slate-700">{item.email}</p>
+                            </td>
+                            <td className="border-2 border-black px-6 py-5">
+                              <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
                                 {item.role}
                               </span>
                             </td>
-                            <td className="px-6 py-5">
-                              <p className="text-sm font-bold text-slate-100">{item.role_assigned_by_name || 'System'}</p>
-                              <p className="text-[10px] text-slate-400">{item.role_assigned_by_email}</p>
+                            <td className="border-2 border-black px-6 py-5">
+                              <p className="text-sm font-semibold text-slate-900">{item.role_assigned_by_name || 'System'}</p>
+                              <p className="text-xs text-slate-500">{item.role_assigned_by_email}</p>
                             </td>
-                            <td className="px-6 py-5">
-                              <p className="text-sm font-medium text-slate-200">{new Date(item.role_assigned_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                              <p className="text-[10px] text-slate-400 font-mono">{new Date(item.role_assigned_at).toLocaleTimeString()}</p>
+                            <td className="border-2 border-black px-6 py-5">
+                              <p className="text-sm font-medium text-slate-900">{new Date(item.role_assigned_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                              <p className="text-xs font-mono text-slate-500">{new Date(item.role_assigned_at).toLocaleTimeString()}</p>
                             </td>
-                            <td className="px-6 py-5 text-center">
+                            <td className="border-2 border-black px-6 py-5 text-center">
                               {item.can_unhash ? (
                                 <div className="relative inline-block group/unhash">
                                   <button
                                     onClick={() => handleToggleUnhash(item.id)}
-                                    className={`rounded-full px-3 py-1 text-[10px] font-bold transition-all duration-200 active:scale-95 ${unhashedById[item.id] ? 'bg-amber-300/25 text-amber-200' : 'bg-white/10 text-slate-200 hover:-translate-y-0.5 hover:bg-indigo-600 hover:text-white'}`}
+                                    className={`px-3 py-1 text-xs font-semibold rounded-md border transition-all duration-200 active:scale-95 ${unhashedById[item.id] ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
                                   >
                                     {loadingUnhashById[item.id] ? '...' : unhashedById[item.id] ? 'Hide' : 'Reveal'}
                                   </button>
                                   {unhashedById[item.id] && (
-                                    <div className="absolute top-full left-1/2 z-50 mt-2 w-max max-w-[150px] -translate-x-1/2 rounded bg-slate-950 p-2 text-[10px] font-mono text-white shadow-xl">
+                                    <div className="absolute top-full left-1/2 z-50 mt-2 w-max max-w-[180px] -translate-x-1/2 rounded-md border border-slate-200 bg-slate-900 p-3 text-xs font-mono text-white shadow-lg">
                                       {unhashedById[item.id]}
                                     </div>
                                   )}
                                 </div>
-                              ) : <span className="text-xs text-slate-500">—</span>}
+                              ) : <span className="text-xs text-slate-400">—</span>}
                             </td>
-                            <td className="px-6 py-5">
-                              <div className="flex items-center gap-2 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                                <button onClick={() => handleEditHistory(item)} className="inline-flex items-center gap-1 rounded-full border border-indigo-300/40 bg-indigo-500/20 px-2.5 py-1 text-[10px] font-bold text-indigo-200 transition-all duration-200 hover:-translate-y-0.5 hover:bg-indigo-500/35 active:scale-95"><Pencil size={12} /> Edit</button>
-                                <button onClick={() => handleDeleteHistory(item)} className="inline-flex items-center gap-1 rounded-full border border-rose-300/40 bg-rose-500/20 px-2.5 py-1 text-[10px] font-bold text-rose-200 transition-all duration-200 hover:-translate-y-0.5 hover:bg-rose-500/35 active:scale-95"><Trash2 size={12} /> Delete</button>
+                            <td className="border-2 border-black px-6 py-5">
+                              <div className="flex items-center gap-3">
+                                <button 
+                                  onClick={() => handleEditHistory(item)} 
+                                  className="text-blue-600 font-semibold text-sm hover:text-blue-700 transition-colors duration-200 inline-flex items-center gap-1"
+                                >
+                                  <Pencil size={14} /> Edit
+                                </button>
+                                <button 
+                                  onClick={() => handleDeleteHistory(item)} 
+                                  className="text-rose-600 font-semibold text-sm hover:text-rose-700 transition-colors duration-200 inline-flex items-center gap-1"
+                                >
+                                  <Trash2 size={14} /> Delete
+                                </button>
                               </div>
                             </td>
                           </tr>
@@ -341,22 +398,22 @@ export default function AdminRoleHistoryPage({ apiBase }) {
 const LoadingSkeleton = () => (
   <div className="p-10 space-y-4">
     {[...Array(5)].map((_, i) => (
-      <div key={i} className="h-12 w-full rounded-lg bg-white/10 animate-pulse" />
+      <div key={i} className="h-12 w-full rounded-lg bg-slate-100 animate-pulse" />
     ))}
   </div>
 );
 
 const EmptyState = () => (
   <div className="py-20 flex flex-col items-center text-center">
-    <div className="text-6xl mb-4 grayscale opacity-20">📋</div>
-    <h3 className="text-lg font-bold text-slate-300">No records found</h3>
-    <p className="text-sm text-slate-400">Assignment history will appear here once faculty are provisioned.</p>
+    <div className="text-6xl mb-4 grayscale opacity-30">📋</div>
+    <h3 className="text-lg font-bold text-slate-700">No records found</h3>
+    <p className="text-sm text-slate-500">Assignment history will appear here once faculty are provisioned.</p>
   </div>
 );
 
 function NavItem({ label, to, active, icon }) {
   return (
-    <Link to={to} className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition-all duration-200 ${active ? 'bg-indigo-500/20 text-indigo-200 shadow-sm shadow-indigo-900/30' : 'text-slate-300 hover:-translate-y-0.5 hover:bg-white/10 hover:text-white hover:shadow-sm'} active:scale-95`}>
+    <Link to={to} className={`flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-semibold transition-all duration-200 ${active ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-300 hover:bg-slate-700 hover:text-white'} active:scale-95`}>
       <span className="text-lg">{icon}</span> {label}
     </Link>
   );

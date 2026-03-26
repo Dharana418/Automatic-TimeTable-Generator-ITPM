@@ -479,6 +479,64 @@ router.get('/admin/users', (req, res) => {
     });
 });
 
+router.get(
+    '/staff-directory',
+    protect,
+    authorize(
+        'admin',
+        'facultycoordinator',
+        'academiccoordinator',
+        'Admin',
+        'Faculty Coordinator',
+        'Academic Coordinator'
+    ),
+    async (req, res) => {
+        try {
+            const { rows } = await pool.query(
+                `SELECT
+                    u.id,
+                    u.name,
+                    u.email,
+                    u.phonenumber,
+                    u.role,
+                    u.role_assigned_at,
+                    u.created_at,
+                    assigner.name AS role_assigned_by_name,
+                    assigner.email AS role_assigned_by_email
+                 FROM users u
+                 LEFT JOIN users assigner ON assigner.id = u.role_assigned_by
+                 WHERE lower(regexp_replace(coalesce(u.role, ''), '[^a-zA-Z0-9]', '', 'g')) = ANY($1)
+                   AND (
+                        EXISTS (
+                            SELECT 1
+                            FROM role_assignment_history rah
+                            WHERE rah.target_user_id = u.id
+                        )
+                        OR u.role_assigned_by IS NOT NULL
+                   )
+                 ORDER BY u.role ASC, u.name ASC`,
+                [[
+                    'lecturer',
+                    'seniorlecturer',
+                    'instructor',
+                    'lic',
+                    'liccoordinator',
+                    'professor',
+                ]]
+            );
+
+            return res.status(200).json({
+                success: true,
+                count: rows.length,
+                users: rows,
+            });
+        } catch (err) {
+            console.error(err);
+            return res.status(500).json({ error: 'Unable to load staff directory' });
+        }
+    }
+);
+
 router.get('/admin/role-assignments', protect, authorize('admin', 'Admin'), async (req, res) => {
     try {
         const assignments = await pool.query(

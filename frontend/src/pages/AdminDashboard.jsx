@@ -17,7 +17,7 @@ const NON_DIGIT_CHARS = /\D/;
 
 const initialForm = { name: '', email: '', password: '', phonenumber: '', role: '', customRole: '' };
 
-const inputClasses = "w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-800 outline-none shadow-sm transition-all duration-200 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20";
+const inputClasses = "w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none shadow-sm transition-all duration-200 placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10";
 
 export default function AdminDashboard({ apiBase, user }) {
   const [form, setForm] = useState(initialForm);
@@ -51,8 +51,8 @@ export default function AdminDashboard({ apiBase, user }) {
   const validateForm = () => {
     if (!form.name.trim() || form.name.trim().length < 3) return 'Valid name required (min 3 chars).';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return 'Invalid email address.';
-    if (form.password.length < 6 || !PASSWORD_HAS_LETTER.test(form.password) || !PASSWORD_HAS_NUMBER.test(form.password) || !PASSWORD_HAS_SPECIAL.test(form.password)) {
-      return 'Password must be 6+ chars with a letter, number, and symbol.';
+    if (form.password.length < 8 || !PASSWORD_HAS_LETTER.test(form.password) || !PASSWORD_HAS_NUMBER.test(form.password) || !PASSWORD_HAS_SPECIAL.test(form.password)) {
+      return 'Password must be 8+ chars with a letter, number, and symbol.';
     }
     if (!form.role) return 'Please select a role.';
     if (form.role === CUSTOM_ROLE_VALUE) {
@@ -97,32 +97,32 @@ export default function AdminDashboard({ apiBase, user }) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0f172a] via-[#1e1b4b] to-[#581c87] font-sans text-white antialiased">
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 antialiased">
       <div className="mx-auto grid min-h-screen max-w-[1600px] lg:grid-cols-[280px_1fr]">
         
         {/* Sidebar */}
-        <aside className="sticky top-0 hidden h-screen flex-col border-r border-white/10 bg-white/5 p-6 backdrop-blur-xl shadow-[0_8px_32px_0_rgba(31,38,135,0.37)] lg:flex">
+        <aside className="sticky top-0 hidden h-screen flex-col border-r border-slate-200 bg-slate-900 p-6 lg:flex">
           <div className="mb-10 flex items-center gap-3 px-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-indigo-200 shadow-lg transition-all duration-200 hover:-translate-y-0.5">
-              <KeyRound size={18} className="drop-shadow" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-600 bg-slate-800 text-blue-300 shadow-sm transition-all duration-200">
+              <KeyRound size={18} />
             </div>
-            <h2 className="text-2xl font-extrabold tracking-tight text-white">Nexus<span className="text-indigo-300">.</span></h2>
+            <h2 className="text-2xl font-extrabold tracking-tight text-white">Admin Panel</h2>
           </div>
 
-          <nav className="flex-1 space-y-2">
+          <nav className="flex-1 space-y-1">
             <NavItem to="/dashboard" active label="Create Staff" icon="👤" />
             <NavItem to="/admin/role-history" label="Role History" icon="📜" />
             <NavItem to="#" label="System Logs" icon="🛡️" disabled />
           </nav>
 
-          <div className="mt-auto rounded-3xl border border-white/10 border-t-[1px] border-t-white/20 bg-white/5 p-4 backdrop-blur-xl shadow-[0_8px_32px_0_rgba(31,38,135,0.37)]">
+          <div className="mt-auto rounded-lg border border-slate-700 bg-slate-800 p-4 shadow-sm">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-xs font-bold text-white uppercase shadow-lg shadow-indigo-900/50">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white uppercase shadow-sm">
                 {user?.name?.[0] || 'A'}
               </div>
               <div className="overflow-hidden">
                 <p className="truncate text-sm font-bold text-white">{user?.name || 'Administrator'}</p>
-                <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-emerald-300">
+                <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-emerald-400">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Online
                 </p>
               </div>
@@ -132,28 +132,28 @@ export default function AdminDashboard({ apiBase, user }) {
 
         {/* Main Content */}
         <main className="p-6 md:p-10 lg:p-16">
-          <header className="mb-8 rounded-3xl border border-white/10 border-t-[1px] border-t-white/20 bg-white/5 p-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.37)] backdrop-blur-xl">
+          <header className="mb-8 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-indigo-200 shadow-lg">
-                <KeyRound size={26} className="drop-shadow" />
+              <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-slate-200 bg-blue-50 text-blue-700 shadow-sm">
+                <KeyRound size={26} />
               </div>
               <div>
-                <p className="text-xs font-medium uppercase tracking-[0.1em] text-slate-400">Command Center</p>
-                <h1 className="text-4xl font-extrabold tracking-tight text-white lg:text-5xl">Staff Provisioning</h1>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Command Center</p>
+                <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 lg:text-5xl">Staff Provisioning</h1>
               </div>
             </div>
-            <p className="mt-4 text-sm text-slate-300">Securely onboard new faculty members and assign departmental roles within the university hierarchy.</p>
+            <p className="mt-4 text-sm text-slate-600">Securely onboard new faculty members and assign departmental roles within the university hierarchy.</p>
           </header>
 
           <section className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
-            <StatCard icon={<Layers3 size={18} className="drop-shadow" />} label="Available Roles" value={String(ROLE_OPTIONS.length)} />
-            <StatCard icon={<UserPlus size={18} className="drop-shadow" />} label="Users Created" value={createdUser ? '1' : '0'} />
-            <StatCard icon={<ShieldCheck size={18} className="drop-shadow" />} label="Form Readiness" value={`${formCompletion}%`} />
+            <StatCard icon={<Layers3 size={18} />} label="Available Roles" value={String(ROLE_OPTIONS.length)} />
+            <StatCard icon={<UserPlus size={18} />} label="Users Created" value={createdUser ? '1' : '0'} />
+            <StatCard icon={<ShieldCheck size={18} />} label="Form Readiness" value={`${formCompletion}%`} />
           </section>
 
           <div className="grid gap-10 lg:grid-cols-3">
             <div className="lg:col-span-2">
-              <div className="rounded-3xl border border-white/10 border-t-[1px] border-t-white/20 bg-white/5 p-8 shadow-[0_8px_32px_0_rgba(31,38,135,0.37)] backdrop-blur-xl">
+              <div className="rounded-lg border border-slate-200 bg-white p-8 shadow-sm">
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="grid gap-6 md:grid-cols-2">
                     <FormGroup label="Full Name *" name="name" value={form.name} onChange={handleChange} placeholder="Dr. Jane Smith" />
@@ -166,7 +166,7 @@ export default function AdminDashboard({ apiBase, user }) {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="ml-1 text-xs font-medium uppercase tracking-[0.1em] text-slate-400">Institutional Role *</label>
+                    <label className="ml-1 text-xs font-bold uppercase tracking-wider text-slate-500">Institutional Role *</label>
                     <select name="role" value={form.role} onChange={handleChange} className={inputClasses} required>
                       <option value="">Choose a role...</option>
                       {ROLE_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
@@ -187,7 +187,7 @@ export default function AdminDashboard({ apiBase, user }) {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-4 font-bold text-white shadow-[0_0_20px_rgba(59,130,246,0.45)] transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 active:scale-95 disabled:opacity-50"
+                    className="w-full rounded-lg bg-blue-600 py-4 font-bold text-white shadow-sm transition-all duration-200 hover:bg-blue-700 active:scale-95 disabled:opacity-50"
                   >
                     {loading ? 'Processing...' : 'Register Staff Account'}
                   </button>
@@ -198,21 +198,19 @@ export default function AdminDashboard({ apiBase, user }) {
             {/* Sidebar Notification */}
             <aside className="space-y-6">
               {createdUser ? (
-                <div className="animate-in fade-in zoom-in slide-in-from-right-4 duration-500 rounded-3xl border border-emerald-300/30 bg-emerald-500/20 p-1 shadow-[0_8px_32px_0_rgba(16,185,129,0.35)]">
-                  <div className="rounded-[22px] border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
-                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-300 text-2xl">✓</div>
-                    <h3 className="text-xl font-extrabold text-white">Creation Successful</h3>
-                    <div className="mt-4 space-y-3 border-t border-white/10 pt-4 text-sm text-slate-200">
-                      <p><span className="font-semibold text-slate-400">Name:</span> {createdUser.name}</p>
-                      <p><span className="font-semibold text-slate-400">Designation:</span> {createdUser.role}</p>
-                      <p className="truncate"><span className="font-semibold text-slate-400">ID/Email:</span> {createdUser.email}</p>
-                    </div>
+                <div className="animate-in fade-in zoom-in slide-in-from-right-4 duration-500 rounded-lg border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
+                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-2xl">✓</div>
+                  <h3 className="text-xl font-extrabold text-emerald-900">Creation Successful</h3>
+                  <div className="mt-4 space-y-3 border-t border-emerald-200 pt-4 text-sm text-emerald-800">
+                    <p><span className="font-semibold text-emerald-700">Name:</span> {createdUser.name}</p>
+                    <p><span className="font-semibold text-emerald-700">Designation:</span> {createdUser.role}</p>
+                    <p className="truncate"><span className="font-semibold text-emerald-700">ID/Email:</span> {createdUser.email}</p>
                   </div>
                 </div>
               ) : (
-                <div className="rounded-3xl border border-white/10 border-t-[1px] border-t-white/20 bg-white/5 p-6 backdrop-blur-xl shadow-[0_8px_32px_0_rgba(31,38,135,0.37)]">
-                  <h4 className="font-extrabold text-white">Security Note</h4>
-                  <p className="mt-2 text-sm leading-relaxed text-slate-300">Temporary passwords should be changed by the staff member upon their first login to ensure account integrity.</p>
+                <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+                  <h4 className="font-extrabold text-slate-900">Security Note</h4>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-600">Temporary passwords should be changed by the staff member upon their first login to ensure account integrity.</p>
                 </div>
               )}
             </aside>
@@ -226,17 +224,17 @@ export default function AdminDashboard({ apiBase, user }) {
 function FormGroup({ label, ...props }) {
   return (
     <div className="space-y-2">
-      <label className="ml-1 text-xs font-medium uppercase tracking-[0.1em] text-slate-400">{label}</label>
+      <label className="ml-1 text-xs font-bold uppercase tracking-wider text-slate-500">{label}</label>
       <input {...props} className={inputClasses} />
     </div>
   );
 }
 
 function NavItem({ label, to, active, icon, disabled }) {
-  const base = "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition-all duration-200";
+  const base = "flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-semibold transition-all duration-200";
   if (disabled) return <div className={`${base} cursor-not-allowed opacity-30 grayscale text-slate-400`}><span className="text-lg">{icon}</span>{label}</div>;
   return (
-    <Link to={to} className={`${base} ${active ? 'bg-indigo-500/20 text-indigo-200 shadow-sm shadow-indigo-900/30' : 'text-slate-300 hover:-translate-y-0.5 hover:bg-white/10 hover:text-white hover:shadow-sm'} active:scale-95`}>
+    <Link to={to} className={`${base} ${active ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-300 hover:bg-slate-700 hover:text-white'} active:scale-95`}>
       <span className={`text-lg transition-transform ${active ? 'scale-110' : ''}`}>{icon}</span>
       {label}
     </Link>
@@ -245,12 +243,12 @@ function NavItem({ label, to, active, icon, disabled }) {
 
 function StatCard({ icon, label, value }) {
   return (
-    <article className="rounded-2xl border border-white/10 border-t-[1px] border-t-white/20 bg-white/5 p-4 shadow-[0_8px_32px_0_rgba(31,38,135,0.37)] backdrop-blur-xl">
-      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-200">
+    <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-blue-50 text-blue-600">
         {icon}
       </div>
-      <p className="text-xs font-medium uppercase tracking-[0.1em] text-slate-400">{label}</p>
-      <p className="mt-2 text-3xl font-extrabold text-white">{value}</p>
+      <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p>
+      <p className="mt-2 text-3xl font-extrabold text-slate-900">{value}</p>
     </article>
   );
 }
