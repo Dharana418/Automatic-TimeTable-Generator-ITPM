@@ -3,47 +3,35 @@ import crypto from 'crypto';
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
 
-let hasWarnedForFallbackKey = false;
-
-const resolveRawSecret = () => {
-  const candidate =
-    process.env.HISTORY_PASSWORD_ENCRYPTION_KEY ||
+const resolveSecret = () => {
+  const secret =
     process.env.HISTORY_PASSWORD_SECRET ||
+    process.env.HISTORY_PASSWORD_ENCRYPTION_KEY ||
     process.env.JWT_SECRET ||
-    '';
+    'dev-history-password-secret-change-me';
 
-  if (!candidate && !hasWarnedForFallbackKey) {
-    hasWarnedForFallbackKey = true;
-    console.warn(
-      '[historyPasswordCrypto] No HISTORY_PASSWORD_ENCRYPTION_KEY/HISTORY_PASSWORD_SECRET/JWT_SECRET set. Using development fallback key.'
-    );
-  }
-
-  return candidate || 'development-history-password-secret-change-me';
+  return String(secret);
 };
 
 const getKey = () => {
-  const rawSecret = resolveRawSecret();
-  return crypto.createHash('sha256').update(String(rawSecret)).digest();
+  return crypto.createHash('sha256').update(resolveSecret()).digest();
 };
 
-export const encryptHistoryPassword = (plainPassword) => {
-  if (typeof plainPassword !== 'string' || plainPassword.length === 0) {
-    throw new Error('Password is required for encryption');
-  }
-
+export const encryptHistoryPassword = (plainText) => {
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv(ALGORITHM, getKey(), iv);
 
   const encrypted = Buffer.concat([
-    cipher.update(plainPassword, 'utf8'),
+    cipher.update(String(plainText), 'utf8'),
     cipher.final(),
   ]);
+
+  const authTag = cipher.getAuthTag();
 
   return {
     encryptedPassword: encrypted.toString('base64'),
     iv: iv.toString('base64'),
-    authTag: cipher.getAuthTag().toString('base64'),
+    authTag: authTag.toString('base64'),
   };
 };
 

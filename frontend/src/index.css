@@ -148,6 +148,47 @@
     @apply rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-blue-300/50 transition duration-300 hover:-translate-y-0.5 hover:from-blue-700 hover:to-blue-800 disabled:cursor-not-allowed disabled:opacity-70;
   }
 
+  .ac-main-menu-wrap {
+    @apply mx-auto mb-8 mt-2 max-w-7xl;
+  }
+
+  .ac-main-menu {
+    @apply grid grid-cols-1 overflow-hidden rounded-2xl border border-sky-100 bg-white/95 p-1 shadow-lg shadow-sky-100/70 sm:grid-cols-2;
+  }
+
+  .ac-main-menu-btn {
+    @apply rounded-xl border border-transparent px-6 py-3 text-center text-sm font-extrabold tracking-wide text-slate-700 transition duration-200;
+    font-family: var(--font-cursive);
+  }
+
+  .ac-main-menu-btn:not(.is-active) {
+    @apply bg-transparent hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700;
+  }
+
+  .ac-main-menu-btn.is-active {
+    @apply border-sky-300 bg-gradient-to-r from-sky-600 to-blue-700 text-white shadow-md shadow-sky-300/60;
+  }
+
+  .action-btn.ac-lecture-action-btn {
+    @apply bg-gradient-to-r from-cyan-600 to-blue-700 shadow-cyan-300/60 hover:from-cyan-700 hover:to-blue-800;
+  }
+
+  .dashboard-btn.hall-primary-btn {
+    @apply bg-gradient-to-r from-teal-600 to-cyan-700 shadow-cyan-300/60 hover:from-teal-700 hover:to-cyan-800;
+  }
+
+  .hall-action-btn {
+    @apply rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700;
+  }
+
+  .hall-action-btn--danger {
+    @apply border-red-200 text-red-700 hover:border-red-300 hover:bg-red-50 hover:text-red-800;
+  }
+
+  .hall-action-btn--warning {
+    @apply border-amber-200 text-amber-700 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800;
+  }
+
   .dashboard-main {
     @apply mx-auto grid max-w-7xl grid-cols-1 gap-6 lg:grid-cols-[1fr_360px];
   }

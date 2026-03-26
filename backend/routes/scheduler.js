@@ -11,6 +11,7 @@ import {
     listModuleAssignments,
     resetData,
     runScheduler,
+    updateItem,
     runSchedulerBySegments,
     upsertSoftConstraints,
     updateItem,
