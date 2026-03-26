@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Users, BookOpen, Building2, FileText, AlertCircle, Calendar, Check, X, Pencil, Trash2 } from 'lucide-react';
 import schedulerApi from '../api/scheduler.js';
 import moduleCatalog from '../data/moduleCatalog.js';
 import { askForText, confirmDelete, showError, showSuccess, showWarning } from '../utils/alerts.js';
@@ -52,67 +53,59 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   const [view3d, setView3d] = useState({ rotateX: 10, rotateZ: -18, zoom: 1 });
   const [showCalendarForm, setShowCalendarForm] = useState(false);
 
+  const showMessage = (text, type = 'success') => {
+    setMessage({ text, type });
+    setTimeout(() => setMessage({ text: '', type: '' }), 5000);
+  };
+
+  const loadAllData = async () => {
+    setLoading(true);
+    try {
+      const loadTimetablesInitial = async () => {
+        const response = await fetch(`${apiBase}/api/academic-coordinator/timetables`, {
+          credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.success) setTimetables(data.data || []);
+      };
+
+      const loadConflictsInitial = async () => {
+        const response = await fetch(`${apiBase}/api/academic-coordinator/conflicts?resolved=false`, {
+          credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.success) setConflicts(data.data || []);
+      };
+
+      const loadAcademicCalendarInitial = async () => {
+        const response = await fetch(`${apiBase}/api/academic-coordinator/calendar`, {
+          credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.success) setAcademicCalendar(data.data || []);
+      };
+
+      await Promise.all([
+        loadLecturers(),
+        loadLics(),
+        loadModules(),
+        loadCampusStructures(),
+        loadAssignments(),
+        loadTimetablesInitial(),
+        loadConflictsInitial(),
+        loadAcademicCalendarInitial()
+      ]);
+    } catch (err) {
+      console.error('Failed to load some data:', err);
+      showMessage('Failed to load some data', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadAllData();
-  }, []);
-
-  const showMessage = (text, type = 'success') => {
-    setMessage({ text, type });
-    setTimeout(() => setMessage({ text: '', type: '' }), 5000);
-  };
-
-    const loadAllData = async () => {
-      setLoading(true);
-      try {
-        const loadTimetablesInitial = async () => {
-          const response = await fetch(`${apiBase}/api/academic-coordinator/timetables`, {
-            credentials: 'include'
-          });
-          const data = await response.json();
-          if (data.success) setTimetables(data.data || []);
-        };
-
-        const loadConflictsInitial = async () => {
-          const response = await fetch(`${apiBase}/api/academic-coordinator/conflicts?resolved=false`, {
-            credentials: 'include'
-          });
-          const data = await response.json();
-          if (data.success) setConflicts(data.data || []);
-        };
-
-        const loadAcademicCalendarInitial = async () => {
-          const response = await fetch(`${apiBase}/api/academic-coordinator/calendar`, {
-            credentials: 'include'
-          });
-          const data = await response.json();
-          if (data.success) setAcademicCalendar(data.data || []);
-        };
-
-        await Promise.all([
-          loadLecturers(),
-          loadLics(),
-          loadModules(),
-          loadCampusStructures(),
-          loadAssignments(),
-          loadTimetablesInitial(),
-          loadConflictsInitial(),
-          loadAcademicCalendarInitial()
-        ]);
-      } catch (err) {
-        console.error('Failed to load some data:', err);
-        showMessage('Failed to load some data', 'error');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadAllData();
   }, [apiBase]);
-
-  const showMessage = (text, type = 'success') => {
-    setMessage({ text, type });
-    setTimeout(() => setMessage({ text: '', type: '' }), 5000);
-  };
 
   const loadLecturers = async () => {
     try {
