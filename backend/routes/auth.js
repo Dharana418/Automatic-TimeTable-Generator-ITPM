@@ -2,10 +2,14 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import bcryptjs from 'bcryptjs';
+import crypto from 'crypto';
 import pool from '../config/db.js';
 import {
     registerValidation,
     loginValidation,
+    forgotPasswordValidation,
+    resetPasswordValidation,
+    profileUpdateValidation,
     adminCreateUserValidation,
     bootstrapAdminValidation,
     adminRoleAssignmentCreateValidation,
@@ -25,6 +29,7 @@ const ROLE_MAP = {
     facultycoordinator: 'Faculty Coordinator',
     academiccoordinator: 'Academic Coordinator',
     lic: 'LIC',
+    liccoordinator: 'LIC',
     instructor: 'Instructor',
     professor: 'Professor',
     lecturer: 'Lecturer',
@@ -34,10 +39,13 @@ const ROLE_MAP = {
 };
 
 const normalizeRoleKey = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const normalizeRoleLabel = (value) => String(value || '').trim().replace(/\s+/g, ' ');
+const RESET_TOKEN_TTL_MINUTES = Number(process.env.RESET_TOKEN_TTL_MINUTES || 20);
 
 const parseRole = (value) => {
     const key = normalizeRoleKey(value);
-    const storedRole = ROLE_MAP[key] || null;
+    const normalizedLabel = normalizeRoleLabel(value);
+    const storedRole = ROLE_MAP[key] || (normalizedLabel ? normalizedLabel : null);
     return { key, storedRole };
 };
 
@@ -120,6 +128,9 @@ const generateToken = (user) => {
         expiresIn: '7d',
     });
 }
+
+const hashResetToken = (rawToken) => crypto.createHash('sha256').update(String(rawToken)).digest('hex');
+
 router.post('/register', registerValidation, validate, async (req, res) => {
     const { name, email, password, address, birthday, phonenumber } = req.body || {};
     if (!name || !email || !password) {
@@ -171,8 +182,192 @@ router.post('/login', loginValidation, validate, async (req, res) => {
     }
 });
 
+router.post('/forgot-password', forgotPasswordValidation, validate, async (req, res) => {
+    const { email } = req.body || {};
+    const safeMessage = 'If this account exists, a password reset token has been generated.';
+
+    try {
+        const userResult = await pool.query('SELECT id, email FROM users WHERE email = $1 LIMIT 1', [email]);
+
+        if (!userResult.rows.length) {
+            return res.status(200).json({ success: true, message: safeMessage });
+        }
+
+        const rawToken = crypto.randomBytes(32).toString('hex');
+        const tokenHash = hashResetToken(rawToken);
+        const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000);
+
+        await pool.query(
+            `UPDATE users
+             SET reset_password_token_hash = $2,
+                 reset_password_expires_at = $3,
+                 reset_password_requested_at = NOW(),
+                 reset_password_consumed_at = NULL
+             WHERE id = $1`,
+            [userResult.rows[0].id, tokenHash, expiresAt]
+        );
+
+        const payload = {
+            success: true,
+            message: safeMessage,
+            expiresInMinutes: RESET_TOKEN_TTL_MINUTES,
+        };
+
+        if (process.env.NODE_ENV !== 'production') {
+            payload.resetToken = rawToken;
+            payload.resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${rawToken}`;
+        }
+
+        return res.status(200).json(payload);
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Unable to process forgot password request' });
+    }
+});
+
+router.post('/reset-password', resetPasswordValidation, validate, async (req, res) => {
+    const { token, password } = req.body || {};
+
+    try {
+        const tokenHash = hashResetToken(token);
+
+        const userResult = await pool.query(
+            `SELECT id, email
+             FROM users
+             WHERE reset_password_token_hash = $1
+               AND reset_password_expires_at IS NOT NULL
+               AND reset_password_expires_at > NOW()
+               AND reset_password_consumed_at IS NULL
+             LIMIT 1`,
+            [tokenHash]
+        );
+
+        if (!userResult.rows.length) {
+            return res.status(400).json({ error: 'Invalid or expired reset token' });
+        }
+
+        const user = userResult.rows[0];
+        const nextPasswordHash = await bcryptjs.hash(password, 10);
+
+        await pool.query(
+            `UPDATE users
+             SET password = $2,
+                 reset_password_consumed_at = NOW(),
+                 reset_password_token_hash = NULL,
+                 reset_password_expires_at = NULL
+             WHERE id = $1`,
+            [user.id, nextPasswordHash]
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: 'Password reset successful. You can now login with your new password.',
+            email: user.email,
+        });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Unable to reset password' });
+    }
+});
+
 router.get('/me', protect, async (req, res) => {
-    res.json({ user: req.user });
+    const { password, reset_password_token_hash, ...safeUser } = req.user || {};
+    res.json({ user: safeUser });
+});
+
+router.put('/me', protect, profileUpdateValidation, validate, async (req, res) => {
+    const { name, email, address, birthday, phonenumber, profilePhotoUrl } = req.body || {};
+
+    const updates = [];
+    const values = [];
+
+    if (typeof name !== 'undefined') {
+        updates.push(`name = $${updates.length + 1}`);
+        values.push(name);
+    }
+    if (typeof email !== 'undefined') {
+        updates.push(`email = $${updates.length + 1}`);
+        values.push(email);
+    }
+    if (typeof address !== 'undefined') {
+        updates.push(`address = $${updates.length + 1}`);
+        values.push(address || null);
+    }
+    if (typeof birthday !== 'undefined') {
+        updates.push(`birthday = $${updates.length + 1}`);
+        values.push(birthday || null);
+    }
+    if (typeof phonenumber !== 'undefined') {
+        updates.push(`phonenumber = $${updates.length + 1}`);
+        values.push(phonenumber || null);
+    }
+    if (typeof profilePhotoUrl !== 'undefined') {
+        updates.push(`profile_photo_url = $${updates.length + 1}`);
+        values.push(profilePhotoUrl || null);
+    }
+
+    if (!updates.length) {
+        return res.status(400).json({ error: 'No profile fields provided to update' });
+    }
+
+    try {
+        if (typeof email !== 'undefined') {
+            const emailConflict = await pool.query(
+                'SELECT id FROM users WHERE email = $1 AND id <> $2 LIMIT 1',
+                [email, req.user.id]
+            );
+
+            if (emailConflict.rows.length) {
+                return res.status(409).json({ error: 'Email is already used by another account' });
+            }
+        }
+
+        values.push(req.user.id);
+        const updated = await pool.query(
+            `UPDATE users
+             SET ${updates.join(', ')}
+             WHERE id = $${values.length}
+             RETURNING id, name, email, address, birthday, phonenumber, profile_photo_url, role, role_assigned_by, role_assigned_at, role_assignment_note, created_at`,
+            values
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: 'Profile updated successfully',
+            user: updated.rows[0],
+        });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Unable to update profile' });
+    }
+});
+
+router.delete('/me', protect, async (req, res) => {
+    try {
+        const deleted = await pool.query(
+            `DELETE FROM users WHERE id = $1 RETURNING id, email`,
+            [req.user.id]
+        );
+
+        if (!deleted.rows.length) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.clearCookie('token', cookieOptions);
+        return res.status(200).json({
+            success: true,
+            message: 'Profile deleted successfully',
+            user: deleted.rows[0],
+        });
+    } catch (err) {
+        console.error(err);
+        if (err?.code === '23503') {
+            return res.status(409).json({
+                error: 'Profile cannot be deleted because it is linked to existing records.',
+            });
+        }
+        return res.status(500).json({ error: 'Unable to delete profile' });
+    }
 });
 
 router.post('/logout', (req, res) => {
@@ -284,6 +479,64 @@ router.get('/admin/users', (req, res) => {
     });
 });
 
+router.get(
+    '/staff-directory',
+    protect,
+    authorize(
+        'admin',
+        'facultycoordinator',
+        'academiccoordinator',
+        'Admin',
+        'Faculty Coordinator',
+        'Academic Coordinator'
+    ),
+    async (req, res) => {
+        try {
+            const { rows } = await pool.query(
+                `SELECT
+                    u.id,
+                    u.name,
+                    u.email,
+                    u.phonenumber,
+                    u.role,
+                    u.role_assigned_at,
+                    u.created_at,
+                    assigner.name AS role_assigned_by_name,
+                    assigner.email AS role_assigned_by_email
+                 FROM users u
+                 LEFT JOIN users assigner ON assigner.id = u.role_assigned_by
+                 WHERE lower(regexp_replace(coalesce(u.role, ''), '[^a-zA-Z0-9]', '', 'g')) = ANY($1)
+                   AND (
+                        EXISTS (
+                            SELECT 1
+                            FROM role_assignment_history rah
+                            WHERE rah.target_user_id = u.id
+                        )
+                        OR u.role_assigned_by IS NOT NULL
+                   )
+                 ORDER BY u.role ASC, u.name ASC`,
+                [[
+                    'lecturer',
+                    'seniorlecturer',
+                    'instructor',
+                    'lic',
+                    'liccoordinator',
+                    'professor',
+                ]]
+            );
+
+            return res.status(200).json({
+                success: true,
+                count: rows.length,
+                users: rows,
+            });
+        } catch (err) {
+            console.error(err);
+            return res.status(500).json({ error: 'Unable to load staff directory' });
+        }
+    }
+);
+
 router.get('/admin/role-assignments', protect, authorize('admin', 'Admin'), async (req, res) => {
     try {
         const assignments = await pool.query(
@@ -296,6 +549,9 @@ router.get('/admin/role-assignments', protect, authorize('admin', 'Admin'), asyn
                 rah.assigned_at AS role_assigned_at,
                 rah.assignment_note AS role_assignment_note,
                 rah.assigned_by AS role_assigned_by,
+                rah.password_encrypted,
+                rah.password_encryption_iv,
+                rah.password_encryption_tag,
                 (rah.password_hash IS NOT NULL) AS has_password_hash,
                 (rah.password_encrypted IS NOT NULL) AS can_unhash,
                 assigner.name AS role_assigned_by_name,
@@ -306,10 +562,42 @@ router.get('/admin/role-assignments', protect, authorize('admin', 'Admin'), asyn
             ORDER BY rah.assigned_at DESC, rah.id DESC`
         );
 
+        // Decrypt passwords
+        const decryptedAssignments = assignments.rows.map((row) => {
+            let decryptedPassword = null;
+            if (row.password_encrypted && row.password_encryption_iv && row.password_encryption_tag) {
+                try {
+                    decryptedPassword = decryptHistoryPassword({
+                        encryptedPassword: row.password_encrypted,
+                        iv: row.password_encryption_iv,
+                        authTag: row.password_encryption_tag,
+                    });
+                } catch (decryptErr) {
+                    console.error('Failed to decrypt password for user:', row.name, decryptErr);
+                    decryptedPassword = null;
+                }
+            }
+            // Return row without encryption fields, with decrypted password
+            return {
+                id: row.id,
+                target_user_id: row.target_user_id,
+                name: row.name,
+                email: row.email,
+                role: row.role,
+                role_assigned_at: row.role_assigned_at,
+                role_assignment_note: row.role_assignment_note,
+                role_assigned_by: row.role_assigned_by,
+                password: decryptedPassword,
+                can_unhash: row.can_unhash,
+                role_assigned_by_name: row.role_assigned_by_name,
+                role_assigned_by_email: row.role_assigned_by_email,
+            };
+        });
+
         return res.status(200).json({
             success: true,
-            count: assignments.rows.length,
-            assignments: assignments.rows,
+            count: decryptedAssignments.length,
+            assignments: decryptedAssignments,
         });
     } catch (err) {
         console.error(err);
@@ -344,6 +632,21 @@ router.post('/admin/role-assignments', protect, authorize('admin', 'Admin'), adm
 
         const targetUser = targetUserResult.rows[0];
 
+        await pool.query(
+            `UPDATE users
+             SET role = $2,
+                 role_assigned_by = $3,
+                 role_assigned_at = NOW(),
+                 role_assignment_note = $4
+             WHERE id = $1`,
+            [
+                targetUser.id,
+                storedRole,
+                req.user?.id || null,
+                roleAssignmentNote || null,
+            ]
+        );
+
         await logRoleAssignmentHistory({
             targetUserId: targetUser.id,
             assignedRole: storedRole,
@@ -372,7 +675,7 @@ router.put('/admin/role-assignments/:historyId', protect, authorize('admin', 'Ad
     }
 
     try {
-        const existing = await pool.query('SELECT id, assigned_role, assignment_note FROM role_assignment_history WHERE id = $1', [historyId]);
+        const existing = await pool.query('SELECT id, target_user_id, assigned_role, assignment_note FROM role_assignment_history WHERE id = $1', [historyId]);
         if (!existing.rows.length) {
             return res.status(404).json({ error: 'History record not found' });
         }
@@ -397,6 +700,21 @@ router.put('/admin/role-assignments/:historyId', protect, authorize('admin', 'Ad
              WHERE id = $1
              RETURNING id, target_user_id, assigned_role, assigned_by, assignment_note, assigned_at`,
             [historyId, nextRole, nextNote]
+        );
+
+        await pool.query(
+            `UPDATE users
+             SET role = $2,
+                 role_assigned_by = $3,
+                 role_assigned_at = NOW(),
+                 role_assignment_note = $4
+             WHERE id = $1`,
+            [
+                existing.rows[0].target_user_id,
+                nextRole,
+                req.user?.id || null,
+                nextNote,
+            ]
         );
 
         return res.status(200).json({

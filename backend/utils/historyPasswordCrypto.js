@@ -36,16 +36,20 @@ export const encryptHistoryPassword = (plainText) => {
 };
 
 export const decryptHistoryPassword = ({ encryptedPassword, iv, authTag }) => {
+  if (!encryptedPassword || !iv || !authTag) {
+    throw new Error('Encrypted payload is incomplete');
+  }
+
   const decipher = crypto.createDecipheriv(
     ALGORITHM,
     getKey(),
-    Buffer.from(String(iv), 'base64')
+    Buffer.from(iv, 'base64')
   );
 
-  decipher.setAuthTag(Buffer.from(String(authTag), 'base64'));
+  decipher.setAuthTag(Buffer.from(authTag, 'base64'));
 
   const decrypted = Buffer.concat([
-    decipher.update(Buffer.from(String(encryptedPassword), 'base64')),
+    decipher.update(Buffer.from(encryptedPassword, 'base64')),
     decipher.final(),
   ]);
 

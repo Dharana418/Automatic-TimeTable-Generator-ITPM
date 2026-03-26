@@ -1,6 +1,6 @@
 const BATCH_CAPACITY = 120;
 
-const buildBatches = () => {
+export const buildBatches = () => {
   const items = [];
 
   const addSeries = ({ year, semester, mode, department, count }) => {
