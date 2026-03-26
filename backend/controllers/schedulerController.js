@@ -7,59 +7,13 @@ import pool from '../config/db.js';
 
 const allowedTypes = ['halls', 'modules', 'lics', 'instructors', 'departments', 'batches'];
 
-const DEPARTMENT_ALIAS_MAP = {
-  IT: ['IT', 'INFORMATIONTECHNOLOGY'],
-  SE: ['SE', 'SOFTWAREENGINEERING'],
-  IM: ['IM', 'INTERACTIVEMULTIMEDIA'],
-  CSNE: ['CSNE', 'COMPUTERSYSTEMSANDNETWORKENGINEERING', 'COMPUTERSYSTEMSNETWORKENGINEERING'],
-  CY: ['CY', 'CYBERSECURITY'],
-  DS: ['DS', 'DATASCIENCE'],
-  ISE: ['ISE', 'INFORMATIONSYSTEMSENGINEERING', 'IE'],
-};
-
-const ENGINEERING_SPECIALIZATIONS = new Set(Object.keys(DEPARTMENT_ALIAS_MAP));
+const ENGINEERING_SPECIALIZATIONS = new Set(['CS', 'ISE', 'CSNE', 'IM']);
 
 const normalizeAlgorithmKey = (value) => String(value || '').trim().toLowerCase();
 const normalizeRole = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-const normalizeDepartmentToken = (value) => String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-
-const resolveDepartmentSpecialization = (value) => {
-  const normalized = normalizeDepartmentToken(value);
-  if (!normalized) return null;
-
-  const directMatch = Object.keys(DEPARTMENT_ALIAS_MAP).find((key) => key === normalized);
-  if (directMatch) return directMatch;
-
-  for (const [specialization, aliases] of Object.entries(DEPARTMENT_ALIAS_MAP)) {
-    if (aliases.some((alias) => normalized.includes(normalizeDepartmentToken(alias)))) {
-      return specialization;
-    }
-  }
-
-  return null;
-};
-
-const isDepartmentMatchedToSegment = (department, segment) => {
-  const departmentSpecialization = resolveDepartmentSpecialization(department);
-  if (!departmentSpecialization) {
-    const normalizedDepartment = normalizeDepartmentToken(department);
-    return segment.departmentGroup === 'Engineering'
-      ? normalizedDepartment.includes('ENGINEERING')
-      : normalizedDepartment.includes(segment.specialization);
-  }
-
-  if (segment.departmentGroup === 'Engineering') {
-    return ENGINEERING_SPECIALIZATIONS.has(departmentSpecialization);
-  }
-
-  return departmentSpecialization === segment.specialization;
-};
 
 const isAcademicCoordinator = (user) => normalizeRole(user?.role) === 'academiccoordinator';
-const isLic = (user) => {
-  const role = normalizeRole(user?.role);
-  return role === 'lic' || role === 'liccoordinator';
-};
+const isLic = (user) => normalizeRole(user?.role) === 'lic';
 const isFacultyCoordinator = (user) => normalizeRole(user?.role) === 'facultycoordinator';
 const isAdmin = (user) => normalizeRole(user?.role) === 'admin';
 const isTeachingStaff = (user) => {
@@ -71,8 +25,7 @@ const parseBatchLabel = (name) => {
   const match = String(name || '').match(/^Y(\d+)\.S(\d+)\.(WE|WD)\.([A-Z0-9]+)\./i);
   if (!match) return null;
 
-  const rawSpecialization = String(match[4]).toUpperCase();
-  const specialization = resolveDepartmentSpecialization(rawSpecialization) || rawSpecialization;
+  const specialization = String(match[4]).toUpperCase();
   return {
     year: Number(match[1]),
     semester: Number(match[2]),
@@ -84,14 +37,9 @@ const parseBatchLabel = (name) => {
 
 const inferModuleSpecialization = (module) => {
   const code = String(module?.code || '').toUpperCase();
-  if (code.startsWith('CSNE')) return 'CSNE';
-  if (code.startsWith('ISE')) return 'ISE';
-  if (code.startsWith('CY')) return 'CY';
-  if (code.startsWith('DS')) return 'DS';
   if (code.startsWith('IT')) return 'IT';
   if (code.startsWith('SE')) return 'SE';
-  if (code.startsWith('IM')) return 'IM';
-  if (code.startsWith('IE')) return 'ISE';
+  if (code.startsWith('IE')) return 'Engineering';
   return 'General';
 };
 
@@ -174,11 +122,19 @@ const buildSemesterSpecializationSegments = ({ batches = [], modules = [], lics 
       });
 
     const licsForSegment = lics.filter((lic) => {
-      return isDepartmentMatchedToSegment(lic.department, segment);
+      const department = String(lic.department || '').toUpperCase();
+      if (segment.departmentGroup === 'Engineering') {
+        return ['ENGINEERING', 'CS', 'ISE', 'CSNE', 'IM'].some((value) => department.includes(value));
+      }
+      return department.includes(segment.specialization);
     });
 
     const instructorsForSegment = instructors.filter((instructor) => {
-      return isDepartmentMatchedToSegment(instructor.department, segment);
+      const department = String(instructor.department || '').toUpperCase();
+      if (segment.departmentGroup === 'Engineering') {
+        return ['ENGINEERING', 'CS', 'ISE', 'CSNE', 'IM'].some((value) => department.includes(value));
+      }
+      return department.includes(segment.specialization);
     });
 
     segments.push({
@@ -269,10 +225,6 @@ export const addItem = async (req, res) => {
 
     if (!allowedTypes.includes(type)) {
       return res.status(400).json({ error: 'Invalid data type' });
-    }
-
-    if (isLic(req.user) && !['modules', 'instructors'].includes(type)) {
-      return res.status(403).json({ error: 'LIC can only create modules and instructors' });
     }
 
     const id = payload.id || `${type}_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
@@ -556,19 +508,9 @@ export const updateItem = async (req, res) => {
     }
 
     if (type === 'batches') {
-      const {
-        name,
-        department_id,
-        capacity,
-      } = payload;
+      const { name = null, department_id = null, capacity = null } = payload;
       const { rows, rowCount } = await pool.query(
-        `UPDATE batches
-         SET
-           name = COALESCE($1, name),
-           department_id = COALESCE($2, department_id),
-           capacity = COALESCE($3, capacity)
-         WHERE id=$4
-         RETURNING *`,
+        `UPDATE batches SET name=$1, department_id=$2, capacity=$3 WHERE id=$4 RETURNING *`,
         [name, department_id, capacity, id]
       );
       if (!rowCount) return res.status(404).json({ error: 'Item not found' });
