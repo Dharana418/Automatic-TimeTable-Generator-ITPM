@@ -98,9 +98,7 @@ function App() {
             isAuthenticated ? (
               <Navigate to={getDashboardPathByRole(user?.role)} replace />
             ) : (
-              <section className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 p-5 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
-                <Login apiBase={API_BASE} onAuthSuccess={handleAuthSuccess} />
-              </section>
+              <Login apiBase={API_BASE} onAuthSuccess={handleAuthSuccess} />
             )
           }
         />
