@@ -22,8 +22,7 @@
     margin: 0;
     min-width: 320px;
     overflow-x: hidden;
-    @apply bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 text-slate-800 antialiased transition-colors duration-300 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800 dark:text-slate-100;
-    background-color: #686868;
+    @apply bg-gradient-to-br from-slate-100 via-purple-50 to-blue-50 text-slate-800 antialiased transition-colors duration-300 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800 dark:text-slate-100;
     font-weight: 500;
   }
 
@@ -108,7 +107,7 @@
   }
 
   .dashboard-container {
-    @apply min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 p-4 md:p-8;
+    @apply min-h-screen bg-gradient-to-br from-slate-100 via-purple-50 to-blue-50 p-4 md:p-8;
   }
 
   .dashboard-header {
@@ -1068,6 +1067,328 @@ textarea.swal-beautiful-input {
 .swal2-confirm.swal2-styled[style*="rgb(239, 68, 68)"]:hover,
 .swal-delete-btn:hover {
   background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
+}
+
+.swal-beautiful-toast {
+  border-radius: 12px !important;
+  backdrop-filter: blur(12px);
+  padding: 16px 20px !important;
+  font-family: 'Source Sans 3', 'Segoe UI', sans-serif !important;
+}
+
+.swal-beautiful-toast .swal2-title {
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  color: #1f2937 !important;
+}
+
+.swal-beautiful-toast .swal2-html-container {
+  font-size: 13px !important;
+  color: #6b7280 !important;
+  margin: 8px 0 0 0 !important;
+}
+
+.swal-beautiful-timer {
+  background: linear-gradient(90deg, #3b82f6, #10b981, #f59e0b, #ef4444) !important;
+  height: 3px !important;
+}
+
+.swal2-icon {
+  font-size: 48px !important;
+}
+
+.swal2-icon.swal2-success {
+  border-color: #10b981 !important;
+  color: #10b981 !important;
+}
+
+.swal2-icon.swal2-error {
+  border-color: #ef4444 !important;
+  color: #ef4444 !important;
+}
+
+.swal2-icon.swal2-warning {
+  border-color: #f59e0b !important;
+  color: #f59e0b !important;
+}
+
+.swal2-icon.swal2-info {
+  border-color: #3b82f6 !important;
+  color: #3b82f6 !important;
+}
+
+/* Loading spinner */
+.swal-beautiful-popup .swal2-loading {
+  border-color: #e5e7eb !important;
+  border-right-color: #3b82f6 !important;
+  animation: spin 1s linear infinite !important;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Validation message */
+.swal2-validation-message {
+  background: #fef2f2 !important;
+  border: 1px solid #fecaca !important;
+  color: #dc2626 !important;
+  margin-top: 12px !important;
+  padding: 10px 12px !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+
+/* Focus ring styling */
+.swal-beautiful-confirm:focus-within,
+.swal-beautiful-cancel:focus-within {
+  outline: none !important;
+}
+
+@media (max-width: 480px) {
+  .swal-beautiful-popup {
+    padding: 24px 20px;
+    width: 90vw !important;
+  }
+
+  .swal-beautiful-title {
+    font-size: 20px;
+  }
+
+  .swal-beautiful-html {
+    font-size: 14px;
+  }
+
+  .swal-beautiful-confirm,
+  .swal-beautiful-cancel {
+    padding: 10px 20px !important;
+    font-size: 14px !important;
+  }
+
+  .swal2-actions {
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  .swal2-actions button {
+    width: 100% !important;
+  }
+}
+
+/* ========== FACULTY COORDINATOR ANIMATIONS ========== */
+
+@keyframes float-slow {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.15;
+  }
+  25% {
+    transform: translate(30px, -30px) scale(1.05);
+    opacity: 0.2;
+  }
+  50% {
+    transform: translate(0, -50px) scale(1.1);
+    opacity: 0.25;
+  }
+  75% {
+    transform: translate(-30px, -30px) scale(1.05);
+    opacity: 0.2;
+  }
+}
+
+@keyframes float-medium {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.12;
+  }
+  33% {
+    transform: translate(-40px, 30px) scale(1.08);
+    opacity: 0.18;
+  }
+  66% {
+    transform: translate(40px, -30px) scale(1.05);
+    opacity: 0.15;
+  }
+}
+
+@keyframes float-slow-reverse {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.2;
+  }
+  25% {
+    transform: translate(-30px, 30px) scale(1.05);
+    opacity: 0.25;
+  }
+  50% {
+    transform: translate(0, 50px) scale(1.1);
+    opacity: 0.3;
+  }
+  75% {
+    transform: translate(30px, 30px) scale(1.05);
+    opacity: 0.25;
+  }
+}
+
+@keyframes float-fast {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.1;
+  }
+  20% {
+    transform: translate(25px, -25px) scale(1.06);
+    opacity: 0.16;
+  }
+  40% {
+    transform: translate(-25px, 25px) scale(1.08);
+    opacity: 0.18;
+  }
+  60% {
+    transform: translate(30px, 30px) scale(1.04);
+    opacity: 0.15;
+  }
+  80% {
+    transform: translate(-30px, -30px) scale(1.07);
+    opacity: 0.17;
+  }
+}
+
+@keyframes grid-shift {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 50px 50px;
+  }
+}
+
+@keyframes float-particle-1 {
+  0%, 100% {
+    transform: translate(0, 0);
+    opacity: 0.4;
+  }
+  25% {
+    transform: translate(40px, -50px);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translate(20px, 80px);
+    opacity: 0.3;
+  }
+  75% {
+    transform: translate(-40px, 30px);
+    opacity: 0.5;
+  }
+}
+
+@keyframes float-particle-2 {
+  0%, 100% {
+    transform: translate(0, 0);
+    opacity: 0.3;
+  }
+  33% {
+    transform: translate(-60px, 40px);
+    opacity: 0.5;
+  }
+  66% {
+    transform: translate(60px, -40px);
+    opacity: 0.4;
+  }
+}
+
+@keyframes float-particle-3 {
+  0%, 100% {
+    transform: translate(0, 0);
+    opacity: 0.4;
+  }
+  25% {
+    transform: translate(30px, 60px);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translate(-50px, -30px);
+    opacity: 0.35;
+  }
+  75% {
+    transform: translate(40px, -50px);
+    opacity: 0.55;
+  }
+}
+
+@keyframes float-particle-4 {
+  0%, 100% {
+    transform: translate(0, 0);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translate(-40px, -70px);
+    opacity: 0.5;
+  }
+}
+
+@keyframes float-particle-5 {
+  0%, 100% {
+    transform: translate(0, 0);
+    opacity: 0.25;
+  }
+  33% {
+    transform: translate(50px, 50px);
+    opacity: 0.4;
+  }
+  66% {
+    transform: translate(-50px, -50px);
+    opacity: 0.35;
+  }
+}
+
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(59, 130, 246, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59, 130, 246, 0.1) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+.animate-float-slow {
+  animation: float-slow 8s ease-in-out infinite;
+}
+
+.animate-float-medium {
+  animation: float-medium 10s ease-in-out infinite;
+}
+
+.animate-float-slow-reverse {
+  animation: float-slow-reverse 12s ease-in-out infinite;
+}
+
+.animate-float-fast {
+  animation: float-fast 6s ease-in-out infinite;
+}
+
+.animate-grid-shift {
+  animation: grid-shift 20s linear infinite;
+}
+
+.animate-float-particle-1 {
+  animation: float-particle-1 15s ease-in-out infinite;
+}
+
+.animate-float-particle-2 {
+  animation: float-particle-2 18s ease-in-out infinite;
+}
+
+.animate-float-particle-3 {
+  animation: float-particle-3 20s ease-in-out infinite;
+}
+
+.animate-float-particle-4 {
+  animation: float-particle-4 16s ease-in-out infinite;
+}
+
+.animate-float-particle-5 {
+  animation: float-particle-5 22s ease-in-out infinite;
 }
 
 .swal-beautiful-toast {
