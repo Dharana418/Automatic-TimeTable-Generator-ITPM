@@ -125,41 +125,67 @@ const FacultyCoordinatorDashboard = ({ user }) => {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-80 border-r border-slate-700 bg-slate-900 backdrop-blur-xl transition-transform duration-300 lg:translate-x-0 rounded-r-3xl ${
+        className={`fixed inset-y-0 left-0 z-40 w-80 border-r border-indigo-500/30 bg-gradient-to-b from-slate-950 via-slate-900 to-indigo-950 backdrop-blur-xl transition-transform duration-300 lg:translate-x-0 rounded-r-3xl shadow-2xl ${
           mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="border-b border-slate-700 px-6 py-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-400">Faculty Coordinator</p>
-          <h2 className="mt-1 text-2xl font-bold text-white">Dashboard</h2>
+        {/* Sidebar Header */}
+        <div className="border-b border-indigo-500/30 bg-gradient-to-r from-indigo-900/40 to-purple-900/40 px-6 py-6">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="text-2xl">⏱️</div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Faculty Coordinator</p>
+              <h2 className="mt-0.5 text-xl font-bold bg-gradient-to-r from-white to-slate-200 bg-clip-text text-transparent">Scheduler</h2>
+            </div>
+          </div>
         </div>
 
-        <nav className="space-y-6 px-4 py-5">
-          {menuGroups.map((group) => (
+        <nav className="space-y-6 px-4 py-6">
+          {menuGroups.map((group, groupIdx) => (
             <div key={group.title}>
-              <p className="mb-2 px-2 text-[10px] uppercase tracking-[0.16em] text-slate-400">{group.title}</p>
-              <div className="space-y-1.5">
-                {group.items.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      navigate(item.to);
-                      setMobileSidebarOpen(false);
-                    }}
-                    className={`w-full rounded-2xl px-3 py-2.5 text-left text-sm font-medium transition ${
-                      location.pathname === item.to
-                        ? 'bg-gradient-to-r from-blue-500/40 to-sky-400/40 text-blue-300 ring-1 ring-blue-400/60 font-semibold'
-                        : 'text-slate-300 hover:bg-slate-800 hover:text-slate-100'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
+              <p className="mb-3 px-3 text-[10px] uppercase tracking-[0.18em] font-bold bg-gradient-to-r from-blue-400/60 to-cyan-400/60 bg-clip-text text-transparent">{group.title}</p>
+              <div className="space-y-2">
+                {group.items.map((item, itemIdx) => {
+                  const colorGroups = [
+                    { icon: '📊', border: 'border-l-4 border-blue-500', bg: 'hover:bg-blue-500/10', activeBg: 'from-blue-600/40 to-blue-500/30', text: 'hover:text-blue-300' },
+                    { icon: '📅', border: 'border-l-4 border-purple-500', bg: 'hover:bg-purple-500/10', activeBg: 'from-purple-600/40 to-purple-500/30', text: 'hover:text-purple-300' },
+                    { icon: '📦', border: 'border-l-4 border-cyan-500', bg: 'hover:bg-cyan-500/10', activeBg: 'from-cyan-600/40 to-cyan-500/30', text: 'hover:text-cyan-300' },
+                  ];
+                  const colors = colorGroups[(groupIdx * 3 + itemIdx) % colorGroups.length];
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        navigate(item.to);
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={`w-full rounded-xl px-4 py-3 text-left text-sm font-medium transition ${colors.border} ${
+                        location.pathname === item.to
+                          ? `bg-gradient-to-r ${colors.activeBg} ring-1 ring-white/20 font-semibold text-white shadow-lg`
+                          : `text-slate-300 ${colors.bg} ${colors.text}`
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>{colors.icon}</span>
+                        <span>{item.label}</span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ))}
         </nav>
+
+        {/* Bottom User Card */}
+        <div className="absolute bottom-0 left-0 right-0 border-t border-indigo-500/30 bg-gradient-to-t from-indigo-950/60 to-slate-900 p-4 rounded-br-3xl">
+          <div className="rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-400/30 p-4">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-300">Logged In As</p>
+            <p className="mt-2 text-sm font-bold bg-gradient-to-r from-blue-300 to-cyan-300 bg-clip-text text-transparent">{username || 'Coordinator'}</p>
+            <p className="mt-1 text-[10px] uppercase tracking-widest text-indigo-400/80">⭐ Schedule Manager</p>
+          </div>
+        </div>
       </aside>
 
       <main className="relative z-10 lg:pl-80">
