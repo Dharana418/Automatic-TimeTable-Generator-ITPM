@@ -6,6 +6,7 @@ import Navigation from "./components/Navigation.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import FacultyCoordinatorDashboard from "./pages/FacultyCoordinatorDashboard.jsx";
 import FacultyBatchesPage from "./pages/FacultyBatchesPage.jsx";
+import FacultyModulesPage from "./pages/FacultyModulesPage.jsx";
 import LICDashboard from "./pages/LICDashboard.jsx";
 import AcademicCoordinatorDashboard from "./pages/AC_before_merge.jsx";
 import InstructorDashboard from "./pages/InstructorDashboard.jsx";
@@ -93,9 +94,10 @@ function App() {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
     localStorage.setItem('theme', theme);
+    document.documentElement.style.colorScheme = theme;
   }, [theme]);
 
-  if (loading) return <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 text-lg font-semibold text-slate-700 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800 dark:text-slate-100">Loading...</div>;
+  if (loading) return <div className="flex min-h-screen items-center justify-center bg-white text-lg font-semibold text-gray-700 dark:bg-black dark:text-gray-200">Loading...</div>;
 
   return (
     <Router>
@@ -143,6 +145,12 @@ function App() {
         <Route path="/faculty/batches" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
             {roleKey === "facultycoordinator" ? <FacultyBatchesPage user={user} /> : <Navigate to="/dashboard" replace />}
+          </ProtectedRoute>
+        } />
+
+        <Route path="/faculty/modules" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
+            {roleKey === "facultycoordinator" ? <FacultyModulesPage user={user} /> : <Navigate to="/dashboard" replace />}
           </ProtectedRoute>
         } />
 
