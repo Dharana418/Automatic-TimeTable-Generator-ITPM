@@ -41,8 +41,8 @@ export default function Home() {
     <div className="relative min-h-screen w-full overflow-hidden bg-slate-950">
       {/* Background Images */}
       <div className="absolute inset-0 z-[1] flex">
-        <img src={building} alt="SLIIT Building" className="h-full w-1/2 scale-105 object-cover" />
-        <img src={campus} alt="SLIIT Campus Facilities" className="h-full w-1/2 scale-105 object-cover" />
+        <img src={building} alt="" role="presentation" className="h-full w-1/2 scale-105 object-cover" />
+        <img src={campus} alt="" role="presentation" className="h-full w-1/2 scale-105 object-cover" />
       </div>
 
       {/* Overlay */}

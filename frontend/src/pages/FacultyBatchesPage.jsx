@@ -251,17 +251,17 @@ export default function FacultyBatchesPage() {
   };
 
   const DEPT_COLOR_MAP = {
-    IT: { badge: 'bg-blue-100 text-blue-800 border-blue-300', header: 'from-blue-50', accent: 'bg-blue-600' },
-    SE: { badge: 'bg-emerald-100 text-emerald-800 border-emerald-300', header: 'from-emerald-50', accent: 'bg-emerald-600' },
-    DS: { badge: 'bg-violet-100 text-violet-800 border-violet-300', header: 'from-violet-50', accent: 'bg-violet-600' },
-    CS: { badge: 'bg-amber-100 text-amber-800 border-amber-300', header: 'from-amber-50', accent: 'bg-amber-600' },
-    ISE: { badge: 'bg-pink-100 text-pink-800 border-pink-300', header: 'from-pink-50', accent: 'bg-pink-600' },
-    IM: { badge: 'bg-indigo-100 text-indigo-800 border-indigo-300', header: 'from-indigo-50', accent: 'bg-indigo-600' },
-    CSNE: { badge: 'bg-rose-100 text-rose-800 border-rose-300', header: 'from-rose-50', accent: 'bg-rose-600' },
+    IT: { badge: 'bg-blue-100 text-blue-800 border-blue-300', header: 'from-blue-50', accent: 'bg-blue-600', capacityText: 'text-blue-600' },
+    SE: { badge: 'bg-emerald-100 text-emerald-800 border-emerald-300', header: 'from-emerald-50', accent: 'bg-emerald-600', capacityText: 'text-emerald-600' },
+    DS: { badge: 'bg-violet-100 text-violet-800 border-violet-300', header: 'from-violet-50', accent: 'bg-violet-600', capacityText: 'text-violet-600' },
+    CS: { badge: 'bg-amber-100 text-amber-800 border-amber-300', header: 'from-amber-50', accent: 'bg-amber-600', capacityText: 'text-amber-600' },
+    ISE: { badge: 'bg-pink-100 text-pink-800 border-pink-300', header: 'from-pink-50', accent: 'bg-pink-600', capacityText: 'text-pink-600' },
+    IM: { badge: 'bg-indigo-100 text-indigo-800 border-indigo-300', header: 'from-indigo-50', accent: 'bg-indigo-600', capacityText: 'text-indigo-600' },
+    CSNE: { badge: 'bg-rose-100 text-rose-800 border-rose-300', header: 'from-rose-50', accent: 'bg-rose-600', capacityText: 'text-rose-600' },
   };
 
   const getDepartmentColor = (dept) => {
-    return DEPT_COLOR_MAP[dept] || { badge: 'bg-slate-100 text-slate-800 border-slate-300', header: 'from-slate-50', accent: 'bg-slate-600' };
+    return DEPT_COLOR_MAP[dept] || { badge: 'bg-slate-100 text-slate-800 border-slate-300', header: 'from-slate-50', accent: 'bg-slate-600', capacityText: 'text-slate-600' };
   };
 
   return (
@@ -571,7 +571,7 @@ export default function FacultyBatchesPage() {
 
                                     <div className="mt-3 flex items-center justify-between rounded-xl bg-white px-3 py-2 border border-slate-100">
                                       <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Capacity</span>
-                                      <span className={`text-sm font-extrabold ${colors.accent.replace('bg-', 'text-')}`}>
+                                      <span className={`text-sm font-extrabold ${colors.capacityText}`}>
                                         {batch.capacity || 120}
                                       </span>
                                     </div>

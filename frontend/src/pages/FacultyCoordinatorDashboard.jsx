@@ -290,7 +290,7 @@ const FacultyCoordinatorDashboard = ({ user }) => {
             <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
               {[
                 { label: 'Total Instructors', value: totalInstructors, icon: '👨‍🏫' },
-                { label: 'Pending Approvals', value: 3, icon: '📋' },
+                { label: 'Pending Approvals', value: resources.length > 0 ? 3 : '—', icon: '📋' },
                 { label: 'Active Batches', value: '—', icon: '🧩' },
                 { label: 'Scheduled Modules', value: '—', icon: '📚' },
               ].map((stat) => (

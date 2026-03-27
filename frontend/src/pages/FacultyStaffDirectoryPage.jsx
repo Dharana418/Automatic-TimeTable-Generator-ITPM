@@ -22,6 +22,16 @@ const formatDateTime = (value) => {
   return parsed.toLocaleDateString();
 };
 
+const ROLE_PLURALS = {
+  'Lecturer': 'Lecturers',
+  'Senior Lecturer': 'Senior Lecturers',
+  'Instructor': 'Instructors',
+  'LIC': 'LICs',
+  'Professor': 'Professors',
+};
+
+const pluralizeRole = (role) => ROLE_PLURALS[role] || `${role}s`;
+
 const ROLE_COLORS = {
   'Lecturer': { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200', badge: 'bg-blue-600' },
   'Senior Lecturer': { bg: 'bg-violet-100', text: 'text-violet-700', border: 'border-violet-200', badge: 'bg-violet-600' },
@@ -137,7 +147,7 @@ export default function FacultyStaffDirectoryPage() {
               users.length > 0 && (
                 <div key={role} className="text-center">
                   <p className="text-lg font-bold">{users.length}</p>
-                  <p className="text-[10px] font-medium text-indigo-200">{role}s</p>
+                  <p className="text-[10px] font-medium text-indigo-200">{pluralizeRole(role)}</p>
                 </div>
               )
             ))}
@@ -198,7 +208,7 @@ export default function FacultyStaffDirectoryPage() {
                       <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${colors.badge} text-[10px] font-bold text-white`}>
                         {section.role.slice(0, 1)}
                       </div>
-                      <h2 className={`text-sm font-bold ${colors.text}`}>{section.role}s</h2>
+                      <h2 className={`text-sm font-bold ${colors.text}`}>{pluralizeRole(section.role)}</h2>
                     </div>
                     <span className={`rounded-full ${colors.badge} px-2.5 py-0.5 text-[10px] font-bold text-white`}>
                       {section.users.length}
@@ -206,7 +216,7 @@ export default function FacultyStaffDirectoryPage() {
                   </div>
 
                   {section.users.length === 0 ? (
-                    <p className="px-5 py-5 text-sm text-slate-400">No {section.role.toLowerCase()} records found.</p>
+                    <p className="px-5 py-5 text-sm text-slate-400">No {pluralizeRole(section.role).toLowerCase()} found.</p>
                   ) : (
                     <div className="grid gap-px bg-slate-100 sm:grid-cols-2 lg:grid-cols-3">
                       {section.users.map((person) => (
