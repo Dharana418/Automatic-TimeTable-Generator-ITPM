@@ -125,19 +125,19 @@ const FacultyCoordinatorDashboard = ({ user }) => {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-80 border-r border-blue-100/50 bg-white/80 backdrop-blur-xl transition-transform duration-300 lg:translate-x-0 rounded-r-3xl ${
+        className={`fixed inset-y-0 left-0 z-40 w-80 border-r border-slate-700 bg-slate-900 backdrop-blur-xl transition-transform duration-300 lg:translate-x-0 rounded-r-3xl ${
           mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="border-b border-blue-100/50 px-6 py-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">Faculty Coordinator</p>
-          <h2 className="mt-1 text-2xl font-bold text-slate-900">Dashboard</h2>
+        <div className="border-b border-slate-700 px-6 py-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-400">Faculty Coordinator</p>
+          <h2 className="mt-1 text-2xl font-bold text-white">Dashboard</h2>
         </div>
 
         <nav className="space-y-6 px-4 py-5">
           {menuGroups.map((group) => (
             <div key={group.title}>
-              <p className="mb-2 px-2 text-[10px] uppercase tracking-[0.16em] text-slate-500">{group.title}</p>
+              <p className="mb-2 px-2 text-[10px] uppercase tracking-[0.16em] text-slate-400">{group.title}</p>
               <div className="space-y-1.5">
                 {group.items.map((item) => (
                   <button
@@ -149,8 +149,8 @@ const FacultyCoordinatorDashboard = ({ user }) => {
                     }}
                     className={`w-full rounded-2xl px-3 py-2.5 text-left text-sm font-medium transition ${
                       location.pathname === item.to
-                        ? 'bg-gradient-to-r from-blue-500/20 to-sky-400/20 text-blue-700 ring-1 ring-blue-200/60 font-semibold'
-                        : 'text-slate-600 hover:bg-slate-100/50 hover:text-slate-800'
+                        ? 'bg-gradient-to-r from-blue-500/40 to-sky-400/40 text-blue-300 ring-1 ring-blue-400/60 font-semibold'
+                        : 'text-slate-300 hover:bg-slate-800 hover:text-slate-100'
                     }`}
                   >
                     {item.label}
