@@ -82,69 +82,99 @@ const Login = ({ apiBase, onAuthSuccess }) => {
   };
 
   return (
-    <div className="w-full max-w-md rounded-3xl border border-white/50 bg-white/95 px-8 py-10 text-center shadow-[0_24px_60px_rgba(15,23,42,0.22)] backdrop-blur-md">
-      <img src={sliitLogo} alt="SLIIT Logo" className="mx-auto mb-5 block w-20 drop-shadow-sm" />
-      <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-indigo-500">Welcome Back</p>
-      <h2 className="mb-6 text-3xl text-slate-900">Sign In</h2>
-
-      <form className="flex flex-col gap-3 text-left" onSubmit={handleSubmit}>
-        <label className="mb-1 text-sm font-semibold text-slate-700">Email</label>
-        <input
-          type="email"
-          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-800 outline-none ring-indigo-500 transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2"
-          placeholder="Enter your email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-
-        <label className="mb-1 mt-1 text-sm font-semibold text-slate-700">Password</label>
-        <div className="relative w-full">
-          <input
-            type={showPassword ? "text" : "password"}
-            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 pr-11 text-slate-800 outline-none ring-indigo-500 transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2"
-            placeholder="Enter your password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-          <button
-            type="button"
-            className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md border-none bg-transparent p-0 text-indigo-950 transition hover:bg-indigo-50"
-            aria-label={showPassword ? "Hide password" : "Show password"}
-            onClick={() => setShowPassword((s) => !s)}
-          >
-            {showPassword ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-                <path d="M3 3L21 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M10.58 10.58a3 3 0 004.24 4.24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M2.93 12.53C4.86 16.17 8.24 18.5 12 18.5c2.09 0 4.03-.6 5.69-1.63" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M14.12 9.88A3 3 0 009.88 14.12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-                <path d="M1.5 12s4-7 10.5-7S22.5 12 22.5 12s-4 7-10.5 7S1.5 12 1.5 12z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            )}
-          </button>
+    <div className="w-full max-w-md">
+      {/* Card */}
+      <div className="rounded-3xl border border-white/40 bg-white shadow-[0_32px_80px_rgba(15,23,42,0.18)] overflow-hidden">
+        {/* Header band */}
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-8 py-6 text-center">
+          <img src={sliitLogo} alt="SLIIT Logo" className="mx-auto mb-3 block w-16 brightness-0 invert drop-shadow-sm" />
+          <p className="text-xs font-bold uppercase tracking-widest text-blue-200">SLIIT Timetable System</p>
+          <h2 className="mt-1 text-2xl font-black text-white">Welcome Back</h2>
         </div>
 
-        {error && <div className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-center text-sm text-red-600">{error}</div>}
+        {/* Form body */}
+        <div className="px-8 py-7">
+          <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+            <div>
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                Email Address
+              </label>
+              <input
+                type="email"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                placeholder="you@sliit.lk"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
 
-        <button
-          type="button"
-          onClick={handleForgotPassword}
-          disabled={forgotLoading}
-          className="text-right text-sm font-semibold text-indigo-700 transition hover:text-indigo-900 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {forgotLoading ? "Requesting reset..." : "Forgot Password?"}
-        </button>
+            <div>
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 pr-12 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  onClick={() => setShowPassword((s) => !s)}
+                >
+                  {showPassword ? (
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                      <path d="M3 3L21 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M10.58 10.58a3 3 0 004.24 4.24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M2.93 12.53C4.86 16.17 8.24 18.5 12 18.5c2.09 0 4.03-.6 5.69-1.63" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  ) : (
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                      <path d="M1.5 12s4-7 10.5-7S22.5 12 22.5 12s-4 7-10.5 7S1.5 12 1.5 12z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
 
-        <button type="submit" className="mt-2 rounded-xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-slate-900 px-4 py-3 font-bold text-white shadow-lg shadow-indigo-500/30 transition hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70" disabled={loading}>
-          {loading ? "Signing In..." : "Sign In"}
-        </button>
-      </form>
+            {error && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-600">
+                {error}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={forgotLoading}
+                className="text-xs font-bold text-blue-600 transition hover:text-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {forgotLoading ? "Requesting..." : "Forgot Password?"}
+              </button>
+            </div>
+
+            <button
+              type="submit"
+              className="mt-1 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-700 px-4 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-600/30 transition-all hover:-translate-y-0.5 hover:shadow-blue-600/40 disabled:cursor-not-allowed disabled:opacity-70"
+              disabled={loading}
+            >
+              {loading ? "Signing In..." : "Sign In"}
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <p className="mt-5 text-center text-xs text-slate-400">
+        SLIIT Automatic Timetable Generator &middot; Secure Access
+      </p>
     </div>
   );
 };
