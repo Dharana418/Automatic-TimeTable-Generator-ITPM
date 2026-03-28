@@ -1,12 +1,13 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700;800&family=Great+Vibes:wght@400&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600;700&display=swap');
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: "Source Sans 3", "Segoe UI", sans-serif;
-  --font-display: "Space Grotesk", "Segoe UI", sans-serif;
-  --font-cursive: "Playfair Display", "Cormorant Garamond", serif;
-  --font-script: "Great Vibes", cursive;
+  --font-sans: "Inter", "Segoe UI", sans-serif;
+  --font-display: "Inter", "Segoe UI", sans-serif;
+  --font-cursive: "Inter", "Segoe UI", sans-serif;
+  --font-script: "Inter", "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", "Consolas", monospace;
 }
 
 @layer base {
@@ -22,7 +23,7 @@
     margin: 0;
     min-width: 320px;
     overflow-x: hidden;
-    @apply bg-gradient-to-br from-slate-100 via-purple-50 to-blue-50 text-slate-800 antialiased transition-colors duration-300 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800 dark:text-slate-100;
+    @apply bg-gradient-to-br from-slate-100 via-slate-50 to-blue-100 text-slate-800 antialiased transition-colors duration-300 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800 dark:text-slate-100;
     font-weight: 500;
   }
 
@@ -107,11 +108,11 @@
   }
 
   .dashboard-container {
-    @apply min-h-screen bg-gradient-to-br from-slate-100 via-purple-50 to-blue-50 p-4 md:p-8;
+    @apply min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-100 p-4 md:p-8;
   }
 
   .dashboard-header {
-    @apply mx-auto mb-6 max-w-6xl rounded-2xl border border-blue-100/80 bg-white/90 p-5 shadow-lg shadow-blue-100/60 backdrop-blur;
+    @apply mx-auto mb-6 max-w-6xl rounded-2xl border border-slate-200/80 bg-white/95 p-5 shadow-lg shadow-slate-200/50 backdrop-blur;
   }
 
   .dashboard-header h1 {
@@ -130,7 +131,7 @@
   }
 
   .dashboard-card {
-    @apply rounded-xl border border-blue-100/70 bg-white/90 p-6 shadow-md shadow-blue-100/50 transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-blue-200/50;
+    @apply rounded-xl border border-slate-200/80 bg-white/95 p-6 shadow-md shadow-slate-200/50 transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-300/50;
   }
 
   .dashboard-card h2 {
@@ -144,7 +145,7 @@
   .dashboard-btn,
   .primary,
   .action-btn {
-    @apply rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-blue-300/50 transition duration-300 hover:-translate-y-0.5 hover:from-blue-700 hover:to-blue-800 disabled:cursor-not-allowed disabled:opacity-70;
+    @apply rounded-lg bg-gradient-to-r from-sky-700 to-blue-800 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-slate-400/40 transition duration-300 hover:-translate-y-0.5 hover:from-sky-800 hover:to-blue-900 disabled:cursor-not-allowed disabled:opacity-70;
   }
 
   .ac-main-menu-wrap {
@@ -1176,6 +1177,39 @@ textarea.swal-beautiful-input {
   .swal2-actions button {
     width: 100% !important;
   }
+}
+
+/* ========== CORPORATE ACADEMIC COLOR THEME ========== */
+/* Primary Brand: Deep Midnight Indigo (#0C1D3F) */
+/* Accents: Icy Arctic Cyan (#22D3EE), Soft Coral Rose (#FCA5A5), Vibrant Electric Violet (#8B5CF6) */
+/* Typography: Academic Stone Gray (#64748B) */
+
+:root {
+  --color-midnight-indigo: #0C1D3F;
+  --color-arctic-cyan: #22D3EE;
+  --color-coral-rose: #FCA5A5;
+  --color-electric-violet: #8B5CF6;
+  --color-stone-gray: #64748B;
+}
+
+.corporate-academic-background {
+  background: linear-gradient(135deg, #f0f4f8 0%, #e8f0f8 50%, #f0f5ff 100%);
+}
+
+.corporate-academic-sidebar {
+  background: linear-gradient(180deg, #0C1D3F 0%, #1a2a4f 50%, #0f2847 100%);
+}
+
+.corporate-academic-accent-cyan {
+  color: #22D3EE;
+}
+
+.corporate-academic-accent-violet {
+  background: linear-gradient(135deg, #8B5CF6 0%, #a78bfa 100%);
+}
+
+.corporate-academic-accent-coral {
+  background: linear-gradient(135deg, #FCA5A5 0%, #f97171 100%);
 }
 
 /* ========== FACULTY COORDINATOR ANIMATIONS ========== */

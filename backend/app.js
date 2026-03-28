@@ -15,7 +15,13 @@ const app = express();
 
 // CORS configuration
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:5174'],
+    origin: (origin, callback) => {
+        // Allow server-to-server tools (no Origin header) and local dev frontends on any port.
+        if (!origin) return callback(null, true);
+        const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
+        if (isLocalhost) return callback(null, true);
+        return callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']

@@ -1,33 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import api from '../api/scheduler.js';
+import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 
-const menuGroups = [
-  {
-    title: 'Workspace',
-    items: [
-      { id: 'overview', label: 'Overview', to: '/dashboard' },
-      { id: 'timetable', label: 'Timetables', to: '/scheduler' },
-    ],
-  },
-  {
-    title: 'Coordination',
-    items: [
-      { id: 'batches', label: 'Batches', to: '/faculty/batches' },
-      { id: 'modules', label: 'Modules', to: '/faculty/modules' },
-      { id: 'resources', label: 'Resources', to: '/dashboard' },
-    ],
-  },
-];
+const dayOptions = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+const sparklineSets = {
+  resources: [45, 55, 58, 64, 67, 70, 72],
+  instructors: [32, 35, 38, 40, 44, 46, 49],
+  sync: [85, 88, 91, 92, 94, 96, 97],
+};
 
 const FacultyCoordinatorDashboard = ({ user }) => {
   const username = user?.username || user?.name || 'Coordinator';
   const navigate = useNavigate();
-  const location = useLocation();
 
   const [resources, setResources] = useState([]);
   const [_loadingResources, setLoadingResources] = useState(false);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [savingSoftConstraints, setSavingSoftConstraints] = useState(false);
   const [softConstraintForm, setSoftConstraintForm] = useState({
     preferredDaysCsv: 'Mon,Tue,Wed,Thu,Fri',
@@ -56,10 +45,21 @@ const FacultyCoordinatorDashboard = ({ user }) => {
     };
   }, []);
 
+  const selectedDays = useMemo(
+    () =>
+      softConstraintForm.preferredDaysCsv
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+    [softConstraintForm.preferredDaysCsv],
+  );
+
   const totalInstructors = useMemo(
     () => resources.reduce((sum, lic) => sum + (lic.instructors?.length || 0), 0),
-    [resources]
+    [resources],
   );
+
+  const syncHealth = resources.length > 0 ? 'Synced' : 'Pending';
 
   const saveSoftConstraints = async () => {
     try {
@@ -85,257 +85,233 @@ const FacultyCoordinatorDashboard = ({ user }) => {
     }
   };
 
+  const toggleDay = (day) => {
+    const hasDay = selectedDays.includes(day);
+    const next = hasDay ? selectedDays.filter((item) => item !== day) : [...selectedDays, day];
+    setSoftConstraintForm((prev) => ({
+      ...prev,
+      preferredDaysCsv: next.join(','),
+    }));
+  };
+
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-slate-100 via-purple-50 to-blue-50 text-slate-800">
-      {/* Animated Background Orbs */}
-      <div className="pointer-events-none absolute -left-40 -top-40 h-96 w-96 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 opacity-20 blur-3xl animate-float-slow" />
-      <div className="pointer-events-none absolute -right-32 top-1/2 h-80 w-80 rounded-full bg-gradient-to-br from-pink-400 to-rose-500 opacity-15 blur-3xl animate-float-medium" />
-      <div className="pointer-events-none absolute left-1/3 -bottom-40 h-96 w-96 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 opacity-20 blur-3xl animate-float-slow-reverse" />
-      <div className="pointer-events-none absolute right-1/4 top-1/4 h-72 w-72 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 opacity-15 blur-3xl animate-float-fast" />
-
-      {/* Animated Grid Background */}
-      <div className="pointer-events-none absolute inset-0 bg-grid opacity-5 animate-grid-shift" />
-
-      {/* Floating Particles */}
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute w-2 h-2 bg-purple-400 rounded-full opacity-40 top-1/4 left-1/4 animate-float-particle-1" />
-        <div className="absolute w-1.5 h-1.5 bg-pink-400 rounded-full opacity-30 top-1/3 right-1/4 animate-float-particle-2" />
-        <div className="absolute w-2 h-2 bg-cyan-400 rounded-full opacity-40 bottom-1/4 left-1/3 animate-float-particle-3" />
-        <div className="absolute w-1.5 h-1.5 bg-emerald-400 rounded-full opacity-35 top-1/2 right-1/3 animate-float-particle-4" />
-        <div className="absolute w-2 h-2 bg-indigo-400 rounded-full opacity-25 bottom-1/3 right-1/4 animate-float-particle-5" />
-      </div>
-
-      {/* 3D Floating Schedule Cards */}
-      <div className="pointer-events-none absolute inset-0 perspective-3d">
-        <div className="card-3d card-3d-1 absolute top-1/4 left-1/4 w-32 h-40 border border-blue-200/40 flex items-center justify-center text-xs font-semibold text-blue-400/60">📅</div>
-        <div className="card-3d card-3d-2 absolute top-1/3 right-1/4 w-32 h-40 border border-purple-200/40 flex items-center justify-center text-xs font-semibold text-purple-400/60">⏰</div>
-        <div className="card-3d card-3d-3 absolute bottom-1/4 left-1/3 w-32 h-40 border border-indigo-200/40 flex items-center justify-center text-xs font-semibold text-indigo-400/60">📋</div>
-        <div className="card-3d card-3d-4 absolute top-1/2 right-1/3 w-32 h-40 border border-cyan-200/40 flex items-center justify-center text-xs font-semibold text-cyan-400/60">🗓️</div>
-        <div className="card-3d card-3d-5 absolute bottom-1/3 right-1/4 w-32 h-40 border border-emerald-200/40 flex items-center justify-center text-xs font-semibold text-emerald-400/60">✓</div>
-        <div className="card-3d card-3d-6 absolute top-2/3 left-1/4 w-32 h-40 border border-pink-200/40 flex items-center justify-center text-2xl">🎓</div>
-      </div>
-
-      {mobileSidebarOpen && (
+    <FacultyCoordinatorShell
+      user={user}
+      title="Faculty Coordinator Workspace"
+      subtitle="Operational overview for scheduling, batches, and faculty resource alignment"
+      badge="Modern Institutional Professional"
+      headerActions={
         <button
           type="button"
-          className="fixed inset-0 z-30 bg-black/20 lg:hidden"
-          onClick={() => setMobileSidebarOpen(false)}
-          aria-label="Close sidebar"
-        />
-      )}
+          onClick={() => navigate('/scheduler')}
+          className="rounded-xl border border-sky-700 bg-sky-700 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(3,105,161,0.24)] transition hover:-translate-y-0.5 hover:bg-sky-800 active:translate-y-[1px]"
+        >
+          Open Timetables
+        </button>
+      }
+    >
+      <div className="grid gap-5 xl:grid-cols-12">
+        <section className="xl:col-span-12">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <SummaryCard
+              label="LIC Units"
+              value={resources.length}
+              status="Data Active"
+              chart={sparklineSets.resources}
+            />
+            <SummaryCard
+              label="Instructors"
+              value={totalInstructors}
+              status="Faculty Loaded"
+              chart={sparklineSets.instructors}
+            />
+            <SummaryCard
+              label="Sync Health"
+              value={syncHealth}
+              status={resources.length > 0 ? 'Healthy' : 'Awaiting Data'}
+              chart={sparklineSets.sync}
+              pulse={resources.length > 0}
+            />
+            <SummaryCard
+              label="Constraint Profile"
+              value={`w5=${softConstraintForm.w5Weight}`}
+              status="Policy Mode"
+              chart={[35, 42, 54, 52, 61, 60, 68]}
+            />
+          </div>
+        </section>
 
-      <aside
-        className={`fixed inset-y-0 left-0 z-40 w-80 border-r border-indigo-500/30 bg-gradient-to-b from-slate-950 via-slate-900 to-indigo-950 backdrop-blur-xl transition-transform duration-300 lg:translate-x-0 rounded-r-3xl shadow-2xl ${
-          mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
-        {/* Sidebar Header */}
-        <div className="border-b border-indigo-500/30 bg-gradient-to-r from-indigo-900/40 to-purple-900/40 px-6 py-6">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="text-2xl">⏱️</div>
+        <section className="rounded-3xl border border-slate-200 bg-white/88 p-6 shadow-[0_14px_40px_rgba(15,23,42,0.08)] xl:col-span-8">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Faculty Coordinator</p>
-              <h2 className="mt-0.5 text-xl font-bold bg-gradient-to-r from-white to-slate-200 bg-clip-text text-transparent">Scheduler</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Workspace Operations</p>
+              <h3 className="mt-2 text-2xl font-semibold text-slate-900">Batch & Timetable Operations Center</h3>
+              <p className="mt-2 max-w-2xl text-sm text-slate-600">
+                Use the coordination tools to maintain specialization balance, resource utilization, and scheduling readiness.
+              </p>
+            </div>
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+              Coordinator Ready
+            </span>
+          </div>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
+            <ActionTile
+              title="Batch Control"
+              description="Manage cohorts, capacities, and specialization allocation windows."
+              buttonText="Open Batches"
+              onClick={() => navigate('/faculty/batches')}
+            />
+            <ActionTile
+              title="Module Ledger"
+              description="Inspect departmental modules and review teaching load filters."
+              buttonText="Open Modules"
+              onClick={() => navigate('/faculty/modules')}
+            />
+            <ActionTile
+              title="Timetable Engine"
+              description="Launch timetable generation and evaluate optimization outputs."
+              buttonText="Open Scheduler"
+              onClick={() => navigate('/scheduler')}
+            />
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-slate-200 bg-white/88 p-6 shadow-[0_14px_40px_rgba(15,23,42,0.08)] xl:col-span-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Settings Console</p>
+              <h3 className="mt-2 text-xl font-semibold text-slate-900">Soft Constraints</h3>
+            </div>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+              w5 Policy
+            </span>
+          </div>
+
+          <div className="mt-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">Preferred Days</p>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              {dayOptions.map((day) => {
+                const isSelected = selectedDays.includes(day);
+                return (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => toggleDay(day)}
+                    className={`rounded-xl border px-2 py-2 text-xs font-semibold transition active:translate-y-[1px] ${
+                      isSelected
+                        ? 'border-sky-500 bg-sky-100 text-sky-900'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    {day}
+                  </button>
+                );
+              })}
             </div>
           </div>
-        </div>
 
-        <nav className="space-y-6 px-4 py-6">
-          {menuGroups.map((group, groupIdx) => (
-            <div key={group.title}>
-              <p className="mb-3 px-3 text-[10px] uppercase tracking-[0.18em] font-bold bg-gradient-to-r from-blue-400/60 to-cyan-400/60 bg-clip-text text-transparent">{group.title}</p>
-              <div className="space-y-2">
-                {group.items.map((item, itemIdx) => {
-                  const colorGroups = [
-                    { icon: '📊', border: 'border-l-4 border-blue-500', bg: 'hover:bg-blue-500/10', activeBg: 'from-blue-600/40 to-blue-500/30', text: 'hover:text-blue-300' },
-                    { icon: '📅', border: 'border-l-4 border-purple-500', bg: 'hover:bg-purple-500/10', activeBg: 'from-purple-600/40 to-purple-500/30', text: 'hover:text-purple-300' },
-                    { icon: '📦', border: 'border-l-4 border-cyan-500', bg: 'hover:bg-cyan-500/10', activeBg: 'from-cyan-600/40 to-cyan-500/30', text: 'hover:text-cyan-300' },
-                  ];
-                  const colors = colorGroups[(groupIdx * 3 + itemIdx) % colorGroups.length];
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => {
-                        navigate(item.to);
-                        setMobileSidebarOpen(false);
-                      }}
-                      className={`w-full rounded-xl px-4 py-3 text-left text-sm font-medium transition ${colors.border} ${
-                        location.pathname === item.to
-                          ? `bg-gradient-to-r ${colors.activeBg} ring-1 ring-white/20 font-semibold text-white shadow-lg`
-                          : `text-slate-300 ${colors.bg} ${colors.text}`
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span>{colors.icon}</span>
-                        <span>{item.label}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </nav>
-
-        {/* Bottom User Card */}
-        <div className="absolute bottom-0 left-0 right-0 border-t border-indigo-500/30 bg-gradient-to-t from-indigo-950/60 to-slate-900 p-4 rounded-br-3xl">
-          <div className="rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-400/30 p-4">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-300">Logged In As</p>
-            <p className="mt-2 text-sm font-bold bg-gradient-to-r from-blue-300 to-cyan-300 bg-clip-text text-transparent">{username || 'Coordinator'}</p>
-            <p className="mt-1 text-[10px] uppercase tracking-widest text-indigo-400/80">⭐ Schedule Manager</p>
+          <div className="mt-4 space-y-3">
+            <Input
+              label="Preferred Slots"
+              val={softConstraintForm.preferredSlotsCsv}
+              onChange={(v) => setSoftConstraintForm({ ...softConstraintForm, preferredSlotsCsv: v })}
+              mono
+            />
+            <Input
+              label="w5 Weight"
+              type="number"
+              val={softConstraintForm.w5Weight}
+              onChange={(v) => setSoftConstraintForm({ ...softConstraintForm, w5Weight: v })}
+            />
+            <Input
+              label="Notes"
+              val={softConstraintForm.notes}
+              onChange={(v) => setSoftConstraintForm({ ...softConstraintForm, notes: v })}
+              placeholder="Constraint context for scheduling runs"
+            />
           </div>
-        </div>
-      </aside>
 
-      <main className="relative z-10 lg:pl-80">
-        <header className="sticky top-0 z-20 border-b border-blue-100/50 bg-white/70 px-6 py-4 backdrop-blur-md shadow-sm rounded-b-3xl">
-          <div className="mx-auto flex max-w-7xl items-center justify-between">
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setMobileSidebarOpen(true)}
-                className="rounded-2xl border border-blue-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-blue-50 lg:hidden"
-              >
-                Menu
-              </button>
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-blue-600 font-medium">Academic Coordination</p>
-                <h1 className="text-xl font-bold text-slate-900">Faculty Coordinator Workspace</h1>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 rounded-2xl border border-blue-100/70 bg-white/90 px-4 py-3 shadow-sm backdrop-blur">
-              <div className="text-right">
-                <p className="text-sm font-semibold text-slate-900">{username}</p>
-                <p className="text-[10px] uppercase tracking-[0.16em] text-blue-600">Coordinator</p>
-              </div>
-              <div className="grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-blue-600 to-sky-500 text-sm font-bold text-white shadow-md">
-                {username[0] || 'C'}
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <div className="mx-auto grid max-w-7xl gap-6 p-6 xl:grid-cols-12">
-          <section className="xl:col-span-12">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <SummaryCard
-                label="LIC Units"
-                value={resources.length}
-                icon="🏢"
-                gradient="from-indigo-500 to-purple-600"
-              />
-              <SummaryCard
-                label="Instructors"
-                value={totalInstructors}
-                icon="👨‍🏫"
-                gradient="from-emerald-500 to-teal-600"
-              />
-              <SummaryCard
-                label="Resources Loaded"
-                value={resources.length > 0 ? 'Yes' : 'No'}
-                icon={resources.length > 0 ? "✅" : "⏳"}
-                gradient="from-orange-500 to-rose-600"
-              />
-            </div>
-          </section>
-
-          <section className="rounded-3xl border border-purple-100/70 bg-gradient-to-br from-purple-50 via-white to-pink-50 p-7 shadow-lg backdrop-blur xl:col-span-8">
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.2em] bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">📦 Batch Management</p>
-                <h3 className="mt-2 text-2xl font-bold text-slate-900">Manage Batch Details</h3>
-              </div>
-              <div className="text-3xl">📋</div>
-            </div>
-            <p className="text-sm text-slate-600 mb-4">
-              Configure batch sizes, assign specializations, and manage campus capacity rules in the dedicated Batches page.
-            </p>
-
-            <div className="mt-4 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => navigate('/faculty/batches')}
-                className="rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 px-5 py-3 text-sm font-semibold text-white transition shadow-lg hover:-translate-y-1 hover:shadow-xl hover:from-purple-700 hover:to-pink-700 active:translate-y-0"
-              >
-                🎯 Open Batches Page
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate('/scheduler')}
-                className="rounded-2xl border-2 border-purple-300 bg-white px-5 py-3 text-sm font-semibold text-purple-700 transition hover:bg-purple-50 hover:border-purple-400"
-              >
-                📅 Open Timetables
-              </button>
-            </div>
-          </section>
-
-          <section className="rounded-3xl border border-cyan-100/70 bg-gradient-to-br from-cyan-50 via-white to-blue-50 p-7 shadow-lg backdrop-blur xl:col-span-4">
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.2em] bg-gradient-to-r from-cyan-600 to-blue-600 bg-clip-text text-transparent">⚙️ Soft Constraints</p>
-                <h3 className="mt-2 text-lg font-bold text-slate-900">w5 Preferences</h3>
-              </div>
-              <div className="text-2xl">🎛️</div>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              <Input
-                label="📅 Preferred Days"
-                val={softConstraintForm.preferredDaysCsv}
-                onChange={(v) => setSoftConstraintForm({ ...softConstraintForm, preferredDaysCsv: v })}
-              />
-              <Input
-                label="⏰ Preferred Slots"
-                val={softConstraintForm.preferredSlotsCsv}
-                onChange={(v) => setSoftConstraintForm({ ...softConstraintForm, preferredSlotsCsv: v })}
-              />
-              <Input
-                label="⚖️ w5 Weight"
-                type="number"
-                val={softConstraintForm.w5Weight}
-                onChange={(v) => setSoftConstraintForm({ ...softConstraintForm, w5Weight: v })}
-              />
-
-              <button
-                type="button"
-                onClick={saveSoftConstraints}
-                disabled={savingSoftConstraints}
-                className="w-full rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-3 text-sm font-semibold text-white transition shadow-lg hover:-translate-y-1 hover:shadow-xl hover:from-cyan-700 hover:to-blue-700 disabled:opacity-60 disabled:hover:translate-y-0"
-              >
-                {savingSoftConstraints ? '💾 Saving...' : '✨ Save Constraints'}
-              </button>
-            </div>
-          </section>
-        </div>
-      </main>
-    </div>
+          <button
+            type="button"
+            onClick={saveSoftConstraints}
+            disabled={savingSoftConstraints}
+            className="mt-4 w-full rounded-xl border border-sky-700 bg-sky-700 px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(3,105,161,0.24)] transition hover:-translate-y-0.5 hover:bg-sky-800 active:translate-y-[1px] disabled:opacity-60"
+          >
+            {savingSoftConstraints ? 'Saving...' : 'Save Constraints'}
+          </button>
+          <p className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            Logged in as <span className="font-semibold text-slate-900">{username}</span>
+          </p>
+        </section>
+      </div>
+    </FacultyCoordinatorShell>
   );
 };
 
-const SummaryCard = ({ label, value, icon, gradient }) => (
-  <div className={`rounded-3xl bg-gradient-to-br ${gradient} p-6 shadow-lg backdrop-blur border border-white/30 transition hover:-translate-y-2 hover:shadow-xl`}>
-    <div className="flex items-start justify-between">
+const SummaryCard = ({ label, value, status, chart, pulse = false }) => (
+  <article className="rounded-3xl border border-slate-200 bg-white/88 p-4 shadow-[0_12px_35px_rgba(15,23,42,0.08)]">
+    <div className="flex items-center justify-between gap-3">
       <div>
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/90">{label}</p>
-        <p className="mt-3 text-4xl font-bold text-white">{value}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">{label}</p>
+        <p className="mt-2 text-2xl font-semibold text-slate-900">{value}</p>
       </div>
-      <div className="text-4xl opacity-80">{icon}</div>
+      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-semibold uppercase text-emerald-700">
+        <span className={`h-2 w-2 rounded-full bg-emerald-500 ${pulse ? 'animate-pulse' : ''}`} />
+        {status}
+      </span>
     </div>
-  </div>
+    <Sparkline points={chart} />
+  </article>
 );
 
-const Input = ({ label, val, onChange, type = 'text' }) => (
-  <div>
-    <label className="text-[10px] uppercase tracking-[0.14em] font-bold bg-gradient-to-r from-slate-600 to-slate-700 bg-clip-text text-transparent">{label}</label>
+const Sparkline = ({ points = [] }) => {
+  const max = Math.max(...points, 1);
+  const width = 180;
+  const height = 36;
+  const step = points.length > 1 ? width / (points.length - 1) : width;
+  const d = points
+    .map((point, index) => {
+      const x = index * step;
+      const y = height - (point / max) * height;
+      return `${index === 0 ? 'M' : 'L'}${x},${y}`;
+    })
+    .join(' ');
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="mt-3 h-10 w-full" preserveAspectRatio="none">
+      <path d={d} fill="none" stroke="#0369a1" strokeWidth="2.2" strokeLinecap="round" />
+    </svg>
+  );
+};
+
+const ActionTile = ({ title, description, buttonText, onClick }) => (
+  <article className="rounded-2xl border border-slate-200 bg-slate-50/55 p-4 shadow-[0_8px_20px_rgba(15,23,42,0.05)]">
+    <h4 className="text-sm font-semibold text-slate-900">{title}</h4>
+    <p className="mt-2 text-sm text-slate-600">{description}</p>
+    <button
+      type="button"
+      onClick={onClick}
+      className="mt-4 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-400 active:translate-y-[1px]"
+    >
+      {buttonText}
+    </button>
+  </article>
+);
+
+const Input = ({ label, val, onChange, type = 'text', placeholder = '', mono = false }) => (
+  <label className="block">
+    <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">{label}</span>
     <input
       type={type}
-      className="mt-2 w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-200/50 hover:border-slate-300"
+      className={`mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:ring-4 focus:ring-sky-100 ${
+        mono ? 'font-mono' : ''
+      }`}
+      placeholder={placeholder}
       value={val}
       onChange={(e) => onChange(e.target.value)}
     />
-  </div>
+  </label>
 );
 
 export default FacultyCoordinatorDashboard;
