@@ -15,6 +15,59 @@ const AMENITIES = [
   { id: 'sound_system', label: 'Sound System', icon: '🔊' },
 ];
 
+const HALL_ID_REGEX = /^[A-Za-z0-9][A-Za-z0-9_-]{1,39}$/;
+const HALL_TEXT_REGEX = /^[A-Za-z0-9][A-Za-z0-9 .,&()/-]{1,79}$/;
+
+const normalizeHallForm = (form) => ({
+  hallId: String(form.hallId || '').trim(),
+  hallType: String(form.hallType || '').trim(),
+  capacity: String(form.capacity || '').trim(),
+  building: String(form.building || '').trim(),
+  floor: String(form.floor || '').trim(),
+  amenities: form.amenities || {},
+  maintenanceStart: String(form.maintenanceStart || '').trim(),
+  maintenanceEnd: String(form.maintenanceEnd || '').trim(),
+});
+
+const validateHallFormPayload = (form, { validateId = true } = {}) => {
+  const normalized = normalizeHallForm(form);
+
+  if (validateId && !HALL_ID_REGEX.test(normalized.hallId)) {
+    return 'Hall ID must be 2-40 characters with letters, numbers, underscore, or hyphen.';
+  }
+
+  if (!normalized.hallType || normalized.hallType.length < 2 || normalized.hallType.length > 60) {
+    return 'Hall type must be between 2 and 60 characters.';
+  }
+
+  if (!normalized.building || normalized.building.length < 2 || normalized.building.length > 80) {
+    return 'Building must be between 2 and 80 characters.';
+  }
+
+  if (!HALL_TEXT_REGEX.test(normalized.hallType) || !HALL_TEXT_REGEX.test(normalized.building)) {
+    return 'Hall type and building can only include letters, numbers, spaces, and . , & ( ) / -';
+  }
+
+  if (normalized.floor && normalized.floor.length > 30) {
+    return 'Floor cannot exceed 30 characters.';
+  }
+
+  const capacityValue = Number(normalized.capacity);
+  if (!Number.isInteger(capacityValue) || capacityValue < 1 || capacityValue > 2000) {
+    return 'Capacity must be an integer between 1 and 2000.';
+  }
+
+  if ((normalized.maintenanceStart && !normalized.maintenanceEnd) || (!normalized.maintenanceStart && normalized.maintenanceEnd)) {
+    return 'Please provide both maintenance start and end dates.';
+  }
+
+  if (normalized.maintenanceStart && normalized.maintenanceEnd && normalized.maintenanceEnd < normalized.maintenanceStart) {
+    return 'Maintenance end date must be on or after the start date.';
+  }
+
+  return null;
+};
+
 const HallAllocation = ({ apiBase }) => {
   const [halls, setHalls] = useState([]);
   const [timetables, setTimetables] = useState([]);
@@ -188,16 +241,14 @@ const HallAllocation = ({ apiBase }) => {
     e.preventDefault();
     setHallError('');
 
-    if (!hallForm.hallId || !hallForm.hallType || !hallForm.capacity || !hallForm.building) {
-      setHallError('Please fill all hall fields.');
+    const validationError = validateHallFormPayload(hallForm, { validateId: true });
+    if (validationError) {
+      setHallError(validationError);
       return;
     }
 
-    const capacityValue = Number(hallForm.capacity);
-    if (!Number.isFinite(capacityValue) || capacityValue <= 0) {
-      setHallError('Capacity must be a positive number.');
-      return;
-    }
+    const normalizedForm = normalizeHallForm(hallForm);
+    const capacityValue = Number(normalizedForm.capacity);
 
     setSubmittingHall(true);
     try {
@@ -206,14 +257,14 @@ const HallAllocation = ({ apiBase }) => {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: hallForm.hallId,
-          name: hallForm.hallId,
+          id: normalizedForm.hallId,
+          name: normalizedForm.hallId,
           capacity: capacityValue,
           features: {
-            hallType: hallForm.hallType,
-            building: hallForm.building,
-            floor: hallForm.floor,
-            amenities: hallForm.amenities,
+            hallType: normalizedForm.hallType,
+            building: normalizedForm.building,
+            floor: normalizedForm.floor,
+            amenities: normalizedForm.amenities,
           },
           status: hallForm.status,
         }),
@@ -238,7 +289,7 @@ const HallAllocation = ({ apiBase }) => {
       });
       setShowAddHallModal(false);
       setToast({ message: 'Hall added successfully.', type: 'success' });
-      await notifyUser('Hall Added', `Hall ${hallForm.hallId} was added successfully.`);
+      await notifyUser('Hall Added', `Hall ${normalizedForm.hallId} was added successfully.`);
     } catch (err) {
       console.error('Add hall error:', err);
       const errorMessage = err.message || 'Failed to add hall';
@@ -297,14 +348,9 @@ const HallAllocation = ({ apiBase }) => {
     e.preventDefault();
     setEditHallError('');
 
-    if (!editHallForm.hallId || !editHallForm.hallType || !editHallForm.capacity || !editHallForm.building) {
-      setEditHallError('Please fill all hall fields.');
-      return;
-    }
-
-    const capacityValue = Number(editHallForm.capacity);
-    if (!Number.isFinite(capacityValue) || capacityValue <= 0) {
-      setEditHallError('Capacity must be a positive number.');
+    const validationError = validateHallFormPayload(editHallForm, { validateId: false });
+    if (validationError) {
+      setEditHallError(validationError);
       return;
     }
 
@@ -1373,6 +1419,11 @@ const HallAllocation = ({ apiBase }) => {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
+                const maintenanceValidationError = validateHallFormPayload(editHallForm, { validateId: false });
+                if (maintenanceValidationError) {
+                  setToast({ message: maintenanceValidationError, type: 'error' });
+                  return;
+                }
                 const hallIndex = halls.findIndex(h => h.id === maintenanceHallId);
                 if (hallIndex >= 0) {
                   const updatedHalls = [...halls];

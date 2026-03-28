@@ -1,5 +1,14 @@
 import pool from '../config/db.js';
 
+const VALID_RESOURCE_TYPES = new Set(['equipment', 'furniture', 'technology', 'supplies']);
+const VALID_RESOURCE_CONDITIONS = new Set(['excellent', 'good', 'fair', 'poor']);
+
+const parsePositiveInteger = (value) => {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) return null;
+  return parsed;
+};
+
 // Activity logging helper
 const logActivity = async (entityType, entityId, entityName, action, changes, userId, req) => {
   try {
@@ -30,13 +39,39 @@ const logActivity = async (entityType, entityId, entityName, action, changes, us
 export const addHallResource = async (req, res) => {
   try {
     const { hallId, resourceType, resourceName, quantity, condition, notes } = req.body;
+    const normalizedHallId = String(hallId || '').trim();
+    const normalizedResourceType = String(resourceType || '').trim().toLowerCase();
+    const normalizedResourceName = String(resourceName || '').trim();
+    const normalizedCondition = String(condition || 'good').trim().toLowerCase();
+    const normalizedNotes = notes == null ? null : String(notes).trim();
+    const parsedQuantity = quantity == null ? 1 : parsePositiveInteger(quantity);
 
-    if (!hallId || !resourceType || !resourceName) {
+    if (!normalizedHallId || !normalizedResourceType || !normalizedResourceName) {
       return res.status(400).json({ error: 'Hall ID, resource type, and resource name are required' });
     }
 
+    if (!VALID_RESOURCE_TYPES.has(normalizedResourceType)) {
+      return res.status(400).json({ error: 'Invalid resource type' });
+    }
+
+    if (normalizedResourceName.length < 2 || normalizedResourceName.length > 120) {
+      return res.status(400).json({ error: 'Resource name must be between 2 and 120 characters' });
+    }
+
+    if (!parsedQuantity || parsedQuantity > 500) {
+      return res.status(400).json({ error: 'Quantity must be an integer between 1 and 500' });
+    }
+
+    if (!VALID_RESOURCE_CONDITIONS.has(normalizedCondition)) {
+      return res.status(400).json({ error: 'Invalid condition value' });
+    }
+
+    if (normalizedNotes && normalizedNotes.length > 500) {
+      return res.status(400).json({ error: 'Notes cannot exceed 500 characters' });
+    }
+
     // Verify hall exists
-    const hallCheck = await pool.query('SELECT id FROM halls WHERE id = $1', [hallId]);
+    const hallCheck = await pool.query('SELECT id FROM halls WHERE id = $1', [normalizedHallId]);
     if (hallCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Hall not found' });
     }
@@ -45,7 +80,7 @@ export const addHallResource = async (req, res) => {
       `INSERT INTO hall_resources (hall_id, resource_type, resource_name, quantity, condition, notes, added_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [hallId, resourceType, resourceName, quantity || 1, condition || 'good', notes, req.user.id]
+      [normalizedHallId, normalizedResourceType, normalizedResourceName, parsedQuantity, normalizedCondition, normalizedNotes, req.user.id]
     );
 
     // Log activity
@@ -82,6 +117,21 @@ export const updateHallResource = async (req, res) => {
   try {
     const { resourceId } = req.params;
     const { quantity, condition, notes } = req.body;
+    const parsedQuantity = typeof quantity === 'undefined' ? undefined : parsePositiveInteger(quantity);
+    const normalizedCondition = typeof condition === 'undefined' ? undefined : String(condition || '').trim().toLowerCase();
+    const normalizedNotes = typeof notes === 'undefined' ? undefined : (notes == null ? null : String(notes).trim());
+
+    if (typeof quantity !== 'undefined' && (!parsedQuantity || parsedQuantity > 500)) {
+      return res.status(400).json({ error: 'Quantity must be an integer between 1 and 500' });
+    }
+
+    if (typeof condition !== 'undefined' && !VALID_RESOURCE_CONDITIONS.has(normalizedCondition)) {
+      return res.status(400).json({ error: 'Invalid condition value' });
+    }
+
+    if (typeof normalizedNotes !== 'undefined' && normalizedNotes && normalizedNotes.length > 500) {
+      return res.status(400).json({ error: 'Notes cannot exceed 500 characters' });
+    }
 
     const oldResource = await pool.query('SELECT * FROM hall_resources WHERE id = $1', [resourceId]);
     if (oldResource.rows.length === 0) {
@@ -96,7 +146,7 @@ export const updateHallResource = async (req, res) => {
            updated_at = NOW()
        WHERE id = $4
        RETURNING *`,
-      [quantity, condition, notes, resourceId]
+      [parsedQuantity, normalizedCondition, normalizedNotes, resourceId]
     );
 
     const changes = {
@@ -139,20 +189,46 @@ export const deleteHallResource = async (req, res) => {
 export const addHallRating = async (req, res) => {
   try {
     const { hallId, rating, comment, facilityCondition, cleanlinessRating, equipmentWorking } = req.body;
+    const normalizedHallId = String(hallId || '').trim();
+    const parsedRating = Number(rating);
+    const parsedCleanlinessRating = cleanlinessRating == null ? null : Number(cleanlinessRating);
+    const normalizedComment = comment == null ? null : String(comment).trim();
+    const normalizedFacilityCondition = facilityCondition == null ? null : String(facilityCondition).trim().toLowerCase();
 
-    if (!hallId || !rating) {
+    if (!normalizedHallId || !Number.isFinite(parsedRating)) {
       return res.status(400).json({ error: 'Hall ID and rating are required' });
     }
 
-    if (rating < 1 || rating > 5) {
+    if (!Number.isInteger(parsedRating) || parsedRating < 1 || parsedRating > 5) {
       return res.status(400).json({ error: 'Rating must be between 1 and 5' });
+    }
+
+    if (parsedCleanlinessRating != null && (!Number.isInteger(parsedCleanlinessRating) || parsedCleanlinessRating < 1 || parsedCleanlinessRating > 5)) {
+      return res.status(400).json({ error: 'Cleanliness rating must be between 1 and 5' });
+    }
+
+    if (normalizedFacilityCondition && !VALID_RESOURCE_CONDITIONS.has(normalizedFacilityCondition)) {
+      return res.status(400).json({ error: 'Invalid facility condition value' });
+    }
+
+    if (normalizedComment && normalizedComment.length > 1000) {
+      return res.status(400).json({ error: 'Comment cannot exceed 1000 characters' });
+    }
+
+    if (typeof equipmentWorking !== 'undefined' && typeof equipmentWorking !== 'boolean') {
+      return res.status(400).json({ error: 'equipmentWorking must be true or false' });
+    }
+
+    const hallCheck = await pool.query('SELECT id FROM halls WHERE id = $1', [normalizedHallId]);
+    if (hallCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Hall not found' });
     }
 
     // Check if user already rated this hall recently (within 24 hours)
     const recentRating = await pool.query(
       `SELECT id FROM hall_ratings 
        WHERE hall_id = $1 AND user_id = $2 AND created_at > NOW() - INTERVAL '24 hours'`,
-      [hallId, req.user.id]
+      [normalizedHallId, req.user.id]
     );
 
     if (recentRating.rows.length > 0) {
@@ -163,11 +239,11 @@ export const addHallRating = async (req, res) => {
       `INSERT INTO hall_ratings (hall_id, user_id, rating, comment, facility_condition, cleanliness_rating, equipment_working)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [hallId, req.user.id, rating, comment, facilityCondition, cleanlinessRating, equipmentWorking]
+      [normalizedHallId, req.user.id, parsedRating, normalizedComment, normalizedFacilityCondition, parsedCleanlinessRating, equipmentWorking]
     );
 
     // Log activity
-    await logActivity('hall_rating', rows[0].id, hallId, 'add_rating', rows[0], req.user.id, req);
+    await logActivity('hall_rating', rows[0].id, normalizedHallId, 'add_rating', rows[0], req.user.id, req);
 
     res.status(201).json({ success: true, rating: rows[0] });
   } catch (err) {
@@ -242,6 +318,16 @@ export const getHallStats = async (req, res) => {
 export const getActivityLogs = async (req, res) => {
   try {
     const { entityType, entityId, limit = 50, offset = 0 } = req.query;
+    const parsedLimit = Number(limit);
+    const parsedOffset = Number(offset);
+
+    if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 200) {
+      return res.status(400).json({ error: 'limit must be an integer between 1 and 200' });
+    }
+
+    if (!Number.isInteger(parsedOffset) || parsedOffset < 0) {
+      return res.status(400).json({ error: 'offset must be a non-negative integer' });
+    }
 
     let query = 'SELECT l.*, u.name as performed_by_name FROM activity_logs l LEFT JOIN users u ON l.performed_by = u.id WHERE 1=1';
     const params = [];
@@ -257,7 +343,7 @@ export const getActivityLogs = async (req, res) => {
     }
 
     query += ` ORDER BY l.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-    params.push(limit, offset);
+    params.push(parsedLimit, parsedOffset);
 
     const { rows } = await pool.query(query, params);
 
@@ -309,8 +395,27 @@ export const getHallRecommendations = async (req, res) => {
       return res.status(404).json({ error: 'Module not found' });
     }
 
-    const moduleBatchSize = batchSize || modules[0].batch_size || 30;
-    const requiredResourcesList = requiredResources ? JSON.parse(requiredResources) : [];
+    const moduleBatchSize = batchSize ? Number(batchSize) : Number(modules[0].batch_size || 30);
+    if (!Number.isInteger(moduleBatchSize) || moduleBatchSize < 1 || moduleBatchSize > 2000) {
+      return res.status(400).json({ error: 'batchSize must be an integer between 1 and 2000' });
+    }
+
+    let requiredResourcesList = [];
+    if (requiredResources) {
+      try {
+        const parsedResources = JSON.parse(requiredResources);
+        if (!Array.isArray(parsedResources)) {
+          return res.status(400).json({ error: 'requiredResources must be a JSON array of strings' });
+        }
+
+        requiredResourcesList = parsedResources
+          .map((resource) => String(resource || '').trim().toLowerCase())
+          .filter((resource) => resource.length > 0)
+          .slice(0, 20);
+      } catch {
+        return res.status(400).json({ error: 'requiredResources must be valid JSON' });
+      }
+    }
 
     // Fetch all halls with their resources
     const { rows: halls } = await pool.query(

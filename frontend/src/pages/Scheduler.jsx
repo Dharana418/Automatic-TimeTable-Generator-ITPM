@@ -50,29 +50,18 @@ export default function Scheduler() {
   const [activeNav, setActiveNav] = useState('weekly');
 
   const fetchList = useCallback(async (t) => {
-    try{
+    try {
       const res = await schedulerApi.listItems(t);
       setItems(res.items || []);
-    }catch(e){ console.error(e); setItems([]); }
+    } catch (e) {
+      console.error(e);
+      setItems([]);
+    }
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-
-    schedulerApi
-      .listItems(activeType)
-      .then((res) => {
-        if (!cancelled) setItems(res.items || []);
-      })
-      .catch((e) => {
-        console.error(e);
-        if (!cancelled) setItems([]);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeType]);
+    fetchList(activeType);
+  }, [activeType, fetchList]);
 
   async function handleAdd(e){
     e.preventDefault();

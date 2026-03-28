@@ -12,6 +12,73 @@ const ENGINEERING_SPECIALIZATIONS = new Set(['CS', 'ISE', 'CSNE', 'IM']);
 const normalizeAlgorithmKey = (value) => String(value || '').trim().toLowerCase();
 const normalizeRole = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
+const HALL_ID_REGEX = /^[A-Za-z0-9][A-Za-z0-9_-]{1,39}$/;
+const HALL_TEXT_REGEX = /^[A-Za-z0-9][A-Za-z0-9 .,&()\/-]{1,79}$/;
+const ALLOWED_HALL_AMENITIES = new Set([
+  'projector',
+  'wifi',
+  'ac',
+  'lab_equipment',
+  'accessibility',
+  'whiteboard',
+  'sound_system',
+]);
+
+const validateHallPayload = ({ id = '', name = '', capacity, features } = {}) => {
+  const normalizedId = String(id || '').trim();
+  const normalizedName = String(name || '').trim();
+
+  if (!normalizedId || !HALL_ID_REGEX.test(normalizedId)) {
+    return 'Hall id must be 2-40 characters and contain only letters, numbers, underscore, or hyphen';
+  }
+
+  if (!normalizedName || !HALL_TEXT_REGEX.test(normalizedName)) {
+    return 'Hall name must be 2-80 characters and can include letters, numbers, spaces, and . , & ( ) / -';
+  }
+
+  const numericCapacity = Number(capacity);
+  if (!Number.isInteger(numericCapacity) || numericCapacity < 1 || numericCapacity > 2000) {
+    return 'Hall capacity must be an integer between 1 and 2000';
+  }
+
+  if (!features || typeof features !== 'object' || Array.isArray(features)) {
+    return 'Hall features must be a valid object';
+  }
+
+  const hallType = String(features.hallType || '').trim();
+  const building = String(features.building || '').trim();
+  const floor = features.floor == null ? '' : String(features.floor).trim();
+
+  if (!hallType || hallType.length < 2 || hallType.length > 60) {
+    return 'Hall type must be between 2 and 60 characters';
+  }
+
+  if (!building || building.length < 2 || building.length > 80) {
+    return 'Building must be between 2 and 80 characters';
+  }
+
+  if (floor && floor.length > 30) {
+    return 'Floor cannot exceed 30 characters';
+  }
+
+  if (features.amenities != null) {
+    if (typeof features.amenities !== 'object' || Array.isArray(features.amenities)) {
+      return 'Amenities must be a key/value object';
+    }
+
+    for (const [key, value] of Object.entries(features.amenities)) {
+      if (!ALLOWED_HALL_AMENITIES.has(key)) {
+        return `Unsupported amenity: ${key}`;
+      }
+      if (typeof value !== 'boolean') {
+        return `Amenity '${key}' must be true or false`;
+      }
+    }
+  }
+
+  return null;
+};
+
 const isAcademicCoordinator = (user) => normalizeRole(user?.role) === 'academiccoordinator';
 const isLic = (user) => normalizeRole(user?.role) === 'lic';
 const isFacultyCoordinator = (user) => normalizeRole(user?.role) === 'facultycoordinator';
@@ -235,6 +302,11 @@ export const addItem = async (req, res) => {
       }
 
       const { name = null, capacity = null, features = null } = payload;
+      const hallValidationError = validateHallPayload({ id, name, capacity, features });
+      if (hallValidationError) {
+        return res.status(400).json({ error: hallValidationError });
+      }
+
       const { rows } = await pool.query(
         `INSERT INTO halls(id, name, capacity, features)
          VALUES($1, $2, $3, $4)
@@ -459,6 +531,11 @@ export const updateItem = async (req, res) => {
 
     if (type === 'halls') {
       const { name = null, capacity = null, features = null } = payload;
+      const hallValidationError = validateHallPayload({ id, name, capacity, features });
+      if (hallValidationError) {
+        return res.status(400).json({ error: hallValidationError });
+      }
+
       const { rows, rowCount } = await pool.query(
         `UPDATE halls SET name=$1, capacity=$2, features=$3 WHERE id=$4 RETURNING *`,
         [name, capacity, features ? JSON.stringify(features) : null, id]

@@ -22,9 +22,17 @@ const SmartRecommendationsPanel = ({ apiBase }) => {
 
   const handleGetRecommendations = async (e) => {
     e.preventDefault();
-    
-    if (!batchSize) {
-      setToast({ message: 'Please enter batch size', type: 'error' });
+
+    const normalizedModuleId = String(moduleId || '').trim();
+    const parsedBatchSize = Number(batchSize);
+
+    if (!normalizedModuleId) {
+      setToast({ message: 'Please enter a module ID', type: 'error' });
+      return;
+    }
+
+    if (!Number.isInteger(parsedBatchSize) || parsedBatchSize < 1 || parsedBatchSize > 2000) {
+      setToast({ message: 'Batch size must be an integer between 1 and 2000', type: 'error' });
       return;
     }
 
@@ -33,11 +41,18 @@ const SmartRecommendationsPanel = ({ apiBase }) => {
       const resourceList = requiredResources
         .split(',')
         .map(r => r.trim())
-        .filter(r => r.length > 0);
+        .filter(r => r.length > 0)
+        .slice(0, 20);
+
+      if (resourceList.some((resource) => resource.length > 40)) {
+        setToast({ message: 'Each resource name must be 40 characters or fewer', type: 'error' });
+        setLoading(false);
+        return;
+      }
 
       const params = new URLSearchParams();
-      if (moduleId) params.append('moduleId', moduleId);
-      params.append('batchSize', batchSize);
+      params.append('moduleId', normalizedModuleId);
+      params.append('batchSize', String(parsedBatchSize));
       if (resourceList.length > 0) {
         params.append('requiredResources', JSON.stringify(resourceList));
       }
@@ -98,7 +113,7 @@ const SmartRecommendationsPanel = ({ apiBase }) => {
       <form onSubmit={handleGetRecommendations} className="space-y-3 mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label className="text-xs font-medium">Module ID (Optional)</label>
+            <label className="text-xs font-medium">Module ID *</label>
             <input
               type="text"
               value={moduleId}
