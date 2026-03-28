@@ -1,79 +1,55 @@
 import BatchList from '../components/BatchList.jsx';
-import { Link } from 'react-router-dom';
+import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 
-const specializations = ['IT', 'SE', 'DS', 'ISE', 'CS', 'Computer Science', 'IM', 'CN'];
+const specializationTags = ['IT', 'SE', 'DS', 'ISE', 'CS', 'Computer Science', 'IM', 'CN'];
 
 const FacultyBatchesPage = ({ user }) => {
   const displayName = user?.name || user?.username || 'Faculty Coordinator';
 
   return (
-    <div className="min-h-screen bg-white dark:bg-black">
-      <div className="flex min-h-screen">
-        {/* Dark Slate Sidebar */}
-        <aside className="hidden w-64 border-r border-[#E2E8F0] bg-slate-900 p-6 dark:border-gray-800 lg:block">
-          <div className="mb-8">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-slate-300">Batch Admin</h2>
-          </div>
-          <nav className="space-y-1">
-            <NavLink to="/faculty/batches" label="Batch List" active icon="📦" />
-            <NavLink to="/faculty/modules" label="Modules" icon="📚" />
-            <NavLink to="/dashboard" label="Dashboard" icon="📊" />
-          </nav>
-          <div className="mt-auto border-t border-[#E2E8F0] pt-6 dark:border-gray-800">
-            <div className="rounded border border-[#E2E8F0] bg-slate-800 p-3 dark:border-gray-700">
-              <p className="text-xs font-semibold text-slate-100">{displayName}</p>
-              <p className="mt-1 text-xs text-slate-400">Faculty Coordinator</p>
-            </div>
-          </div>
-        </aside>
-
-        {/* Main Content 12-Column Grid */}
-        <main className="flex-1">
-          <div className="border-b border-[#E2E8F0] bg-white p-6 dark:border-gray-800 dark:bg-gray-950">
-            <div className="mx-auto max-w-7xl">
-              <p className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">Batch Management</p>
-              <h1 className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">Batch & Specialization Control</h1>
-              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                Configure batch sizes, assign specializations, and manage campus capacity rules.
+    <FacultyCoordinatorShell
+      user={user}
+      title="Batch & Specialization Control"
+      subtitle="Institutional workspace for managing batch records and specialization structure"
+      badge="Batch Management"
+    >
+      <div className="space-y-5">
+        <section className="rounded-3xl border border-slate-200 bg-white/88 p-6 shadow-[0_14px_40px_rgba(15,23,42,0.08)]">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Coordinator Console</p>
+              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Faculty Batch Registry</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                Maintain standardized batch definitions, monitor specialization balance, and review group and subgroup composition within a single institutional control panel.
               </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {specializations.map((item) => (
-                  <span
-                    key={item}
-                    className="rounded border border-[#E2E8F0] bg-gray-50 px-3 py-1 text-xs font-medium text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
-                  >
-                    {item}
-                  </span>
-                ))}
-              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">Managed By</p>
+              <p className="mt-1 text-sm font-semibold text-slate-800">{displayName}</p>
             </div>
           </div>
 
-          <div className="p-6">
-            <div className="mx-auto max-w-7xl">
-              <BatchList />
+          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">Specialization Cloud</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {specializationTags.map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
+                >
+                  {tag}
+                </span>
+              ))}
             </div>
           </div>
-        </main>
+        </section>
+
+        <section className="rounded-3xl border border-slate-200 bg-white/92 p-4 shadow-[0_16px_45px_rgba(15,23,42,0.09)] sm:p-5">
+          <BatchList />
+        </section>
       </div>
-    </div>
+    </FacultyCoordinatorShell>
   );
 };
-
-function NavLink({ to, label, active, icon }) {
-  return (
-    <Link
-      to={to}
-      className={`flex items-center gap-3 rounded px-3 py-2 text-sm font-semibold transition ${
-        active
-          ? 'bg-slate-800 text-white'
-          : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-      }`}
-    >
-      <span className="text-base">{icon}</span>
-      {label}
-    </Link>
-  );
-}
 
 export default FacultyBatchesPage;

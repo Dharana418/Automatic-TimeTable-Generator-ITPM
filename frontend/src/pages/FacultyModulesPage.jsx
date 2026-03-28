@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import api from '../api/scheduler.js';
+import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 
 const normalizeDepartment = (value = '') => String(value || '').trim().toUpperCase();
 
@@ -44,6 +45,17 @@ const toModuleView = (moduleItem = {}) => {
     credits: moduleItem.credits,
     lectures_per_week: moduleItem.lectures_per_week,
   };
+};
+
+const departmentPill = {
+  IT: 'bg-cyan-100 text-cyan-800 border-cyan-200',
+  SE: 'bg-violet-100 text-violet-800 border-violet-200',
+  DS: 'bg-amber-100 text-amber-800 border-amber-200',
+  ISE: 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200',
+  CS: 'bg-blue-100 text-blue-800 border-blue-200',
+  IM: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  CN: 'bg-slate-200 text-slate-800 border-slate-300',
+  GENERAL: 'bg-slate-100 text-slate-700 border-slate-200',
 };
 
 const FacultyModulesPage = ({ user }) => {
@@ -96,80 +108,101 @@ const FacultyModulesPage = ({ user }) => {
   }, [modules, selectedDepartment, searchText]);
 
   return (
-    <div className="min-h-screen bg-white p-4 md:p-6 dark:bg-black">
-      <div className="mx-auto max-w-7xl space-y-3">
-        <header className="border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-950">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-gray-400">Faculty Coordinator</p>
-          <h1 className="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">Department Modules</h1>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            {displayName} can view modules added by Academic Coordinator and filter them by department.
-          </p>
-        </header>
+    <FacultyCoordinatorShell
+      user={user}
+      title="Department Module Control"
+      subtitle="Filter, inspect, and monitor modules by department and instructional load"
+      badge="Module Management"
+    >
+      <div className="space-y-5">
+        <section className="rounded-3xl border border-slate-200 bg-white/88 p-6 shadow-[0_14px_40px_rgba(15,23,42,0.08)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Module Ledger</p>
+          <h2 className="mt-2 text-2xl font-semibold text-slate-900">Department Modules</h2>
+          <p className="mt-2 text-sm text-slate-600">{displayName} can review and filter module inventory by department and code.</p>
 
-        <section className="border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-950">
-          <div className="grid gap-2 md:grid-cols-[1.2fr_0.8fr_auto]">
-            <input
-              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#059669] focus:ring-1 focus:ring-[#059669] dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500"
-              placeholder="Search by module code or name"
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-            />
+          <div className="mt-4 grid gap-3 md:grid-cols-[1.2fr_0.8fr_auto]">
+            <label className="block">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">Search</span>
+              <input
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                placeholder="Search by module code or name"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+              />
+            </label>
 
-            <select
-              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-[#059669] focus:ring-1 focus:ring-[#059669] dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-              value={selectedDepartment}
-              onChange={(e) => setSelectedDepartment(e.target.value)}
-            >
-              {departments.map((department) => (
-                <option key={department} value={department} className="bg-white text-gray-900 dark:bg-gray-900 dark:text-white">
-                  {department === 'ALL' ? 'All Departments' : department}
-                </option>
-              ))}
-            </select>
+            <label className="block">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">Department</span>
+              <select
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                value={selectedDepartment}
+                onChange={(e) => setSelectedDepartment(e.target.value)}
+              >
+                {departments.map((department) => (
+                  <option key={department} value={department}>
+                    {department === 'ALL' ? 'All Departments' : department}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-            <div className="border border-gray-300 bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
-              {filteredModules.length}
+            <div>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">Count</span>
+              <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-center text-xl font-semibold text-slate-900">
+                {filteredModules.length}
+              </div>
             </div>
           </div>
+        </section>
 
-          {errorMessage && (
-            <p className="mt-3 border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">{errorMessage}</p>
-          )}
+        {errorMessage && (
+          <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{errorMessage}</p>
+        )}
 
-          {isLoading && <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">Loading modules...</p>}
+        {isLoading && <p className="text-center text-sm font-semibold text-slate-500">Loading modules...</p>}
 
-          {!isLoading && filteredModules.length === 0 && (
-            <p className="mt-3 border border-gray-300 bg-gray-50 px-3 py-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
-              No modules found for the selected filters.
-            </p>
-          )}
+        {!isLoading && filteredModules.length === 0 && (
+          <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-sm font-semibold text-slate-600">
+            No modules found for the selected filters.
+          </p>
+        )}
 
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            {filteredModules.map((moduleItem) => (
-              <article key={moduleItem.id} className="border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-950">
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{moduleItem.code || moduleItem.name}</h3>
-                  <span className="border border-gray-300 bg-gray-50 px-2 py-0.5 text-[11px] font-semibold text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {filteredModules.map((moduleItem) => {
+            const badgeStyle = departmentPill[moduleItem.department] || departmentPill.GENERAL;
+            return (
+              <article
+                key={moduleItem.id}
+                className="rounded-3xl border border-slate-200 bg-white/92 p-5 shadow-[0_12px_35px_rgba(15,23,42,0.07)] transition hover:-translate-y-0.5"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-900">{moduleItem.code || moduleItem.name}</h3>
+                    <p className="mt-1 text-sm text-slate-600">{moduleItem.name}</p>
+                  </div>
+                  <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${badgeStyle}`}>
                     {moduleItem.department || 'GENERAL'}
                   </span>
                 </div>
-                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{moduleItem.name}</p>
-                <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-gray-600 dark:text-gray-400">
+
+                <div className="mt-4 flex flex-wrap gap-2">
                   {moduleItem.credits ? (
-                    <span className="border border-gray-300 bg-gray-50 px-2 py-0.5 dark:border-gray-700 dark:bg-gray-900">Credits: {moduleItem.credits}</span>
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-700">
+                      {moduleItem.credits} credits
+                    </span>
                   ) : null}
                   {moduleItem.lectures_per_week ? (
-                    <span className="border border-gray-300 bg-gray-50 px-2 py-0.5 dark:border-gray-700 dark:bg-gray-900">
-                      Lectures/Week: {moduleItem.lectures_per_week}
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-700">
+                      {moduleItem.lectures_per_week}/week
                     </span>
                   ) : null}
                 </div>
               </article>
-            ))}
-          </div>
+            );
+          })}
         </section>
       </div>
-    </div>
+    </FacultyCoordinatorShell>
   );
 };
 
