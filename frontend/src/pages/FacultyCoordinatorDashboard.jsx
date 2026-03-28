@@ -1,62 +1,32 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Menu, Play, AlertCircle, Users, Calendar } from 'lucide-react';
 import api from '../api/scheduler.js';
 
 const menuGroups = [
   {
     title: 'Workspace',
     items: [
-      { id: 'overview', label: 'Overview', icon: '📊', to: '/dashboard' },
-      { id: 'timetable', label: 'Timetables', icon: '🗓️', to: '/scheduler' },
-      { id: 'batches', label: 'Batches', icon: '🧩', to: '/faculty/batches' },
-      { id: 'staff-directory', label: 'Staff Directory', icon: '👨‍🏫', to: '/faculty/staff' },
+      { id: 'overview', label: 'Overview', to: '/dashboard' },
+      { id: 'timetable', label: 'Timetables', to: '/scheduler' },
     ],
   },
   {
     title: 'Coordination',
     items: [
-      { id: 'resources', label: 'Resources', icon: '🏫', to: '/dashboard' },
-      { id: 'requests', label: 'Requests', icon: '📨', to: '/dashboard' },
+      { id: 'batches', label: 'Batches', to: '/faculty/batches' },
+      { id: 'modules', label: 'Modules', to: '/faculty/modules' },
+      { id: 'resources', label: 'Resources', to: '/dashboard' },
     ],
   },
-  {
-    title: 'Insights',
-    items: [{ id: 'reports', label: 'Reports', icon: '📈', to: '/dashboard' }],
-  },
-];
-
-const quickActions = [
-  {
-    title: 'Start Scheduler',
-    description: 'Generate a fresh timetable using optimized constraints.',
-    action: 'Open Scheduler',
-    icon: Calendar,
-    to: '/scheduler',
-  },
-  {
-    title: 'Check Resources',
-    description: 'Monitor LIC availability and instructor readiness.',
-    action: 'View Resources',
-    icon: Users,
-    to: '/dashboard',
-  },
-];
-
-const focusItems = [
-  'Review hall availability for next week',
-  'Approve pending instructor requests',
-  'Validate module conflict warnings',
-  'Export faculty timetable snapshot',
 ];
 
 const FacultyCoordinatorDashboard = ({ user }) => {
-  const username = user?.username || 'Coordinator';
+  const username = user?.username || user?.name || 'Coordinator';
   const navigate = useNavigate();
   const location = useLocation();
 
   const [resources, setResources] = useState([]);
-  const [loadingResources, setLoadingResources] = useState(false);
+  const [_loadingResources, setLoadingResources] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [savingSoftConstraints, setSavingSoftConstraints] = useState(false);
   const [softConstraintForm, setSoftConstraintForm] = useState({
@@ -68,318 +38,224 @@ const FacultyCoordinatorDashboard = ({ user }) => {
 
   useEffect(() => {
     let mounted = true;
-
-    async function load() {
+    const loadData = async () => {
       try {
         setLoadingResources(true);
         const response = await api.getLicsWithInstructors();
-        if (mounted && response?.items) {
-          setResources(response.items);
-        }
-        
-        // Fetch dynamic roles from backend
-        // TODO: Uncomment when backend endpoint is available
-        // const rolesResponse = await api.getRoles();
-        // if (mounted && rolesResponse?.roles) {
-        //   setRoles(rolesResponse.roles);
-        // }
-      } catch (error) {
-        console.error('Failed to load resources', error);
+        if (mounted && response?.items) setResources(response.items);
+      } catch (err) {
+        console.error('Resource load failed', err);
       } finally {
-        if (mounted) {
-          setLoadingResources(false);
-        }
+        if (mounted) setLoadingResources(false);
       }
-    }
+    };
 
-    load();
-
+    loadData();
     return () => {
       mounted = false;
     };
   }, []);
 
+  const totalInstructors = useMemo(
+    () => resources.reduce((sum, lic) => sum + (lic.instructors?.length || 0), 0),
+    [resources]
+  );
+
   const saveSoftConstraints = async () => {
     try {
       setSavingSoftConstraints(true);
-      const preferredDays = softConstraintForm.preferredDaysCsv
-        .split(',')
-        .map((value) => value.trim())
-        .filter(Boolean);
-
-      const preferredTimeSlots = softConstraintForm.preferredSlotsCsv
-        .split(',')
-        .map((value) => value.trim())
-        .filter(Boolean);
-
-      await api.saveSoftConstraints({
-        preferredDays,
-        preferredTimeSlots,
+      const payload = {
+        preferredDays: softConstraintForm.preferredDaysCsv
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        preferredTimeSlots: softConstraintForm.preferredSlotsCsv
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
         w5Weight: Number(softConstraintForm.w5Weight || 0),
         notes: softConstraintForm.notes,
-      });
-
-      window.alert('Soft constraints saved and mapped to w5 penalty weight.');
+      };
+      await api.saveSoftConstraints(payload);
+      window.alert('Constraints updated successfully.');
     } catch (error) {
-      window.alert(error.message || 'Failed to save soft constraints.');
+      window.alert(error.message || 'Update failed.');
     } finally {
       setSavingSoftConstraints(false);
     }
   };
 
-  const totalInstructors = useMemo(
-    () => resources.reduce((sum, lic) => sum + (lic.instructors || []).length, 0),
-    [resources],
-  );
-
-  const handleSidebarNavigation = (to) => {
-    navigate(to);
-    setMobileSidebarOpen(false);
-  };
-
-  const isMenuItemActive = (to) => {
-    if (to === '/dashboard') {
-      return location.pathname === '/dashboard';
-    }
-
-    return location.pathname.startsWith(to);
-  };
-
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <button
-        type="button"
-        onClick={() => setMobileSidebarOpen(true)}
-        className="fixed left-4 top-4 z-50 rounded-lg bg-blue-600 p-2 text-xs font-semibold text-white shadow-sm transition-all duration-200 hover:bg-blue-700 lg:hidden"
-        aria-label="Open sidebar"
-      >
-        <Menu size={20} strokeWidth={2} />
-      </button>
+    <div className="relative min-h-screen overflow-hidden bg-[#070F2B] text-slate-100">
+      <div className="pointer-events-none absolute -left-20 top-20 h-72 w-72 rounded-full bg-cyan-400/25 blur-3xl" />
+      <div className="pointer-events-none absolute right-0 top-16 h-80 w-80 rounded-full bg-indigo-500/25 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-0 left-1/3 h-96 w-96 rounded-full bg-pink-500/15 blur-3xl" />
 
       {mobileSidebarOpen && (
         <button
           type="button"
-          className="fixed inset-0 z-30 bg-black/40 lg:hidden"
+          className="fixed inset-0 z-30 bg-black/45 lg:hidden"
           onClick={() => setMobileSidebarOpen(false)}
           aria-label="Close sidebar"
         />
       )}
 
       <aside
-        className={`fixed left-0 top-0 z-40 flex h-screen w-80 flex-col border-r border-slate-200 bg-slate-900 backdrop-blur-sm text-white transition-transform duration-300 ease-in-out lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 w-80 border-r border-white/15 bg-white/10 backdrop-blur-xl transition-transform duration-300 lg:translate-x-0 ${
           mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="border-b border-slate-700 px-6 py-6">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-300">Workspace</p>
-          <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">Coordinator Hub</h2>
-          <p className="mt-1 text-xs text-slate-400">Navigation & Resources</p>
+        <div className="border-b border-white/15 px-6 py-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200/80">Faculty Coordinator</p>
+          <h2 className="mt-1 text-2xl font-bold text-white">Dashboard</h2>
         </div>
 
-        <nav className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+        <nav className="space-y-6 px-4 py-5">
           {menuGroups.map((group) => (
-            <section key={group.title} className="rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-sm">
-              <p className="px-2 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-widest text-slate-300">
-                {group.title}
-              </p>
-              <div className="space-y-1">
-                {group.items.map((item) => {
-                  const isActive = isMenuItemActive(item.to);
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => handleSidebarNavigation(item.to)}
-                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-all duration-200 ${
-                        isActive
-                          ? 'bg-blue-600 text-white'
-                          : 'text-slate-300 hover:text-white hover:bg-slate-700'
-                      }`}
-                    >
-                      <span className="text-lg">{item.icon}</span>
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
+            <div key={group.title}>
+              <p className="mb-2 px-2 text-[10px] uppercase tracking-[0.16em] text-slate-300">{group.title}</p>
+              <div className="space-y-1.5">
+                {group.items.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      navigate(item.to);
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${
+                      location.pathname === item.to
+                        ? 'bg-gradient-to-r from-cyan-400/30 to-indigo-500/30 text-white ring-1 ring-cyan-200/45'
+                        : 'text-slate-100 hover:bg-white/15'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
               </div>
-            </section>
+            </div>
           ))}
         </nav>
-
-        <div className="border-t border-slate-700 p-4">
-          <button
-            type="button"
-            onClick={() => handleSidebarNavigation('/scheduler')}
-            className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-blue-700"
-          >
-            <span className="inline-flex items-center justify-center gap-2">
-              <Play size={16} strokeWidth={2} />
-              Open Scheduler
-            </span>
-          </button>
-        </div>
       </aside>
 
-      <main className="w-full lg:pl-80">
-        <header className="sticky top-0 z-20 border-b border-slate-200 bg-white shadow-sm px-4 py-3 md:px-6">
-          <div className="mx-auto flex max-w-7xl items-center justify-between pl-12 lg:pl-0">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-600">Faculty Coordinator</p>
-              <h1 className="text-lg font-semibold tracking-tight text-slate-900 md:text-xl">Scheduling Dashboard</h1>
-            </div>
+      <main className="relative z-10 lg:pl-80">
+        <header className="sticky top-0 z-20 border-b border-white/15 bg-[#070F2B]/65 px-6 py-4 backdrop-blur-xl">
+          <div className="mx-auto flex max-w-7xl items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="hidden text-right sm:block">
-                <p className="text-sm font-medium text-slate-900">{username}</p>
-                <p className="text-xs text-slate-600">Role: Faculty Coordinator</p>
+              <button
+                type="button"
+                onClick={() => setMobileSidebarOpen(true)}
+                className="rounded-lg border border-white/30 bg-white/10 px-3 py-2 text-sm text-white lg:hidden"
+              >
+                Menu
+              </button>
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-cyan-200/80">Academic Coordination</p>
+                <h1 className="text-xl font-bold text-white">Faculty Coordinator Workspace</h1>
               </div>
-              <div className="grid h-10 w-10 place-items-center rounded-lg bg-blue-600 text-xs font-semibold text-white">
-                {username.slice(0, 1).toUpperCase()}
+            </div>
+
+            <div className="flex items-center gap-3 rounded-xl border border-white/20 bg-white/10 px-3 py-2">
+              <div className="text-right">
+                <p className="text-sm font-semibold text-white">{username}</p>
+                <p className="text-[10px] uppercase tracking-[0.16em] text-cyan-200/80">Coordinator</p>
+              </div>
+              <div className="grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-cyan-400 to-indigo-500 text-sm font-bold text-[#070F2B]">
+                {username[0] || 'C'}
               </div>
             </div>
           </div>
         </header>
 
-        <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 md:px-6 xl:grid-cols-[1fr_340px]">
-          <section className="space-y-6">
-            <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="text-2xl font-semibold tracking-tight text-slate-900">Welcome back, {username}</h2>
-              <p className="mt-2 text-sm text-slate-600">
-                Coordinate timetables with precision, monitor resources, and optimize scheduling in real-time.
-              </p>
-
-              <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-5 shadow-sm hover:border-slate-300 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-600">Total Instructors</p>
-                      <p className="mt-3 text-4xl font-semibold text-blue-600">{totalInstructors}</p>
-                      <p className="mt-1 text-xs text-slate-600">Available for allocation</p>
-                    </div>
-                    <Users className="w-12 h-12 text-slate-300" strokeWidth={1.5} />
-                  </div>
-                </div>
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-5 shadow-sm hover:border-slate-300 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-600">Pending Approvals</p>
-                      <p className="mt-3 text-4xl font-semibold text-blue-600">3</p>
-                      <p className="mt-1 text-xs text-slate-600">Need coordinator action</p>
-                    </div>
-                    <AlertCircle className="w-12 h-12 text-slate-300" strokeWidth={1.5} />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              {quickActions.map((action) => {
-                const Icon = action.icon;
-                return (
-                  <article key={action.title} className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="text-base font-semibold text-slate-900">{action.title}</h3>
-                        <p className="mt-2 text-sm text-slate-600">{action.description}</p>
-                        <button
-                          type="button"
-                          onClick={() => handleSidebarNavigation(action.to)}
-                          className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:bg-blue-700"
-                        >
-                          {action.action}
-                        </button>
-                      </div>
-                      <Icon className="w-10 h-10 text-slate-300 ml-4" strokeWidth={1.5} />
-                    </div>
-                  </article>
-                );
-              })}
+        <div className="mx-auto grid max-w-7xl gap-5 p-6 xl:grid-cols-12">
+          <section className="rounded-2xl border border-white/20 bg-white/10 p-5 shadow-sm backdrop-blur-xl xl:col-span-12">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <SummaryCard label="LIC Units" value={resources.length} />
+              <SummaryCard label="Instructors" value={totalInstructors} />
+              <SummaryCard label="Resources Loaded" value={resources.length > 0 ? 'Yes' : 'No'} />
             </div>
           </section>
 
-          <aside className="space-y-6">
-            <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-base font-semibold text-slate-900">Campus Resources</h3>
-              <p className="mt-1 text-xs text-slate-600">LIC units and available instructors</p>
+          <section className="rounded-2xl border border-white/20 bg-white/10 p-5 shadow-sm backdrop-blur-xl xl:col-span-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200/80">Batch Management</p>
+            <h3 className="mt-1 text-lg font-bold text-white">Manage All Batch Details in Batches Page</h3>
+            <p className="mt-2 text-sm text-slate-200/90">
+              Batch sizes and specialization sizes are now managed only in the dedicated Batches page.
+            </p>
 
-              {loadingResources ? (
-                <p className="mt-4 text-xs text-slate-600">Loading resources...</p>
-              ) : (
-                <div className="mt-4 space-y-2">
-                  {resources.length === 0 && <p className="text-xs text-slate-600">No resources found.</p>}
-                  {resources.slice(0, 5).map((lic) => (
-                    <div key={lic.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3 shadow-sm">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-xs font-medium text-slate-900">{lic.name || lic.id}</p>
-                        <span className="text-[10px] text-slate-600">{lic.department || 'N/A'}</span>
-                      </div>
-                      <p className="mt-1 text-[10px] text-slate-600">
-                        {(lic.instructors || []).length} instructor{(lic.instructors || []).length === 1 ? '' : 's'}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => navigate('/faculty/batches')}
+                className="rounded-xl bg-gradient-to-r from-cyan-400 to-indigo-500 px-4 py-2.5 text-sm font-semibold text-[#070F2B] transition hover:brightness-110"
+              >
+                Open Batches Page
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/scheduler')}
+                className="rounded-xl border border-white/35 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20"
+              >
+                Open Timetables
+              </button>
+            </div>
+          </section>
 
-            <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-base font-semibold text-slate-900">Today's Focus</h3>
-              <ul className="mt-3 space-y-2">
-                {focusItems.slice(0, 3).map((item) => (
-                  <li key={item} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </section>
+          <section className="rounded-2xl border border-white/20 bg-white/10 p-5 shadow-sm backdrop-blur-xl xl:col-span-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200/80">Soft Constraints</p>
+            <h3 className="mt-1 text-lg font-bold text-white">w5 Preferences</h3>
 
-            <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-base font-semibold text-slate-900">Soft Constraints</h3>
-              <p className="mt-1 text-xs text-slate-600">Faculty preferences penalized through w5 component</p>
-              <div className="mt-4 space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-900 placeholder-slate-500 shadow-sm transition-all focus:outline-none focus:ring-1 focus:ring-blue-600"
-                    placeholder="Preferred days"
-                    value={softConstraintForm.preferredDaysCsv}
-                    onChange={(event) => setSoftConstraintForm({ ...softConstraintForm, preferredDaysCsv: event.target.value })}
-                  />
-                  <input
-                    className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-900 placeholder-slate-500 shadow-sm transition-all focus:outline-none focus:ring-1 focus:ring-blue-600"
-                    placeholder="Preferred slots"
-                    value={softConstraintForm.preferredSlotsCsv}
-                    onChange={(event) => setSoftConstraintForm({ ...softConstraintForm, preferredSlotsCsv: event.target.value })}
-                  />
-                </div>
-                <input
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-900 placeholder-slate-500 shadow-sm transition-all focus:outline-none focus:ring-1 focus:ring-blue-600"
-                  type="number"
-                  min="0"
-                  placeholder="w5 weight"
-                  value={softConstraintForm.w5Weight}
-                  onChange={(event) => setSoftConstraintForm({ ...softConstraintForm, w5Weight: event.target.value })}
-                />
-                <textarea
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-900 placeholder-slate-500 shadow-sm transition-all focus:outline-none focus:ring-1 focus:ring-blue-600"
-                  rows={2}
-                  placeholder="Notes"
-                  value={softConstraintForm.notes}
-                  onChange={(event) => setSoftConstraintForm({ ...softConstraintForm, notes: event.target.value })}
-                />
-                <button
-                  type="button"
-                  onClick={saveSoftConstraints}
-                  disabled={savingSoftConstraints}
-                  className="w-full rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white shadow-sm transition-all duration-200 hover:bg-blue-700 disabled:opacity-60"
-                >
-                  {savingSoftConstraints ? 'Saving...' : 'Save Constraints'}
-                </button>
-              </div>
-            </section>
-          </aside>
+            <div className="mt-4 space-y-3">
+              <Input
+                label="Preferred Days"
+                val={softConstraintForm.preferredDaysCsv}
+                onChange={(v) => setSoftConstraintForm({ ...softConstraintForm, preferredDaysCsv: v })}
+              />
+              <Input
+                label="Preferred Slots"
+                val={softConstraintForm.preferredSlotsCsv}
+                onChange={(v) => setSoftConstraintForm({ ...softConstraintForm, preferredSlotsCsv: v })}
+              />
+              <Input
+                label="w5 Weight"
+                type="number"
+                val={softConstraintForm.w5Weight}
+                onChange={(v) => setSoftConstraintForm({ ...softConstraintForm, w5Weight: v })}
+              />
+
+              <button
+                type="button"
+                onClick={saveSoftConstraints}
+                disabled={savingSoftConstraints}
+                className="w-full rounded-xl bg-gradient-to-r from-cyan-400 to-indigo-500 px-4 py-2.5 text-sm font-semibold text-[#070F2B] transition hover:brightness-110 disabled:opacity-60"
+              >
+                {savingSoftConstraints ? 'Saving...' : 'Save Constraints'}
+              </button>
+            </div>
+          </section>
         </div>
       </main>
     </div>
   );
 };
+
+const SummaryCard = ({ label, value }) => (
+  <div className="rounded-xl border border-white/25 bg-[#0C183F]/65 p-3">
+    <p className="text-[11px] uppercase tracking-[0.14em] text-cyan-200/85">{label}</p>
+    <p className="mt-1 text-2xl font-bold text-white">{value}</p>
+  </div>
+);
+
+const Input = ({ label, val, onChange, type = 'text' }) => (
+  <div>
+    <label className="text-[10px] uppercase tracking-[0.14em] text-cyan-200/85">{label}</label>
+    <input
+      type={type}
+      className="mt-1 w-full rounded-xl border border-white/25 bg-[#0C183F]/70 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-300/60 focus:border-cyan-300 focus:ring-2 focus:ring-cyan-300/30"
+      value={val}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  </div>
+);
 
 export default FacultyCoordinatorDashboard;
