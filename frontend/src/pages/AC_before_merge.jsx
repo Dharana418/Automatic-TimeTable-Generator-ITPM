@@ -1,4 +1,18 @@
 import React, { useEffect, useState } from 'react';
+import {
+  BookOpen,
+  Building2,
+  UserPlus,
+  Users,
+  BookPlus,
+  Link2,
+  CalendarDays,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  Trash2,
+  ClipboardList,
+} from 'lucide-react';
 
 import schedulerApi from '../api/scheduler.js';
 
@@ -110,65 +124,11 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
 
 
-  useEffect(() => {
-
-    loadAllData();
-
-    // loadAllData is intentionally called only on first mount.
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-
-  }, []);
-
-
-
   const showMessage = (text, type = 'success') => {
 
     setMessage({ text, type });
 
     setTimeout(() => setMessage({ text: '', type: '' }), 5000);
-
-  };
-
-
-
-  const loadAllData = async () => {
-
-    setLoading(true);
-
-    try {
-
-      await Promise.all([
-
-        loadLecturers(),
-
-        loadLics(),
-
-        loadModules(),
-
-        loadCampusStructures(),
-
-        loadAssignments(),
-
-        loadTimetables(),
-
-        loadConflicts(),
-
-        loadAcademicCalendar()
-
-      ]);
-
-    } catch (err) {
-
-      console.error('Failed to load some data:', err);
-
-      showMessage('Failed to load some data', 'error');
-
-    } finally {
-
-      setLoading(false);
-
-    }
 
   };
 
@@ -964,6 +924,41 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
   const highSeverityConflicts = conflicts.filter(c => c.severity === 'high' && !c.resolved).length;
 
+  const calendarTypeIcons = {
+    semester_start: CheckCircle2,
+    semester_end: XCircle,
+    exam_period: AlertTriangle,
+    holiday: CalendarDays,
+    special_event: ClipboardList,
+  };
+
+  useEffect(() => {
+    const loadInitialData = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([
+          loadLecturers(),
+          loadLics(),
+          loadModules(),
+          loadCampusStructures(),
+          loadAssignments(),
+          loadTimetables(),
+          loadConflicts(),
+          loadAcademicCalendar(),
+        ]);
+      } catch (err) {
+        console.error('Failed to load some data:', err);
+        showMessage('Failed to load some data', 'error');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadInitialData();
+    // Run once on mount for initial dashboard hydration.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
 
   if (loading) {
@@ -990,7 +985,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
         <div className="hero-left">
 
-          <h1>≡ƒÄô Academic Coordinator Dashboard</h1>
+          <h1>Academic Coordinator Dashboard</h1>
 
           <p className="hero-sub">Welcome, {user?.name || 'Academic Coordinator'}! Manage timetables, resolve conflicts, and coordinate academic activities.</p>
 
@@ -1018,7 +1013,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
               <div className="stat-label">Active Conflicts</div>
 
-              {highSeverityConflicts > 0 && <div className="stat-hint">ΓÜá∩╕Å {highSeverityConflicts} high severity</div>}
+              {highSeverityConflicts > 0 && <div className="stat-hint">Alert: {highSeverityConflicts} high severity</div>}
 
             </div>
 
@@ -1074,7 +1069,10 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
           >
 
-            ≡ƒôÜ Lectures
+            <span className="ac-menu-btn-content">
+              <BookOpen size={16} />
+              Lectures
+            </span>
 
           </button>
 
@@ -1088,7 +1086,10 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
           >
 
-            ≡ƒÅ¢∩╕Å Hall Allocation
+            <span className="ac-menu-btn-content">
+              <Building2 size={16} />
+              Hall Allocation
+            </span>
 
           </button>
 
@@ -1112,7 +1113,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                 <div>
 
-                  <h3>Γ₧ò Add Lecturer</h3>
+                  <h3 className="ac-ui-title"><span className="ac-ui-icon"><UserPlus size={16} /></span>Add Lecturer</h3>
 
                   <p>Add professors and lecturers with department details</p>
 
@@ -1128,7 +1129,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                 <div>
 
-                  <h3>≡ƒæö Add LIC</h3>
+                  <h3 className="ac-ui-title"><span className="ac-ui-icon"><Users size={16} /></span>Add LIC</h3>
 
                   <p>Create module leadership records for allocation</p>
 
@@ -1144,7 +1145,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                 <div>
 
-                  <h3>≡ƒôÜ Add Module</h3>
+                  <h3 className="ac-ui-title"><span className="ac-ui-icon"><BookPlus size={16} /></span>Add Module</h3>
 
                   <p>Add new modules from catalog or custom</p>
 
@@ -1160,7 +1161,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                 <div>
 
-                  <h3>≡ƒöù Assign Module</h3>
+                  <h3 className="ac-ui-title"><span className="ac-ui-icon"><Link2 size={16} /></span>Assign Module</h3>
 
                   <p>Map modules to lecturers and LICs</p>
 
@@ -1182,7 +1183,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
             <div className="panel">
 
-              <h3>≡ƒôà Timetables for Review</h3>
+              <h3 className="ac-ui-title"><span className="ac-ui-icon"><ClipboardList size={16} /></span>Timetables for Review</h3>
 
               <div className="ac-table-wrapper">
 
@@ -1244,9 +1245,9 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                             <>
 
-                              <button className="ac-approve-btn" onClick={() => approveTimetable(timetable.id)}>Γ£ô Approve</button>
+                              <button className="ac-approve-btn" onClick={() => approveTimetable(timetable.id)}><CheckCircle2 size={14} />Approve</button>
 
-                              <button className="ac-reject-btn" onClick={() => rejectTimetable(timetable.id)}>Γ£ù Reject</button>
+                              <button className="ac-reject-btn" onClick={() => rejectTimetable(timetable.id)}><XCircle size={14} />Reject</button>
 
                             </>
 
@@ -1276,13 +1277,13 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
             <div className="panel">
 
-              <h3>ΓÜá∩╕Å Scheduling Conflicts</h3>
+              <h3 className="ac-ui-title"><span className="ac-ui-icon"><AlertTriangle size={16} /></span>Scheduling Conflicts</h3>
 
               {highSeverityConflicts > 0 && (
 
                 <div className="bg-red-50 text-red-700 p-3 rounded-lg mb-4 border border-red-200">
 
-                  ΓÜá∩╕Å {highSeverityConflicts} high severity conflicts require immediate attention!
+                  Alert: {highSeverityConflicts} high severity conflicts require immediate attention!
 
                 </div>
 
@@ -1366,9 +1367,9 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
             <div className="panel">
 
-              <h3>≡ƒÅ¢∩╕Å Campus Resources</h3>
+              <h3 className="ac-ui-title"><span className="ac-ui-icon"><Building2 size={16} /></span>Campus Resources</h3>
 
-              <p>Halls: {hallCount} ΓÇó Labs: {labCount} ΓÇó Floors: {uniqueFloorCount}</p>
+              <p>Halls: {hallCount} | Labs: {labCount} | Floors: {uniqueFloorCount}</p>
 
               <div className="ac-table-wrapper">
 
@@ -1432,7 +1433,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
               <div className="flex justify-between items-center mb-4">
 
-                <h3>≡ƒôå Academic Calendar</h3>
+                <h3 className="ac-ui-title"><span className="ac-ui-icon"><CalendarDays size={16} /></span>Academic Calendar</h3>
 
                 <button className="primary" onClick={() => setShowCalendarForm(!showCalendarForm)}>
 
@@ -1486,21 +1487,25 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
               <div className="ac-calendar-grid">
 
-                {academicCalendar.map((event) => (
+                {academicCalendar.map((event) => {
+                  const CalendarTypeIcon = calendarTypeIcons[event.event_type] || CalendarDays;
+                  const eventTypeLabel = String(event.event_type || 'event').replace(/_/g, ' ');
 
-                  <div key={event.id} className="ac-calendar-card">
+                  return (
+                    <div key={event.id} className="ac-calendar-card">
+                      <div className={`ac-calendar-type ${event.event_type}`}>
+                        <CalendarTypeIcon size={12} />
+                        <span>{eventTypeLabel}</span>
+                      </div>
 
-                    <div className={`ac-calendar-type ${event.event_type}`}>{event.event_type.replace('_', ' ')}</div>
+                      <h3>{event.event_name}</h3>
 
-                    <h3>{event.event_name}</h3>
+                      <p>{new Date(event.start_date).toLocaleDateString()} - {new Date(event.end_date).toLocaleDateString()}</p>
 
-                    <p>≡ƒôà {new Date(event.start_date).toLocaleDateString()} - {new Date(event.end_date).toLocaleDateString()}</p>
-
-                    <p>≡ƒôÜ Year: {event.academic_year} | Semester: {event.semester || 'N/A'}</p>
-
-                  </div>
-
-                ))}
+                      <p>Year: {event.academic_year} | Semester: {event.semester || 'N/A'}</p>
+                    </div>
+                  );
+                })}
 
               </div>
 
@@ -1518,17 +1523,17 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
           <div className="panel">
 
-            <h3>ΓÜí Quick Actions</h3>
+            <h3 className="ac-ui-title"><span className="ac-ui-icon"><ClipboardList size={16} /></span>Quick Actions</h3>
 
             <div className="shortcuts">
 
-              <div className="chip" onClick={() => setActiveTab('timetables')}>≡ƒôà Review Timetables</div>
+              <div className="chip ac-ui-chip" onClick={() => setActiveTab('timetables')}><ClipboardList size={14} />Review Timetables</div>
 
-              <div className="chip" onClick={() => setActiveTab('conflicts')}>ΓÜá∩╕Å View Conflicts</div>
+              <div className="chip ac-ui-chip" onClick={() => setActiveTab('conflicts')}><AlertTriangle size={14} />View Conflicts</div>
 
-              <div className="chip" onClick={() => setActiveTab('resources')}>≡ƒÅ¢∩╕Å Manage Resources</div>
+              <div className="chip ac-ui-chip" onClick={() => setActiveTab('resources')}><Building2 size={14} />Manage Resources</div>
 
-              <div className="chip" onClick={() => setActiveTab('calendar')}>≡ƒôå Calendar</div>
+              <div className="chip ac-ui-chip" onClick={() => setActiveTab('calendar')}><CalendarDays size={14} />Calendar</div>
 
             </div>
 
@@ -1540,7 +1545,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
           <div className="panel" id="lecturerForm">
 
-            <h3>Γ₧ò Add Lecturer</h3>
+            <h3 className="ac-ui-title"><span className="ac-ui-icon"><UserPlus size={16} /></span>Add Lecturer</h3>
 
             <form onSubmit={addLecturer} className="ac-form">
 
@@ -1556,7 +1561,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                 onChange={(e) => setLecturerForm({ ...lecturerForm, email: e.target.value })} />
 
-              <button className="dashboard-btn" type="submit">Add Lecturer</button>
+              <button className="dashboard-btn ac-ui-action" type="submit"><UserPlus size={15} />Add Lecturer</button>
 
             </form>
 
@@ -1568,7 +1573,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
           <div className="panel" id="licForm">
 
-            <h3>≡ƒæö Add LIC</h3>
+            <h3 className="ac-ui-title"><span className="ac-ui-icon"><Users size={16} /></span>Add LIC</h3>
 
             <form onSubmit={addLic} className="ac-form">
 
@@ -1580,7 +1585,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                 onChange={(e) => setLicForm({ ...licForm, department: e.target.value })} />
 
-              <button className="dashboard-btn" type="submit">Add LIC</button>
+              <button className="dashboard-btn ac-ui-action" type="submit"><Users size={15} />Add LIC</button>
 
             </form>
 
@@ -1592,7 +1597,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
           <div className="panel" id="moduleForm">
 
-            <h3>≡ƒôÜ Add Module</h3>
+            <h3 className="ac-ui-title"><span className="ac-ui-icon"><BookPlus size={16} /></span>Add Module</h3>
 
             <form onSubmit={addModule} className="ac-form">
 
@@ -1636,7 +1641,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                 onChange={(e) => setModuleForm({ ...moduleForm, lectures_per_week: e.target.value })} />
 
-              <button className="dashboard-btn" type="submit">Add Module</button>
+              <button className="dashboard-btn ac-ui-action" type="submit"><BookPlus size={15} />Add Module</button>
 
             </form>
 
@@ -1648,7 +1653,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
           <div className="panel" id="assignmentForm">
 
-            <h3>≡ƒöù Assign Module</h3>
+            <h3 className="ac-ui-title"><span className="ac-ui-icon"><Link2 size={16} /></span>Assign Module</h3>
 
             <form onSubmit={addAssignment} className="ac-form">
 
@@ -1708,7 +1713,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
               </select>
 
-              <button className="dashboard-btn" type="submit">Create Assignment</button>
+              <button className="dashboard-btn ac-ui-action" type="submit"><Link2 size={15} />Create Assignment</button>
 
             </form>
 
@@ -1720,7 +1725,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
           <div className="panel">
 
-            <h3>≡ƒôï Current Assignments</h3>
+            <h3 className="ac-ui-title"><span className="ac-ui-icon"><ClipboardList size={16} /></span>Current Assignments</h3>
 
             <div className="ac-table-wrapper">
 
@@ -1754,7 +1759,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                       <td>Y{assignment.academic_year}/S{assignment.semester}</td>
 
-                      <td><button className="ac-remove-btn" onClick={() => removeAssignment(assignment.id)}>Γ£ù</button></td>
+                      <td><button className="ac-remove-btn" onClick={() => removeAssignment(assignment.id)}><Trash2 size={14} />Remove</button></td>
 
                     </tr>
 
@@ -1784,7 +1789,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
       <div className="ac-3d-card">
 
-        <h2>≡ƒÅù∩╕Å 3D Campus Visualization</h2>
+        <h2>3D Campus Visualization</h2>
 
         <div className="ac-3d-controls">
 
