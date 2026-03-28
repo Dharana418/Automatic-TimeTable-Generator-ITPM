@@ -141,11 +141,6 @@ export async function initDb() {
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role_assigned_by UUID REFERENCES users(id) ON DELETE SET NULL`);
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role_assigned_at TIMESTAMP DEFAULT NOW()`);
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role_assignment_note TEXT`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_token_hash TEXT`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_expires_at TIMESTAMP`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_requested_at TIMESTAMP`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_consumed_at TIMESTAMP`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_url TEXT`);
         console.log('✓ users role assignment metadata ensured');
 
         await pool.query(`
@@ -233,6 +228,75 @@ export async function initDb() {
         `);
         console.log('✓ academic_calendar table ready');
 
+        // Create hall_resources table for equipment and furniture inventory
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS hall_resources (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                hall_id TEXT REFERENCES halls(id) ON DELETE CASCADE,
+                resource_type VARCHAR(100),
+                resource_name VARCHAR(255),
+                quantity INTEGER DEFAULT 1,
+                condition VARCHAR(50) CHECK (condition IN ('excellent', 'good', 'fair', 'poor')),
+                notes TEXT,
+                added_by UUID REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('✓ hall_resources table ready');
+
+        // Create hall_ratings table for feedback on hall condition
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS hall_ratings (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                hall_id TEXT REFERENCES halls(id) ON DELETE CASCADE,
+                user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+                rating INTEGER CHECK (rating >= 1 AND rating <= 5),
+                comment TEXT,
+                facility_condition VARCHAR(50),
+                cleanliness_rating INTEGER CHECK (cleanliness_rating >= 1 AND cleanliness_rating <= 5),
+                equipment_working BOOLEAN,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('✓ hall_ratings table ready');
+
+        // Create activity_logs table for edit/delete history
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS activity_logs (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                entity_type VARCHAR(50),
+                entity_id VARCHAR(255),
+                entity_name VARCHAR(255),
+                action VARCHAR(50) CHECK (action IN ('create', 'update', 'delete', 'assign_resource', 'remove_resource', 'add_rating')),
+                changes JSONB,
+                performed_by UUID REFERENCES users(id),
+                ip_address VARCHAR(50),
+                user_agent TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(id)
+            )
+        `);
+        console.log('✓ activity_logs table ready');
+
+        // Create hall_recommendations table for smart suggestions
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS hall_recommendations (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                for_module_id TEXT REFERENCES modules(id) ON DELETE CASCADE,
+                batch_size INTEGER,
+                recommended_hall_id TEXT REFERENCES halls(id) ON DELETE CASCADE,
+                score DECIMAL(5,2),
+                matching_resources JSONB,
+                missing_resources JSONB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP,
+                UNIQUE(for_module_id, recommended_hall_id)
+            )
+        `);
+        console.log('✓ hall_recommendations table ready');
+
         // Create indexes for better performance
         await pool.query(`
             CREATE INDEX IF NOT EXISTS idx_module_assignments_module_id ON module_assignments(module_id);
@@ -249,6 +313,15 @@ export async function initDb() {
             CREATE INDEX IF NOT EXISTS idx_timetables_status ON timetables(status);
             CREATE INDEX IF NOT EXISTS idx_timetable_approvals_status ON timetable_approvals(status);
             CREATE INDEX IF NOT EXISTS idx_scheduling_conflicts_resolved ON scheduling_conflicts(resolved);
+            CREATE INDEX IF NOT EXISTS idx_hall_resources_hall_id ON hall_resources(hall_id);
+            CREATE INDEX IF NOT EXISTS idx_hall_resources_resource_type ON hall_resources(resource_type);
+            CREATE INDEX IF NOT EXISTS idx_hall_ratings_hall_id ON hall_ratings(hall_id);
+            CREATE INDEX IF NOT EXISTS idx_hall_ratings_created_at ON hall_ratings(created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_activity_logs_entity_id ON activity_logs(entity_id);
+            CREATE INDEX IF NOT EXISTS idx_activity_logs_entity_type ON activity_logs(entity_type);
+            CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at ON activity_logs(created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_hall_recommendations_module_id ON hall_recommendations(for_module_id);
+            CREATE INDEX IF NOT EXISTS idx_hall_recommendations_hall_id ON hall_recommendations(recommended_hall_id)
         `);
         console.log('✓ indexes created');
 

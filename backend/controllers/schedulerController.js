@@ -7,59 +7,80 @@ import pool from '../config/db.js';
 
 const allowedTypes = ['halls', 'modules', 'lics', 'instructors', 'departments', 'batches'];
 
-const DEPARTMENT_ALIAS_MAP = {
-  IT: ['IT', 'INFORMATIONTECHNOLOGY'],
-  SE: ['SE', 'SOFTWAREENGINEERING'],
-  IM: ['IM', 'INTERACTIVEMULTIMEDIA'],
-  CSNE: ['CSNE', 'COMPUTERSYSTEMSANDNETWORKENGINEERING', 'COMPUTERSYSTEMSNETWORKENGINEERING'],
-  CY: ['CY', 'CYBERSECURITY'],
-  DS: ['DS', 'DATASCIENCE'],
-  ISE: ['ISE', 'INFORMATIONSYSTEMSENGINEERING', 'IE'],
-};
-
-const ENGINEERING_SPECIALIZATIONS = new Set(Object.keys(DEPARTMENT_ALIAS_MAP));
+const ENGINEERING_SPECIALIZATIONS = new Set(['CS', 'ISE', 'CSNE', 'IM']);
 
 const normalizeAlgorithmKey = (value) => String(value || '').trim().toLowerCase();
 const normalizeRole = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-const normalizeDepartmentToken = (value) => String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-const resolveDepartmentSpecialization = (value) => {
-  const normalized = normalizeDepartmentToken(value);
-  if (!normalized) return null;
+const HALL_ID_REGEX = /^[A-Za-z0-9][A-Za-z0-9_-]{1,39}$/;
+const HALL_TEXT_REGEX = /^[A-Za-z0-9][A-Za-z0-9 .,&()\/-]{1,79}$/;
+const ALLOWED_HALL_AMENITIES = new Set([
+  'projector',
+  'wifi',
+  'ac',
+  'lab_equipment',
+  'accessibility',
+  'whiteboard',
+  'sound_system',
+]);
 
-  const directMatch = Object.keys(DEPARTMENT_ALIAS_MAP).find((key) => key === normalized);
-  if (directMatch) return directMatch;
+const validateHallPayload = ({ id = '', name = '', capacity, features } = {}) => {
+  const normalizedId = String(id || '').trim();
+  const normalizedName = String(name || '').trim();
 
-  for (const [specialization, aliases] of Object.entries(DEPARTMENT_ALIAS_MAP)) {
-    if (aliases.some((alias) => normalized.includes(normalizeDepartmentToken(alias)))) {
-      return specialization;
+  if (!normalizedId || !HALL_ID_REGEX.test(normalizedId)) {
+    return 'Hall id must be 2-40 characters and contain only letters, numbers, underscore, or hyphen';
+  }
+
+  if (!normalizedName || !HALL_TEXT_REGEX.test(normalizedName)) {
+    return 'Hall name must be 2-80 characters and can include letters, numbers, spaces, and . , & ( ) / -';
+  }
+
+  const numericCapacity = Number(capacity);
+  if (!Number.isInteger(numericCapacity) || numericCapacity < 1 || numericCapacity > 2000) {
+    return 'Hall capacity must be an integer between 1 and 2000';
+  }
+
+  if (!features || typeof features !== 'object' || Array.isArray(features)) {
+    return 'Hall features must be a valid object';
+  }
+
+  const hallType = String(features.hallType || '').trim();
+  const building = String(features.building || '').trim();
+  const floor = features.floor == null ? '' : String(features.floor).trim();
+
+  if (!hallType || hallType.length < 2 || hallType.length > 60) {
+    return 'Hall type must be between 2 and 60 characters';
+  }
+
+  if (!building || building.length < 2 || building.length > 80) {
+    return 'Building must be between 2 and 80 characters';
+  }
+
+  if (floor && floor.length > 30) {
+    return 'Floor cannot exceed 30 characters';
+  }
+
+  if (features.amenities != null) {
+    if (typeof features.amenities !== 'object' || Array.isArray(features.amenities)) {
+      return 'Amenities must be a key/value object';
+    }
+
+    for (const [key, value] of Object.entries(features.amenities)) {
+      if (!ALLOWED_HALL_AMENITIES.has(key)) {
+        return `Unsupported amenity: ${key}`;
+      }
+      if (typeof value !== 'boolean') {
+        return `Amenity '${key}' must be true or false`;
+      }
     }
   }
 
   return null;
 };
 
-const isDepartmentMatchedToSegment = (department, segment) => {
-  const departmentSpecialization = resolveDepartmentSpecialization(department);
-  if (!departmentSpecialization) {
-    const normalizedDepartment = normalizeDepartmentToken(department);
-    return segment.departmentGroup === 'Engineering'
-      ? normalizedDepartment.includes('ENGINEERING')
-      : normalizedDepartment.includes(segment.specialization);
-  }
-
-  if (segment.departmentGroup === 'Engineering') {
-    return ENGINEERING_SPECIALIZATIONS.has(departmentSpecialization);
-  }
-
-  return departmentSpecialization === segment.specialization;
-};
-
 const isAcademicCoordinator = (user) => normalizeRole(user?.role) === 'academiccoordinator';
-const isLic = (user) => {
-  const role = normalizeRole(user?.role);
-  return role === 'lic' || role === 'liccoordinator';
-};
+const isLic = (user) => normalizeRole(user?.role) === 'lic';
 const isFacultyCoordinator = (user) => normalizeRole(user?.role) === 'facultycoordinator';
 const isAdmin = (user) => normalizeRole(user?.role) === 'admin';
 const isTeachingStaff = (user) => {
@@ -71,8 +92,7 @@ const parseBatchLabel = (name) => {
   const match = String(name || '').match(/^Y(\d+)\.S(\d+)\.(WE|WD)\.([A-Z0-9]+)\./i);
   if (!match) return null;
 
-  const rawSpecialization = String(match[4]).toUpperCase();
-  const specialization = resolveDepartmentSpecialization(rawSpecialization) || rawSpecialization;
+  const specialization = String(match[4]).toUpperCase();
   return {
     year: Number(match[1]),
     semester: Number(match[2]),
@@ -84,14 +104,9 @@ const parseBatchLabel = (name) => {
 
 const inferModuleSpecialization = (module) => {
   const code = String(module?.code || '').toUpperCase();
-  if (code.startsWith('CSNE')) return 'CSNE';
-  if (code.startsWith('ISE')) return 'ISE';
-  if (code.startsWith('CY')) return 'CY';
-  if (code.startsWith('DS')) return 'DS';
   if (code.startsWith('IT')) return 'IT';
   if (code.startsWith('SE')) return 'SE';
-  if (code.startsWith('IM')) return 'IM';
-  if (code.startsWith('IE')) return 'ISE';
+  if (code.startsWith('IE')) return 'Engineering';
   return 'General';
 };
 
@@ -174,11 +189,19 @@ const buildSemesterSpecializationSegments = ({ batches = [], modules = [], lics 
       });
 
     const licsForSegment = lics.filter((lic) => {
-      return isDepartmentMatchedToSegment(lic.department, segment);
+      const department = String(lic.department || '').toUpperCase();
+      if (segment.departmentGroup === 'Engineering') {
+        return ['ENGINEERING', 'CS', 'ISE', 'CSNE', 'IM'].some((value) => department.includes(value));
+      }
+      return department.includes(segment.specialization);
     });
 
     const instructorsForSegment = instructors.filter((instructor) => {
-      return isDepartmentMatchedToSegment(instructor.department, segment);
+      const department = String(instructor.department || '').toUpperCase();
+      if (segment.departmentGroup === 'Engineering') {
+        return ['ENGINEERING', 'CS', 'ISE', 'CSNE', 'IM'].some((value) => department.includes(value));
+      }
+      return department.includes(segment.specialization);
     });
 
     segments.push({
@@ -271,10 +294,6 @@ export const addItem = async (req, res) => {
       return res.status(400).json({ error: 'Invalid data type' });
     }
 
-    if (isLic(req.user) && !['modules', 'instructors'].includes(type)) {
-      return res.status(403).json({ error: 'LIC can only create modules and instructors' });
-    }
-
     const id = payload.id || `${type}_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 
     if (type === 'halls') {
@@ -283,6 +302,11 @@ export const addItem = async (req, res) => {
       }
 
       const { name = null, capacity = null, features = null } = payload;
+      const hallValidationError = validateHallPayload({ id, name, capacity, features });
+      if (hallValidationError) {
+        return res.status(400).json({ error: hallValidationError });
+      }
+
       const { rows } = await pool.query(
         `INSERT INTO halls(id, name, capacity, features)
          VALUES($1, $2, $3, $4)
@@ -507,6 +531,11 @@ export const updateItem = async (req, res) => {
 
     if (type === 'halls') {
       const { name = null, capacity = null, features = null } = payload;
+      const hallValidationError = validateHallPayload({ id, name, capacity, features });
+      if (hallValidationError) {
+        return res.status(400).json({ error: hallValidationError });
+      }
+
       const { rows, rowCount } = await pool.query(
         `UPDATE halls SET name=$1, capacity=$2, features=$3 WHERE id=$4 RETURNING *`,
         [name, capacity, features ? JSON.stringify(features) : null, id]
