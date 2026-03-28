@@ -148,27 +148,8 @@
     @apply rounded-lg bg-gradient-to-r from-sky-700 to-blue-800 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-slate-400/40 transition duration-300 hover:-translate-y-0.5 hover:from-sky-800 hover:to-blue-900 disabled:cursor-not-allowed disabled:opacity-70;
   }
 
-  .ac-main-menu-wrap {
-    @apply mx-auto mb-8 mt-2 max-w-7xl;
-  }
-
-  .ac-main-menu {
-    @apply grid grid-cols-1 overflow-hidden rounded-2xl border border-sky-100 bg-white/95 p-1 shadow-lg shadow-sky-100/70 sm:grid-cols-2;
-  }
-
-  .ac-main-menu-btn {
-    @apply rounded-xl border border-transparent px-6 py-3 text-center text-sm font-extrabold tracking-wide text-slate-700 transition duration-200;
-    font-family: var(--font-cursive);
-  }
-
-  .ac-main-menu-btn:not(.is-active) {
-    @apply bg-transparent hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700;
-  }
-
-  .ac-main-menu-btn.is-active {
-    @apply border-sky-300 bg-gradient-to-r from-sky-600 to-blue-700 text-white shadow-md shadow-sky-300/60;
-  }
-
+  /* .ac-main-menu* styles are defined in frontend/src/styles/tailwind.pcss
+     to provide a single source of truth and avoid duplicate selector definitions. */
   .action-btn.ac-lecture-action-btn {
     @apply bg-gradient-to-r from-cyan-600 to-blue-700 shadow-cyan-300/60 hover:from-cyan-700 hover:to-blue-800;
   }

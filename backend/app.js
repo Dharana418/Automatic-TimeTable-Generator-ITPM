@@ -14,12 +14,21 @@ dotenv.config();
 const app = express();
 
 // CORS configuration
+// Set CORS_ORIGINS to a comma-separated list of allowed origins for staging/production,
+// e.g. CORS_ORIGINS=https://app.example.com,https://staging.example.com
+const configuredOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+    : [];
+
 app.use(cors({
     origin: (origin, callback) => {
-        // Allow server-to-server tools (no Origin header) and local dev frontends on any port.
+        // Allow server-to-server tools (no Origin header).
         if (!origin) return callback(null, true);
+        // Always allow localhost / 127.0.0.1 for local development.
         const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
         if (isLocalhost) return callback(null, true);
+        // Allow any explicitly configured origin.
+        if (configuredOrigins.includes(origin)) return callback(null, true);
         return callback(new Error('Not allowed by CORS'));
     },
     credentials: true,

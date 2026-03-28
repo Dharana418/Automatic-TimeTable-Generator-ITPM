@@ -41,37 +41,45 @@ const validateHallPayload = ({ id = '', name = '', capacity, features } = {}) =>
     return 'Hall capacity must be an integer between 1 and 2000';
   }
 
-  if (!features || typeof features !== 'object' || Array.isArray(features)) {
-    return 'Hall features must be a valid object';
-  }
-
-  const hallType = String(features.hallType || '').trim();
-  const building = String(features.building || '').trim();
-  const floor = features.floor == null ? '' : String(features.floor).trim();
-
-  if (!hallType || hallType.length < 2 || hallType.length > 60) {
-    return 'Hall type must be between 2 and 60 characters';
-  }
-
-  if (!building || building.length < 2 || building.length > 80) {
-    return 'Building must be between 2 and 80 characters';
-  }
-
-  if (floor && floor.length > 30) {
-    return 'Floor cannot exceed 30 characters';
-  }
-
-  if (features.amenities != null) {
-    if (typeof features.amenities !== 'object' || Array.isArray(features.amenities)) {
-      return 'Amenities must be a key/value object';
+  // Treat features as optional; validate only when provided
+  if (features != null) {
+    if (typeof features !== 'object' || Array.isArray(features)) {
+      return 'Hall features must be a valid object';
     }
 
-    for (const [key, value] of Object.entries(features.amenities)) {
-      if (!ALLOWED_HALL_AMENITIES.has(key)) {
-        return `Unsupported amenity: ${key}`;
+    if (features.hallType != null) {
+      const hallType = String(features.hallType || '').trim();
+      if (!hallType || hallType.length < 2 || hallType.length > 60) {
+        return 'Hall type must be between 2 and 60 characters';
       }
-      if (typeof value !== 'boolean') {
-        return `Amenity '${key}' must be true or false`;
+    }
+
+    if (features.building != null) {
+      const building = String(features.building || '').trim();
+      if (!building || building.length < 2 || building.length > 80) {
+        return 'Building must be between 2 and 80 characters';
+      }
+    }
+
+    if (features.floor != null) {
+      const floor = String(features.floor).trim();
+      if (floor && floor.length > 30) {
+        return 'Floor cannot exceed 30 characters';
+      }
+    }
+
+    if (features.amenities != null) {
+      if (typeof features.amenities !== 'object' || Array.isArray(features.amenities)) {
+        return 'Amenities must be a key/value object';
+      }
+
+      for (const [key, value] of Object.entries(features.amenities)) {
+        if (!ALLOWED_HALL_AMENITIES.has(key)) {
+          return `Unsupported amenity: ${key}`;
+        }
+        if (typeof value !== 'boolean') {
+          return `Amenity '${key}' must be true or false`;
+        }
       }
     }
   }
