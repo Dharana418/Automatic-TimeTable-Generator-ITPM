@@ -1,4 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { 
+  Users, BookOpen, Link2, Trash2, PlusCircle,
+  LayoutDashboard, Calendar,
+  Settings, LogOut, GraduationCap,
+  Search, Bell, User as UserIcon
+} from 'lucide-react';
 import schedulerApi from '../api/scheduler.js';
 import { confirmDelete, showError, showSuccess, showWarning } from '../utils/alerts.js';
 
@@ -25,7 +31,7 @@ const LICDashboard = ({ user }) => {
     setTimeout(() => setMessage({ text: '', type: '' }), 4500);
   };
 
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
     setLoading(true);
     try {
       const [instructorRes, moduleRes, assignmentRes] = await Promise.all([
@@ -42,11 +48,9 @@ const LICDashboard = ({ user }) => {
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    loadAll();
   }, []);
+
+  useEffect(() => { loadAll(); }, [loadAll]);
 
   const addInstructor = async (event) => {
     event.preventDefault();
