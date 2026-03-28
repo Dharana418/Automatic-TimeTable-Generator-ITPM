@@ -124,6 +124,73 @@ const inferModuleYear = (module) => {
   return match ? Number(match[1]) : null;
 };
 
+const parseBatchSubgroupIdentity = (batchId = '') => {
+  const [yearToken = '', semesterToken = '', modeToken = '', specializationToken = '', groupToken = '', subgroupToken = ''] = String(batchId)
+    .trim()
+    .split('.');
+
+  if (!yearToken || !semesterToken || !modeToken || !specializationToken || !groupToken || !subgroupToken) {
+    return null;
+  }
+
+  return {
+    scopeKey: [
+      String(yearToken).toUpperCase(),
+      String(semesterToken).toUpperCase(),
+      String(modeToken).toUpperCase(),
+      String(specializationToken).toUpperCase(),
+      String(groupToken).trim(),
+    ].join('.'),
+    subgroup: String(subgroupToken).trim(),
+  };
+};
+
+const validateBatchSubgroupRules = async ({ batchId, ignoreId = null }) => {
+  const candidate = parseBatchSubgroupIdentity(batchId);
+  if (!candidate) {
+    return null;
+  }
+
+  if (!/^\d+$/.test(candidate.subgroup)) {
+    return 'Subgroup must be numeric';
+  }
+
+  const subgroupNumber = Number(candidate.subgroup);
+  if (!Number.isInteger(subgroupNumber) || subgroupNumber < 1 || subgroupNumber > 2) {
+    return 'Subgroup must be 1 or 2 (e.g. 01 or 02)';
+  }
+
+  const { rows } = await pool.query(
+    'SELECT id FROM batches WHERE UPPER(id) LIKE $1',
+    [`${candidate.scopeKey}.%`]
+  );
+
+  const siblingSubgroups = new Set();
+
+  for (const row of rows) {
+    if (ignoreId && row.id === ignoreId) {
+      continue;
+    }
+
+    const identity = parseBatchSubgroupIdentity(row.id);
+    if (!identity || identity.scopeKey !== candidate.scopeKey) {
+      continue;
+    }
+
+    if (identity.subgroup === candidate.subgroup) {
+      return 'This subgroup already exists for the selected group';
+    }
+
+    siblingSubgroups.add(identity.subgroup);
+  }
+
+  if (!siblingSubgroups.has(candidate.subgroup) && siblingSubgroups.size >= 2) {
+    return 'A group cannot have more than 2 subgroups';
+  }
+
+  return null;
+};
+
 const runSelectedAlgorithms = (constraints, algorithms, options) => {
   const normalizedAlgorithms = (algorithms || []).map(normalizeAlgorithmKey);
   const results = {};
@@ -466,6 +533,11 @@ export const addItem = async (req, res) => {
       const { name = null, department_id = null, capacity = null } = payload;
       if (!name) return res.status(400).json({ error: 'Batch name is required' });
 
+      const batchValidationError = await validateBatchSubgroupRules({ batchId: id });
+      if (batchValidationError) {
+        return res.status(400).json({ error: batchValidationError });
+      }
+
       const { rows } = await pool.query(
         `INSERT INTO batches(id, name, department_id, capacity)
          VALUES($1, $2, $3, $4)
@@ -594,6 +666,12 @@ export const updateItem = async (req, res) => {
 
     if (type === 'batches') {
       const { name = null, department_id = null, capacity = null } = payload;
+
+      const batchValidationError = await validateBatchSubgroupRules({ batchId: id, ignoreId: id });
+      if (batchValidationError) {
+        return res.status(400).json({ error: batchValidationError });
+      }
+
       const { rows, rowCount } = await pool.query(
         `UPDATE batches SET name=$1, department_id=$2, capacity=$3 WHERE id=$4 RETURNING *`,
         [name, department_id, capacity, id]

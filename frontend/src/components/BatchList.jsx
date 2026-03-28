@@ -32,6 +32,7 @@ const YEAR_OPTIONS = ['1', '2', '3', '4'];
 const SEMESTER_OPTIONS = ['1', '2'];
 
 const toUpper = (value = '') => String(value).trim().toUpperCase();
+const SUBGROUP_INPUT_PATTERN = /^(0?[1-2])?$/;
 
 const getBatchMeta = (batchId = '') => {
   const normalized = String(batchId).trim();
@@ -87,6 +88,21 @@ const buildBatchId = ({ year, semester, mode, specialization, group, subgroup })
   ];
 
   return parts.filter(Boolean).join('.');
+};
+
+const parseBatchIdentity = (batchId = '') => {
+  const [yearToken = '', semesterToken = '', modeToken = '', specializationToken = '', groupToken = '', subgroupToken = ''] = String(batchId)
+    .trim()
+    .split('.');
+
+  if (!yearToken || !semesterToken || !modeToken || !specializationToken || !groupToken || !subgroupToken) {
+    return null;
+  }
+
+  return {
+    scopeKey: [yearToken, semesterToken, toUpper(modeToken), toUpper(specializationToken), groupToken].join('.'),
+    subgroup: subgroupToken,
+  };
 };
 
 export default function BatchList({ initialQuery = '' }) {
@@ -185,8 +201,35 @@ export default function BatchList({ initialQuery = '' }) {
       return;
     }
 
-    if (!/^\d+$/.test(subgroup)) {
-      showWarning('Validation required', 'Subgroup must be numeric.');
+    if (!SUBGROUP_INPUT_PATTERN.test(subgroup)) {
+      showWarning('Validation required', 'Subgroup must be 1 or 2 (e.g. 01 or 02).');
+      return;
+    }
+
+    const candidateIdentity = parseBatchIdentity(nextId);
+    if (!candidateIdentity) {
+      showWarning('Validation required', 'Batch ID format is invalid.');
+      return;
+    }
+
+    const peers = batches.filter((batch) => batch.id !== editingId);
+    const siblingSubgroups = new Set();
+
+    for (const batch of peers) {
+      const identity = parseBatchIdentity(batch.id);
+      if (!identity || identity.scopeKey !== candidateIdentity.scopeKey) {
+        continue;
+      }
+
+      siblingSubgroups.add(identity.subgroup);
+      if (identity.subgroup === candidateIdentity.subgroup) {
+        showWarning('Validation required', 'This subgroup already exists for the selected group.');
+        return;
+      }
+    }
+
+    if (!siblingSubgroups.has(candidateIdentity.subgroup) && siblingSubgroups.size >= 2) {
+      showWarning('Validation required', 'A group cannot have more than 2 subgroups.');
       return;
     }
 
@@ -238,7 +281,7 @@ export default function BatchList({ initialQuery = '' }) {
   };
 
   const handleEdit = (batch) => {
-    const [, , mode = 'WD', specialization = batch.specialization, group = '', subgroup = ''] = batch.id.split('.');
+    const [, , mode = 'WD', , group = '', subgroup = ''] = batch.id.split('.');
     setEditingId(batch.id);
     setForm({
       id: batch.id,
@@ -375,7 +418,13 @@ export default function BatchList({ initialQuery = '' }) {
             className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-mono text-slate-900 outline-none transition-all placeholder:text-slate-500 focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
             placeholder="Subgroup (e.g. 01)"
             value={form.subgroup}
-            onChange={(e) => setForm((prev) => ({ ...prev, subgroup: e.target.value }))}
+            onChange={(e) => {
+              const nextValue = String(e.target.value || '').trim();
+              if (!SUBGROUP_INPUT_PATTERN.test(nextValue)) {
+                return;
+              }
+              setForm((prev) => ({ ...prev, subgroup: nextValue }));
+            }}
           />
         </div>
 
