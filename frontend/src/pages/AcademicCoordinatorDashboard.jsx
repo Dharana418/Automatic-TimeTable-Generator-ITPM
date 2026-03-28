@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Users, BookOpen, Building2, FileText, AlertCircle, Calendar, Check, X, Pencil, Trash2 } from 'lucide-react';
 import schedulerApi from '../api/scheduler.js';
 import moduleCatalog from '../data/moduleCatalog.js';
 import HallAllocation from '../components/HallAllocation.jsx';
-import { askForText, confirmDelete, showError, showSuccess, showWarning } from '../utils/alerts.js';
 
 const HALL_ALLOCATION_PRESET = [
   'A401', 'A402', 'A403', 'A404', 'A405',
@@ -17,7 +15,7 @@ const HALL_ALLOCATION_PRESET = [
 
 const PenaltyBreakdownChart = ({ breakdown }) => {
   if (!breakdown || typeof breakdown !== 'object') {
-    return <div className="ac-empty-row">No penalty data available.</div>;
+    return <div className="text-center py-8 text-gray-500">No penalty data available.</div>;
   }
 
   const entries = Object.entries(breakdown)
@@ -25,22 +23,25 @@ const PenaltyBreakdownChart = ({ breakdown }) => {
     .map(([key, value]) => ({ key, value: Number(value) }));
 
   if (entries.length === 0) {
-    return <div className="ac-empty-row">No penalty data available.</div>;
+    return <div className="text-center py-8 text-gray-500">No penalty data available.</div>;
   }
 
   const maxValue = Math.max(...entries.map((entry) => entry.value), 1);
 
   return (
-    <div className="ac-penalty-list">
+    <div className="space-y-3">
       {entries.map((entry) => {
         const widthPercent = Math.max(4, Math.round((entry.value / maxValue) * 100));
         return (
-          <div key={entry.key} className="ac-penalty-row">
-            <div className="ac-penalty-label">{entry.key}</div>
-            <div className="ac-penalty-track">
-              <div className="ac-penalty-bar" style={{ width: `${widthPercent}%` }} />
+          <div key={entry.key} className="flex items-center gap-3 text-sm">
+            <div className="w-24 font-medium text-gray-700 capitalize">{entry.key}</div>
+            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-amber-500 to-red-500 rounded-full transition-all duration-300"
+                style={{ width: `${widthPercent}%` }}
+              />
             </div>
-            <div className="ac-penalty-value">{entry.value}</div>
+            <div className="w-12 text-right font-semibold text-gray-800">{entry.value}</div>
           </div>
         );
       })}
@@ -50,6 +51,7 @@ const PenaltyBreakdownChart = ({ breakdown }) => {
 
 const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   const [activeTab, setActiveTab] = useState('overview');
+  const [mainView, setMainView] = useState('lectures');
   
   // Data states
   const [lecturers, setLecturers] = useState([]);
@@ -60,7 +62,6 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   const [timetables, setTimetables] = useState([]);
   const [conflicts, setConflicts] = useState([]);
   const [academicCalendar, setAcademicCalendar] = useState([]);
-  const [mainView, setMainView] = useState('lectures');
   
   // Form states
   const [lecturerForm, setLecturerForm] = useState({ name: '', department: '', email: '' });
@@ -101,12 +102,6 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   const [view3d, setView3d] = useState({ rotateX: 10, rotateZ: -18, zoom: 1 });
   const [showCalendarForm, setShowCalendarForm] = useState(false);
 
-  useEffect(() => {
-    loadAllData();
-    // loadAllData is intentionally called only on first mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const showMessage = (text, type = 'success') => {
     setMessage({ text, type });
     setTimeout(() => setMessage({ text: '', type: '' }), 5000);
@@ -116,39 +111,15 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
     const loadAllData = async () => {
       setLoading(true);
       try {
-        const loadTimetablesInitial = async () => {
-          const response = await fetch(`${apiBase}/api/academic-coordinator/timetables`, {
-            credentials: 'include'
-          });
-          const data = await response.json();
-          if (data.success) setTimetables(data.data || []);
-        };
-
-        const loadConflictsInitial = async () => {
-          const response = await fetch(`${apiBase}/api/academic-coordinator/conflicts?resolved=false`, {
-            credentials: 'include'
-          });
-          const data = await response.json();
-          if (data.success) setConflicts(data.data || []);
-        };
-
-        const loadAcademicCalendarInitial = async () => {
-          const response = await fetch(`${apiBase}/api/academic-coordinator/calendar`, {
-            credentials: 'include'
-          });
-          const data = await response.json();
-          if (data.success) setAcademicCalendar(data.data || []);
-        };
-
         await Promise.all([
           loadLecturers(),
           loadLics(),
           loadModules(),
           loadCampusStructures(),
           loadAssignments(),
-          loadTimetablesInitial(),
-          loadConflictsInitial(),
-          loadAcademicCalendarInitial()
+          loadTimetables(),
+          loadConflicts(),
+          loadAcademicCalendar()
         ]);
       } catch (err) {
         console.error('Failed to load some data:', err);
@@ -157,7 +128,6 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
         setLoading(false);
       }
     };
-
     loadAllData();
   }, [apiBase]);
 
@@ -212,9 +182,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
         credentials: 'include'
       });
       const data = await response.json();
-      if (data.success) {
-        setTimetables(data.data || []);
-      }
+      if (data.success) setTimetables(data.data || []);
     } catch (err) {
       console.error('Failed to load timetables:', err);
     }
@@ -226,9 +194,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
         credentials: 'include'
       });
       const data = await response.json();
-      if (data.success) {
-        setConflicts(data.data || []);
-      }
+      if (data.success) setConflicts(data.data || []);
     } catch (err) {
       console.error('Failed to load conflicts:', err);
     }
@@ -240,9 +206,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
         credentials: 'include'
       });
       const data = await response.json();
-      if (data.success) {
-        setAcademicCalendar(data.data || []);
-      }
+      if (data.success) setAcademicCalendar(data.data || []);
     } catch (err) {
       console.error('Failed to load academic calendar:', err);
     }
@@ -257,7 +221,6 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       showMessage('Lecturer added successfully');
       await loadLecturers();
     } catch (err) {
-      console.error('Add lecturer error:', err);
       showMessage(err.message || 'Failed to add lecturer', 'error');
     }
   };
@@ -270,30 +233,22 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       showMessage('LIC added successfully');
       await loadLics();
     } catch (err) {
-      console.error('Add LIC error:', err);
       showMessage(err.message || 'Failed to add LIC', 'error');
     }
   };
 
   const addModule = async (e) => {
     e.preventDefault();
-    
     if (!moduleForm.code || !moduleForm.name) {
       showMessage('Module code and name are required', 'error');
       return;
     }
-    
-    console.log('Submitting module:', moduleForm);
-    
     try {
-      const response = await schedulerApi.addItem('modules', moduleForm);
-      console.log('Module added response:', response);
-      
+      await schedulerApi.addItem('modules', moduleForm);
       setModuleForm({ code: '', name: '', batch_size: '', credits: '', lectures_per_week: '' });
       showMessage('Module added successfully');
       await loadModules();
     } catch (err) {
-      console.error('Add module error:', err);
       showMessage(err.message || 'Failed to add module', 'error');
     }
   };
@@ -304,7 +259,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
     setModuleForm({ ...moduleForm, code, name });
   };
 
-  const _addCampusStructure = async (e) => {
+  const addCampusStructure = async (e) => {
     e.preventDefault();
     try {
       await schedulerApi.addItem('halls', {
@@ -390,7 +345,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
         showMessage(data.message || 'Failed to approve', 'error');
       }
     } catch (err) {
-      showMessage('Failed to approve timetable', 'error',err);
+      showMessage('Failed to approve timetable', 'error');
     }
   };
 
@@ -412,7 +367,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
         showMessage(data.message || 'Failed to reject', 'error');
       }
     } catch (err) {
-      showMessage('Failed to reject timetable', 'error',err);
+      showMessage('Failed to reject timetable', 'error');
     }
   };
 
@@ -434,7 +389,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
         showMessage(data.message || 'Failed to resolve', 'error');
       }
     } catch (err) {
-      showMessage('Failed to resolve conflict', 'error', err);
+      showMessage('Failed to resolve conflict', 'error');
     }
   };
 
@@ -468,15 +423,43 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
     }
   };
 
+  const importPresetHallAllocations = async () => {
+    try {
+      setImportingHalls(true);
+      const existing = new Set(campusStructures.map(s => s.name?.toLowerCase().trim()));
+      const payloads = HALL_ALLOCATION_PRESET
+        .filter(name => !existing.has(name.toLowerCase().trim()))
+        .map(name => ({
+          name,
+          capacity: name.toLowerCase().includes('smart classroom') ? 80 : name.toLowerCase().includes('lab') ? 60 : 120,
+          features: {
+            building: name.match(/^[FG]/i) ? 'New Building' : 'Main Building',
+            floor: name.match(/[A-Z](\d)/)?.[1] || '',
+            roomType: name.toLowerCase().includes('lab') ? 'Lab' : name.toLowerCase().includes('smart classroom') ? 'Smart Classroom' : 'Hall',
+          },
+        }));
+      if (payloads.length === 0) {
+        showMessage('All preset hall allocations already exist', 'success');
+        return;
+      }
+      for (let i = 0; i < payloads.length; i += 15) {
+        await Promise.all(payloads.slice(i, i + 15).map(p => schedulerApi.addItem('halls', p)));
+      }
+      await loadCampusStructures();
+      showMessage(`${payloads.length} hall allocations added successfully`);
+    } catch (err) {
+      showMessage(err.message || 'Failed to import hall allocations', 'error');
+    } finally {
+      setImportingHalls(false);
+    }
+  };
+
   const getFeatureValue = (features, key) => {
     if (!features) return '';
     if (typeof features === 'string') {
       try {
-        const parsed = JSON.parse(features);
-        return parsed?.[key] || '';
-      } catch {
-        return '';
-      }
+        return JSON.parse(features)?.[key] || '';
+      } catch { return ''; }
     }
     return features?.[key] || '';
   };
@@ -489,633 +472,780 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
     return roomType ? roomType.charAt(0).toUpperCase() + roomType.slice(1) : 'Other';
   };
 
-  const normalizeHallName = (value) =>
-    String(value || '')
-      .toLowerCase()
-      .replace(/\s+/g, ' ')
-      .trim();
-
-  const inferBuilding = (name) => {
-    const normalized = normalizeHallName(name);
-
-    if (/^[fg]\d|\bf\d|\bg\d/.test(normalized)) return 'New Building';
-    if (/^[ab]\d|\ba\d|\bb\d/.test(normalized)) return 'Main Building';
-    if (/^e\d|\be\d/.test(normalized)) return 'Main Building';
-    return 'Specialized Facilities';
-  };
-
-  const inferFloor = (name) => {
-    const normalized = String(name || '').toUpperCase();
-    const match = normalized.match(/[A-Z](\d{3,4})/);
-    if (!match) return '';
-
-    const code = match[1];
-    return code.length === 3 ? code.charAt(0) : code.slice(0, 2);
-  };
-
-  const inferRoomType = (name) => {
-    const normalized = normalizeHallName(name);
-    if (normalized.includes('smart classroom')) return 'Smart Classroom';
-    if (normalized.includes('lab')) return 'Lab';
-    return 'Hall';
-  };
-
-  const inferCapacity = (name) => {
-    const normalized = normalizeHallName(name);
-    if (normalized.includes('&') || normalized.includes('+')) return 240;
-    if (normalized.includes('smart classroom')) return 80;
-    if (normalized.includes('lab')) return 60;
-    return 120;
-  };
-
-  const importPresetHallAllocations = async () => {
-    try {
-      setImportingHalls(true);
-      const existing = new Set(campusStructures.map((structure) => normalizeHallName(structure.name)));
-
-      const payloads = HALL_ALLOCATION_PRESET
-        .filter((name) => !existing.has(normalizeHallName(name)))
-        .map((name) => ({
-          name,
-          capacity: inferCapacity(name),
-          features: {
-            building: inferBuilding(name),
-            floor: inferFloor(name),
-            roomType: inferRoomType(name),
-          },
-        }));
-
-      if (payloads.length === 0) {
-        showMessage('All preset hall allocations already exist', 'success');
-        return;
-      }
-
-      for (let index = 0; index < payloads.length; index += 15) {
-        const chunk = payloads.slice(index, index + 15);
-        await Promise.all(chunk.map((payload) => schedulerApi.addItem('halls', payload)));
-      }
-
-      await loadCampusStructures();
-      showMessage(`${payloads.length} hall allocations added successfully`);
-    } catch (err) {
-      showMessage(err.message || 'Failed to import hall allocations', 'error');
-    } finally {
-      setImportingHalls(false);
-    }
-  };
-
-  const hallCount = campusStructures.filter((item) => getCampusType(item) === 'Hall').length;
-  const labCount = campusStructures.filter((item) => getCampusType(item) === 'Lab').length;
-  const uniqueFloorCount = new Set(
-    campusStructures
-      .map((item) => getFeatureValue(item.features, 'floor'))
-      .filter((value) => value !== null && value !== undefined && value !== '')
-  ).size;
-
-  const mainBuildingCount = campusStructures.filter(
-    (item) => getFeatureValue(item.features, 'building') === 'Main Building',
-  ).length;
-  const newBuildingCount = campusStructures.filter(
-    (item) => getFeatureValue(item.features, 'building') === 'New Building',
-  ).length;
-
+  const hallCount = campusStructures.filter(item => getCampusType(item) === 'Hall').length;
+  const labCount = campusStructures.filter(item => getCampusType(item) === 'Lab').length;
   const pendingApprovals = timetables.filter(t => t.approval_status === 'pending' || !t.approval_status).length;
   const activeConflicts = conflicts.filter(c => !c.resolved).length;
   const highSeverityConflicts = conflicts.filter(c => c.severity === 'high' && !c.resolved).length;
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-gray-600">Loading dashboard...</div>
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600">
+        <div className="text-white text-lg">Loading dashboard...</div>
       </div>
     );
   }
 
   return (
-    <div className="dashboard-container ac-dashboard">
-      <div className="dashboard-hero">
-        <div className="hero-left">
-          <h1>🎓 Academic Coordinator Dashboard</h1>
-          <p className="hero-sub">Welcome, {user?.name || 'Academic Coordinator'}! Manage timetables, resolve conflicts, and coordinate academic activities.</p>
-          <div className="stat-row">
-            <div className="stat">
-              <div className="stat-value">{timetables.length}</div>
-              <div className="stat-label">Total Timetables</div>
-            </div>
-            <div className="stat">
-              <div className="stat-value" style={{ color: pendingApprovals > 0 ? '#f59e0b' : '#10b981' }}>{pendingApprovals}</div>
-              <div className="stat-label">Pending Approval</div>
-            </div>
-            <div className="stat">
-              <div className="stat-value" style={{ color: activeConflicts > 0 ? '#ef4444' : '#10b981' }}>{activeConflicts}</div>
-              <div className="stat-label">Active Conflicts</div>
-              {highSeverityConflicts > 0 && <div className="stat-hint">⚠️ {highSeverityConflicts} high severity</div>}
-            </div>
-            <div className="stat">
-              <div className="stat-value">{campusStructures.length}</div>
-              <div className="stat-label">Resources</div>
+    <div className="min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600 p-4 md:p-8">
+      {/* Hero Section */}
+      <div className="max-w-7xl mx-auto mb-8 bg-white rounded-2xl p-6 shadow-xl">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+              🎓 Academic Coordinator Dashboard
+            </h1>
+            <p className="text-gray-600">
+              Welcome, {user?.name || 'Academic Coordinator'}! Manage timetables, resolve conflicts, and coordinate academic activities.
+            </p>
+            <div className="flex flex-wrap gap-4 mt-4">
+              <div className="bg-gray-50 rounded-lg p-3 min-w-[100px]">
+                <div className="text-2xl font-bold text-indigo-600">{timetables.length}</div>
+                <div className="text-sm text-gray-600">Total Timetables</div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3 min-w-[100px]">
+                <div className={`text-2xl font-bold ${pendingApprovals > 0 ? 'text-amber-500' : 'text-green-600'}`}>
+                  {pendingApprovals}
+                </div>
+                <div className="text-sm text-gray-600">Pending Approval</div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3 min-w-[100px]">
+                <div className={`text-2xl font-bold ${activeConflicts > 0 ? 'text-red-500' : 'text-green-600'}`}>
+                  {activeConflicts}
+                </div>
+                <div className="text-sm text-gray-600">Active Conflicts</div>
+                {highSeverityConflicts > 0 && (
+                  <div className="text-xs text-red-500 mt-1">⚠️ {highSeverityConflicts} high severity</div>
+                )}
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3 min-w-[100px]">
+                <div className="text-2xl font-bold text-indigo-600">{campusStructures.length}</div>
+                <div className="text-sm text-gray-600">Resources</div>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="hero-right">
-          <div className="avatar">{user?.name?.charAt(0) || 'A'}</div>
-          <div className="quick-actions">
-            <button className="primary" onClick={() => setActiveTab('timetables')}>Review Timetables</button>
-            <button className="primary" onClick={() => setActiveTab('reassignment')}>Reassign Instructors</button>
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-lg">
+              {user?.name?.charAt(0) || 'A'}
+            </div>
+            <button 
+              onClick={() => setActiveTab('timetables')}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-all shadow-md hover:shadow-lg"
+            >
+              Review Timetables
+            </button>
+            <button 
+              onClick={() => setActiveTab('reassignment')}
+              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-all shadow-md hover:shadow-lg"
+            >
+              Reassign Instructors
+            </button>
           </div>
         </div>
       </div>
 
+      {/* Message Toast */}
       {message.text && (
-        <div className={`ac-message ${message.type === 'error' ? 'ac-message-error' : 'ac-message-success'}`}>
+        <div className={`max-w-7xl mx-auto mb-4 p-3 rounded-lg text-center ${
+          message.type === 'error' 
+            ? 'bg-red-100 text-red-700 border border-red-200' 
+            : 'bg-green-100 text-green-700 border border-green-200'
+        }`}>
           {message.text}
         </div>
       )}
-      {/* Top Menu */}
-      <div className="ac-main-menu-wrap">
-        <div className="ac-main-menu" role="tablist" aria-label="Main dashboard views">
+
+      {/* Main Menu Tabs */}
+      <div className="max-w-7xl mx-auto mb-6">
+        <div className="bg-white rounded-xl p-2 flex gap-2 shadow-lg">
           <button
             onClick={() => setMainView('lectures')}
-            className={`ac-main-menu-btn ${mainView === 'lectures' ? 'is-active' : ''}`}
+            className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
+              mainView === 'lectures' 
+                ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md' 
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
           >
             📚 Lectures
           </button>
-
           <button
             onClick={() => setMainView('hallAllocation')}
-            className={`ac-main-menu-btn ${mainView === 'hallAllocation' ? 'is-active' : ''}`}
+            className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
+              mainView === 'hallAllocation' 
+                ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md' 
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
           >
             🏛️ Hall Allocation
           </button>
         </div>
       </div>
-{mainView === 'lectures' && (
-      <div className="dashboard-main">
-        <div className="left-col">
-          {/* Overview Tab Content */}
-          {activeTab === 'overview' && (
-            <>
-              <div className="action-card">
-                <div>
-                  <h3>➕ Add Lecturer</h3>
-                  <p>Add professors and lecturers with department details</p>
-                </div>
-                <button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('lecturerForm').scrollIntoView({ behavior: 'smooth' })}>Add Now</button>
-              </div>
-              
-              <div className="action-card">
-                <div>
-                  <h3>👔 Add LIC</h3>
-                  <p>Create module leadership records for allocation</p>
-                </div>
-                <button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('licForm').scrollIntoView({ behavior: 'smooth' })}>Add Now</button>
-              </div>
-              
-              <div className="action-card">
-                <div>
-                  <h3>📚 Add Module</h3>
-                  <p>Add new modules from catalog or custom</p>
-                </div>
-                <button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('moduleForm').scrollIntoView({ behavior: 'smooth' })}>Add Now</button>
-              </div>
-              
-              <div className="action-card">
-                <div>
-                  <h3>🔗 Assign Module</h3>
-                  <p>Map modules to lecturers and LICs</p>
-                </div>
-                <button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('assignmentForm').scrollIntoView({ behavior: 'smooth' })}>Assign Now</button>
-              </div>
 
-              <div className="action-card">
-                <div>
-                  <h3>🧩 Post-Generation Instructor Drag & Drop</h3>
-                  <p>Drag lecturers onto generated assignments to rebalance delivery ownership</p>
-                </div>
-                <button className="action-btn" onClick={() => setActiveTab('reassignment')}>Open Board</button>
-              </div>
-            </>
-          )}
-
-          {activeTab === 'reassignment' && (
-            <div className="panel">
-              <h3>🧩 Post-Generation Instructor Reassignment</h3>
-              <p className="hero-sub">Drag an instructor onto an assignment to update lecturer allocation after timetable generation.</p>
-              <div className="ac-dnd-board mt-4">
-                <div className="ac-dnd-column">
-                  <h3>Available Instructors</h3>
-                  <div className="ac-dnd-list">
-                    {lecturers.map((lecturer) => (
-                      <div
-                        key={lecturer.id}
-                        className="ac-dnd-card"
-                        draggable
-                        onDragStart={() => setDragLecturerId(lecturer.id)}
-                        onDragEnd={() => {
-                          setDragLecturerId(null);
-                          setHoveredAssignmentId(null);
-                        }}
-                      >
-                        <strong>{lecturer.name}</strong>
-                        <span>{lecturer.department || 'General'}</span>
+      {/* Main Content */}
+      {mainView === 'lectures' && (
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
+          {/* Left Column */}
+          <div className="space-y-4">
+            {/* Quick Action Cards */}
+            {activeTab === 'overview' && (
+              <>
+                {[
+                  { id: 'lecturerForm', emoji: '➕', title: 'Add Lecturer', desc: 'Add professors and lecturers with department details' },
+                  { id: 'licForm', emoji: '👔', title: 'Add LIC', desc: 'Create module leadership records for allocation' },
+                  { id: 'moduleForm', emoji: '📚', title: 'Add Module', desc: 'Add new modules from catalog or custom' },
+                  { id: 'assignmentForm', emoji: '🔗', title: 'Assign Module', desc: 'Map modules to lecturers and LICs' },
+                ].map((card) => (
+                  <div key={card.id} className="bg-white rounded-xl p-5 shadow-md hover:shadow-lg transition-all group">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">{card.emoji} {card.title}</h3>
+                        <p className="text-sm text-gray-500 mt-1">{card.desc}</p>
                       </div>
-                    ))}
-                    {lecturers.length === 0 && <div className="ac-empty-row">No instructors available</div>}
+                      <button 
+                        onClick={() => document.getElementById(card.id).scrollIntoView({ behavior: 'smooth' })}
+                        className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:shadow-md transition-all group-hover:scale-105"
+                      >
+                        Add Now
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                
+                <div className="bg-white rounded-xl p-5 shadow-md hover:shadow-lg transition-all">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">🧩 Post-Generation Instructor Drag & Drop</h3>
+                      <p className="text-sm text-gray-500 mt-1">Drag lecturers onto generated assignments to rebalance delivery ownership</p>
+                    </div>
+                    <button 
+                      onClick={() => setActiveTab('reassignment')}
+                      className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:shadow-md transition-all"
+                    >
+                      Open Board
+                    </button>
                   </div>
                 </div>
+              </>
+            )}
 
-                <div className="ac-dnd-column">
-                  <h3>Generated Module Assignments</h3>
-                  <div className="ac-dnd-list">
-                    {assignments.map((assignment) => (
-                      <div
-                        key={assignment.id}
-                        className={`ac-dnd-dropzone ${hoveredAssignmentId === assignment.id ? 'ac-dnd-dropzone-active' : ''}`}
-                        onDragOver={(event) => {
-                          event.preventDefault();
-                          setHoveredAssignmentId(assignment.id);
-                        }}
-                        onDragLeave={() => setHoveredAssignmentId((current) => (current === assignment.id ? null : current))}
-                        onDrop={async (event) => {
-                          event.preventDefault();
-                          await reassignInstructor(assignment.id, dragLecturerId);
-                          setDragLecturerId(null);
-                          setHoveredAssignmentId(null);
-                        }}
-                      >
-                        <strong>{assignment.module_code} - {assignment.module_name}</strong>
-                        <span>Current: {assignment.lecturer_name || 'Unassigned'}</span>
-                        <span>LIC: {assignment.lic_name || '-'}</span>
-                        <span>Year/Sem: Y{assignment.academic_year}/S{assignment.semester || '-'}</span>
-                      </div>
-                    ))}
-                    {assignments.length === 0 && <div className="ac-empty-row">No assignments to reassign</div>}
+            {/* Reassignment Tab */}
+            {activeTab === 'reassignment' && (
+              <div className="bg-white rounded-xl p-6 shadow-md">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">🧩 Post-Generation Instructor Reassignment</h3>
+                <p className="text-sm text-gray-500 mb-4">Drag an instructor onto an assignment to update lecturer allocation after timetable generation.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Instructors Column */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h4 className="font-semibold text-gray-800 mb-3">Available Instructors</h4>
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {lecturers.map((lecturer) => (
+                        <div
+                          key={lecturer.id}
+                          className="bg-white rounded-lg p-3 border border-gray-200 cursor-grab active:cursor-grabbing hover:shadow-md transition-all"
+                          draggable
+                          onDragStart={() => setDragLecturerId(lecturer.id)}
+                          onDragEnd={() => {
+                            setDragLecturerId(null);
+                            setHoveredAssignmentId(null);
+                          }}
+                        >
+                          <strong className="block text-gray-800">{lecturer.name}</strong>
+                          <span className="text-xs text-gray-500">{lecturer.department || 'General'}</span>
+                        </div>
+                      ))}
+                      {lecturers.length === 0 && (
+                        <div className="text-center py-8 text-gray-500">No instructors available</div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Assignments Column */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h4 className="font-semibold text-gray-800 mb-3">Generated Module Assignments</h4>
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {assignments.map((assignment) => (
+                        <div
+                          key={assignment.id}
+                          className={`bg-white rounded-lg p-3 border-2 transition-all cursor-pointer ${
+                            hoveredAssignmentId === assignment.id 
+                              ? 'border-green-500 bg-green-50' 
+                              : 'border-dashed border-gray-300 hover:border-indigo-300'
+                          }`}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            setHoveredAssignmentId(assignment.id);
+                          }}
+                          onDragLeave={() => setHoveredAssignmentId(null)}
+                          onDrop={async (e) => {
+                            e.preventDefault();
+                            await reassignInstructor(assignment.id, dragLecturerId);
+                            setDragLecturerId(null);
+                            setHoveredAssignmentId(null);
+                          }}
+                        >
+                          <strong className="block text-gray-800 text-sm">{assignment.module_code} - {assignment.module_name}</strong>
+                          <span className="text-xs text-gray-500 block">Current: {assignment.lecturer_name || 'Unassigned'}</span>
+                          <span className="text-xs text-gray-500 block">LIC: {assignment.lic_name || '-'}</span>
+                          <span className="text-xs text-gray-500 block">Year/Sem: Y{assignment.academic_year}/S{assignment.semester || '-'}</span>
+                        </div>
+                      ))}
+                      {assignments.length === 0 && (
+                        <div className="text-center py-8 text-gray-500">No assignments to reassign</div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Timetables Tab Content */}
-          {activeTab === 'timetables' && (
-            <div className="panel">
-              <h3>📅 Timetables for Review</h3>
-              <div className="ac-table-wrapper">
-                <table className="ac-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Semester</th>
-                      <th>Year</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {timetables.length === 0 && (
+            {/* Timetables Tab */}
+            {activeTab === 'timetables' && (
+              <div className="bg-white rounded-xl p-6 shadow-md overflow-hidden">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">📅 Timetables for Review</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
                       <tr>
-                        <td colSpan="5" className="ac-empty-row">No timetables available</td>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Semester</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Year</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                       </tr>
-                    )}
-                    {timetables.map((timetable) => (
-                      <tr key={timetable.id}>
-                        <td>{timetable.name}</td>
-                        <td>{timetable.semester}</td>
-                        <td>{timetable.year}</td>
-                        <td>
-                          <span className={`ac-status ${timetable.approval_status || 'pending'}`}>
-                            {timetable.approval_status || 'pending'}
-                          </span>
-                        </td>
-                        <td>
-                          {(timetable.approval_status !== 'approved') && (
-                            <>
-                              <button className="ac-approve-btn" onClick={() => approveTimetable(timetable.id)}>✓ Approve</button>
-                              <button className="ac-reject-btn" onClick={() => rejectTimetable(timetable.id)}>✗ Reject</button>
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Conflicts Tab Content */}
-          {activeTab === 'conflicts' && (
-            <div className="panel">
-              <h3>⚠️ Scheduling Conflicts</h3>
-              {highSeverityConflicts > 0 && (
-                <div className="bg-red-50 text-red-700 p-3 rounded-lg mb-4 border border-red-200">
-                  ⚠️ {highSeverityConflicts} high severity conflicts require immediate attention!
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {timetables.length === 0 && (
+                        <tr>
+                          <td colSpan="5" className="px-4 py-8 text-center text-gray-500">No timetables available</td>
+                        </tr>
+                      )}
+                      {timetables.map((timetable) => (
+                        <tr key={timetable.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm text-gray-900">{timetable.name}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{timetable.semester}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{timetable.year}</td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              timetable.approval_status === 'approved' ? 'bg-green-100 text-green-800' :
+                              timetable.approval_status === 'rejected' ? 'bg-red-100 text-red-800' :
+                              'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {timetable.approval_status || 'pending'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 space-x-2">
+                            {timetable.approval_status !== 'approved' && (
+                              <>
+                                <button onClick={() => approveTimetable(timetable.id)} 
+                                  className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm transition-all">
+                                  ✓ Approve
+                                </button>
+                                <button onClick={() => rejectTimetable(timetable.id)} 
+                                  className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-all">
+                                  ✗ Reject
+                                </button>
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              )}
-              <div className="ac-table-wrapper">
-                <table className="ac-table">
-                  <thead>
-                    <tr>
-                      <th>Type</th>
-                      <th>Description</th>
-                      <th>Severity</th>
-                      <th>Timetable</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {conflicts.length === 0 && (
-                      <tr>
-                        <td colSpan="5" className="ac-empty-row">No conflicts found</td>
-                      </tr>
-                    )}
-                    {conflicts.map((conflict) => (
-                      <tr key={conflict.id}>
-                        <td>{conflict.conflict_type}</td>
-                        <td>{conflict.description}</td>
-                        <td><span className={`ac-severity ${conflict.severity}`}>{conflict.severity}</span></td>
-                        <td>{conflict.timetable_name}</td>
-                        <td>
-                          {!conflict.resolved && (
-                            <button className="ac-resolve-btn" onClick={() => resolveConflict(conflict.id)}>Resolve</button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Resources Tab Content */}
-          {activeTab === 'resources' && (
-            <div className="panel">
-              <h3>🏛️ Campus Resources</h3>
-              <p>Halls: {hallCount} • Labs: {labCount} • Floors: {uniqueFloorCount}</p>
-              <p>Main Building (A/B/E): {mainBuildingCount} • New Building (F/G): {newBuildingCount}</p>
-              <div className="mt-3 mb-3">
+            {/* Conflicts Tab */}
+            {activeTab === 'conflicts' && (
+              <div className="bg-white rounded-xl p-6 shadow-md overflow-hidden">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">⚠️ Scheduling Conflicts</h3>
+                {highSeverityConflicts > 0 && (
+                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                    ⚠️ {highSeverityConflicts} high severity conflicts require immediate attention!
+                  </div>
+                )}
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Severity</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timetable</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {conflicts.length === 0 && (
+                        <tr>
+                          <td colSpan="5" className="px-4 py-8 text-center text-gray-500">No conflicts found</td>
+                        </tr>
+                      )}
+                      {conflicts.map((conflict) => (
+                        <tr key={conflict.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm text-gray-900">{conflict.conflict_type}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{conflict.description}</td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              conflict.severity === 'high' ? 'bg-red-100 text-red-800' :
+                              conflict.severity === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-blue-100 text-blue-800'
+                            }`}>
+                              {conflict.severity}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{conflict.timetable_name}</td>
+                          <td className="px-4 py-3">
+                            {!conflict.resolved && (
+                              <button onClick={() => resolveConflict(conflict.id)} 
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-sm transition-all">
+                                Resolve
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Resources Tab */}
+            {activeTab === 'resources' && (
+              <div className="bg-white rounded-xl p-6 shadow-md overflow-hidden">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">🏛️ Campus Resources</h3>
+                <p className="text-sm text-gray-600 mb-2">Halls: {hallCount} • Labs: {labCount}</p>
                 <button
-                  className="dashboard-btn"
                   onClick={importPresetHallAllocations}
                   disabled={importingHalls}
+                  className="mb-4 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition-all disabled:opacity-50"
                 >
-                  {importingHalls ? 'Importing Hall Allocations...' : 'Import Academic Hall Allocation Structure'}
+                  {importingHalls ? 'Importing...' : 'Import Academic Hall Allocation Structure'}
+                </button>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Building</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Floor</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Capacity</th>
+                       </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {campusStructures.map((structure) => (
+                        <tr key={structure.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm text-gray-900">{structure.name}</td>
+                          <td className="px-4 py-3">
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                              {getCampusType(structure)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{getFeatureValue(structure.features, 'building') || '-'}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{getFeatureValue(structure.features, 'floor') || '-'}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{structure.capacity || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Calendar Tab */}
+            {activeTab === 'calendar' && (
+              <div className="bg-white rounded-xl p-6 shadow-md">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">📆 Academic Calendar</h3>
+                  <button 
+                    onClick={() => setShowCalendarForm(!showCalendarForm)}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition-all"
+                  >
+                    {showCalendarForm ? 'Cancel' : '+ Add Event'}
+                  </button>
+                </div>
+                
+                {showCalendarForm && (
+                  <form onSubmit={addCalendarEvent} className="mb-6 p-4 bg-gray-50 rounded-lg">
+                    <input 
+                      type="text"
+                      className="w-full mb-2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-800" 
+                      placeholder="Event Name" 
+                      value={calendarEventForm.event_name}
+                      onChange={(e) => setCalendarEventForm({ ...calendarEventForm, event_name: e.target.value })} 
+                      required 
+                    />
+                    <select 
+                      className="w-full mb-2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-800 bg-white" 
+                      value={calendarEventForm.event_type}
+                      onChange={(e) => setCalendarEventForm({ ...calendarEventForm, event_type: e.target.value })}
+                    >
+                      <option value="semester_start" className="text-gray-800">Semester Start</option>
+                      <option value="semester_end" className="text-gray-800">Semester End</option>
+                      <option value="exam_period" className="text-gray-800">Exam Period</option>
+                      <option value="holiday" className="text-gray-800">Holiday</option>
+                      <option value="special_event" className="text-gray-800">Special Event</option>
+                    </select>
+                    <input 
+                      type="date" 
+                      className="w-full mb-2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-800" 
+                      value={calendarEventForm.start_date}
+                      onChange={(e) => setCalendarEventForm({ ...calendarEventForm, start_date: e.target.value })} 
+                      required 
+                    />
+                    <input 
+                      type="date" 
+                      className="w-full mb-2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-800" 
+                      value={calendarEventForm.end_date}
+                      onChange={(e) => setCalendarEventForm({ ...calendarEventForm, end_date: e.target.value })} 
+                      required 
+                    />
+                    <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-all">
+                      Add Event
+                    </button>
+                  </form>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {academicCalendar.map((event) => (
+                    <div key={event.id} className="bg-gray-50 rounded-lg p-4 border-l-4 border-indigo-500 hover:shadow-md transition-all">
+                      <div className={`inline-block px-2 py-1 rounded-full text-xs font-medium mb-2 ${
+                        event.event_type === 'semester_start' ? 'bg-green-100 text-green-800' :
+                        event.event_type === 'semester_end' ? 'bg-red-100 text-red-800' :
+                        event.event_type === 'exam_period' ? 'bg-yellow-100 text-yellow-800' :
+                        event.event_type === 'holiday' ? 'bg-blue-100 text-blue-800' :
+                        'bg-purple-100 text-purple-800'
+                      }`}>
+                        {event.event_type.replace('_', ' ')}
+                      </div>
+                      <h4 className="font-semibold text-gray-900 mb-1">{event.event_name}</h4>
+                      <p className="text-xs text-gray-500 mb-1">
+                        📅 {new Date(event.start_date).toLocaleDateString()} - {new Date(event.end_date).toLocaleDateString()}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        📚 Year: {event.academic_year} | Semester: {event.semester || 'N/A'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right Column */}
+          <div className="space-y-4">
+            {/* Quick Actions */}
+            <div className="bg-white rounded-xl p-5 shadow-md">
+              <h3 className="font-semibold text-gray-900 mb-3">⚡ Quick Actions</h3>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { tab: 'timetables', label: '📅 Review Timetables' },
+                  { tab: 'conflicts', label: '⚠️ View Conflicts' },
+                  { tab: 'resources', label: '🏛️ Manage Resources' },
+                  { tab: 'calendar', label: '📆 Calendar' },
+                  { tab: 'reassignment', label: '🧩 Reassign Instructors' },
+                ].map((item) => (
+                  <button
+                    key={item.tab}
+                    onClick={() => setActiveTab(item.tab)}
+                    className="px-3 py-1.5 bg-gray-100 hover:bg-indigo-100 text-gray-700 hover:text-indigo-700 rounded-full text-sm transition-all"
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Penalty Breakdown */}
+            <div className="bg-white rounded-xl p-5 shadow-md">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-semibold text-gray-900">📊 Penalty Breakdown (w1–w5)</h3>
+                <button 
+                  onClick={loadPenaltyBreakdown} 
+                  disabled={penaltyLoading}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-lg text-sm transition-all disabled:opacity-50"
+                >
+                  {penaltyLoading ? 'Loading...' : 'Refresh'}
                 </button>
               </div>
-              <div className="ac-table-wrapper">
-                <table className="ac-table">
-                  <thead>
+              <PenaltyBreakdownChart breakdown={penaltyBreakdown} />
+            </div>
+
+            {/* Add Lecturer Form */}
+            <div className="bg-white rounded-xl p-5 shadow-md" id="lecturerForm">
+              <h3 className="font-semibold text-gray-900 mb-3">➕ Add Lecturer</h3>
+              <form onSubmit={addLecturer} className="space-y-3">
+                <input 
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-800 bg-white" 
+                  placeholder="Lecturer name" 
+                  value={lecturerForm.name}
+                  onChange={(e) => setLecturerForm({ ...lecturerForm, name: e.target.value })} 
+                  required 
+                />
+                <input 
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-800 bg-white" 
+                  placeholder="Department" 
+                  value={lecturerForm.department}
+                  onChange={(e) => setLecturerForm({ ...lecturerForm, department: e.target.value })} 
+                />
+                <input 
+                  type="email"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-800 bg-white" 
+                  placeholder="Email" 
+                  value={lecturerForm.email}
+                  onChange={(e) => setLecturerForm({ ...lecturerForm, email: e.target.value })} 
+                />
+                <button type="submit" className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white py-2 rounded-lg hover:shadow-md transition-all">
+                  Add Lecturer
+                </button>
+              </form>
+            </div>
+
+            {/* Add LIC Form */}
+            <div className="bg-white rounded-xl p-5 shadow-md" id="licForm">
+              <h3 className="font-semibold text-gray-900 mb-3">👔 Add LIC</h3>
+              <form onSubmit={addLic} className="space-y-3">
+                <input 
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-800 bg-white" 
+                  placeholder="LIC name" 
+                  value={licForm.name}
+                  onChange={(e) => setLicForm({ ...licForm, name: e.target.value })} 
+                  required 
+                />
+                <input 
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-800 bg-white" 
+                  placeholder="Department" 
+                  value={licForm.department}
+                  onChange={(e) => setLicForm({ ...licForm, department: e.target.value })} 
+                />
+                <button type="submit" className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white py-2 rounded-lg hover:shadow-md transition-all">
+                  Add LIC
+                </button>
+              </form>
+            </div>
+
+            {/* Add Module Form */}
+            <div className="bg-white rounded-xl p-5 shadow-md" id="moduleForm">
+              <h3 className="font-semibold text-gray-900 mb-3">📚 Add Module</h3>
+              <form onSubmit={addModule} className="space-y-3">
+                <select 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-800 bg-white" 
+                  value={selectedCatalogModule}
+                  onChange={(e) => setSelectedCatalogModule(e.target.value)}
+                >
+                  <option value="" className="text-gray-500">Select from catalog</option>
+                  {moduleCatalog.map((module) => (
+                    <option key={`${module.code}-${module.name}`} value={`${module.code}::${module.name}`} className="text-gray-800">
+                      {module.code} - {module.name}
+                    </option>
+                  ))}
+                </select>
+                <button type="button" onClick={applyCatalogModule} 
+                  className="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 rounded-lg text-sm transition-all">
+                  Use Selected
+                </button>
+                <input 
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-800 bg-white" 
+                  placeholder="Module code (required)" 
+                  value={moduleForm.code}
+                  onChange={(e) => setModuleForm({ ...moduleForm, code: e.target.value })} 
+                  required 
+                />
+                <input 
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-800 bg-white" 
+                  placeholder="Module name (required)" 
+                  value={moduleForm.name}
+                  onChange={(e) => setModuleForm({ ...moduleForm, name: e.target.value })} 
+                  required 
+                />
+                <input 
+                  type="number"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-800 bg-white" 
+                  placeholder="Credits (optional)" 
+                  value={moduleForm.credits}
+                  onChange={(e) => setModuleForm({ ...moduleForm, credits: e.target.value })} 
+                />
+                <input 
+                  type="number"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-800 bg-white" 
+                  placeholder="Lectures per week (optional)" 
+                  value={moduleForm.lectures_per_week}
+                  onChange={(e) => setModuleForm({ ...moduleForm, lectures_per_week: e.target.value })} 
+                />
+                <button type="submit" className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white py-2 rounded-lg hover:shadow-md transition-all">
+                  Add Module
+                </button>
+              </form>
+            </div>
+
+            {/* Add Assignment Form */}
+            <div className="bg-white rounded-xl p-5 shadow-md" id="assignmentForm">
+              <h3 className="font-semibold text-gray-900 mb-3">🔗 Assign Module</h3>
+              <form onSubmit={addAssignment} className="space-y-3">
+                <select 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-800 bg-white" 
+                  value={assignmentForm.moduleId}
+                  onChange={(e) => setAssignmentForm({ ...assignmentForm, moduleId: e.target.value })} 
+                  required
+                >
+                  <option value="" className="text-gray-500">Select module</option>
+                  {modules.map((module) => (
+                    <option key={module.id} value={module.id} className="text-gray-800">{module.code} - {module.name}</option>
+                  ))}
+                </select>
+                <select 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-800 bg-white" 
+                  value={assignmentForm.lecturerId}
+                  onChange={(e) => setAssignmentForm({ ...assignmentForm, lecturerId: e.target.value })} 
+                  required
+                >
+                  <option value="" className="text-gray-500">Select lecturer</option>
+                  {lecturers.map((lecturer) => (
+                    <option key={lecturer.id} value={lecturer.id} className="text-gray-800">{lecturer.name}</option>
+                  ))}
+                </select>
+                <select 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-800 bg-white" 
+                  value={assignmentForm.licId}
+                  onChange={(e) => setAssignmentForm({ ...assignmentForm, licId: e.target.value })} 
+                  required
+                >
+                  <option value="" className="text-gray-500">Select LIC</option>
+                  {lics.map((lic) => (
+                    <option key={lic.id} value={lic.id} className="text-gray-800">{lic.name}</option>
+                  ))}
+                </select>
+                <select 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-800 bg-white" 
+                  value={assignmentForm.academicYear}
+                  onChange={(e) => setAssignmentForm({ ...assignmentForm, academicYear: e.target.value })}
+                >
+                  <option value="1" className="text-gray-800">Year 1</option>
+                  <option value="2" className="text-gray-800">Year 2</option>
+                  <option value="3" className="text-gray-800">Year 3</option>
+                  <option value="4" className="text-gray-800">Year 4</option>
+                </select>
+                <button type="submit" className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white py-2 rounded-lg hover:shadow-md transition-all">
+                  Create Assignment
+                </button>
+              </form>
+            </div>
+
+            {/* Current Assignments */}
+            <div className="bg-white rounded-xl p-5 shadow-md">
+              <h3 className="font-semibold text-gray-900 mb-3">📋 Current Assignments</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
                     <tr>
-                      <th>Name</th>
-                      <th>Type</th>
-                      <th>Building</th>
-                      <th>Floor</th>
-                      <th>Capacity</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Module</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Lecturer</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Year/Sem</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase"></th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {campusStructures.map((structure) => (
-                      <tr key={structure.id}>
-                        <td>{structure.name}</td>
-                        <td><span className="ac-type-pill">{getCampusType(structure)}</span></td>
-                        <td>{getFeatureValue(structure.features, 'building') || '-'}</td>
-                        <td>{getFeatureValue(structure.features, 'floor') || '-'}</td>
-                        <td>{structure.capacity || '-'}</td>
+                  <tbody className="divide-y divide-gray-200">
+                    {assignments.slice(0, 5).map((assignment) => (
+                      <tr key={assignment.id} className="hover:bg-gray-50">
+                        <td className="px-3 py-2 text-sm text-gray-900">{assignment.module_code}</td>
+                        <td className="px-3 py-2 text-sm text-gray-600">{assignment.lecturer_name}</td>
+                        <td className="px-3 py-2 text-sm text-gray-600">Y{assignment.academic_year}/S{assignment.semester}</td>
+                        <td className="px-3 py-2">
+                          <button onClick={() => removeAssignment(assignment.id)} 
+                            className="text-red-600 hover:text-red-800 text-sm transition-all">
+                            ✗ Remove
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             </div>
-          )}
-
-          {/* Calendar Tab Content */}
-          {activeTab === 'calendar' && (
-            <div className="panel">
-              <div className="flex justify-between items-center mb-4">
-                <h3>📆 Academic Calendar</h3>
-                <button className="primary" onClick={() => setShowCalendarForm(!showCalendarForm)}>
-                  {showCalendarForm ? 'Cancel' : '+ Add Event'}
-                </button>
-              </div>
-              
-              {showCalendarForm && (
-                <form onSubmit={addCalendarEvent} className="mb-5 p-4 bg-gray-50 rounded-lg">
-                  <input className="ac-input mb-2" placeholder="Event Name" value={calendarEventForm.event_name}
-                    onChange={(e) => setCalendarEventForm({ ...calendarEventForm, event_name: e.target.value })} required />
-                  <select className="ac-input mb-2" value={calendarEventForm.event_type}
-                    onChange={(e) => setCalendarEventForm({ ...calendarEventForm, event_type: e.target.value })}>
-                    <option value="semester_start">Semester Start</option>
-                    <option value="semester_end">Semester End</option>
-                    <option value="exam_period">Exam Period</option>
-                    <option value="holiday">Holiday</option>
-                    <option value="special_event">Special Event</option>
-                  </select>
-                  <input className="ac-input mb-2" type="date" placeholder="Start Date" value={calendarEventForm.start_date}
-                    onChange={(e) => setCalendarEventForm({ ...calendarEventForm, start_date: e.target.value })} required />
-                  <input className="ac-input mb-2" type="date" placeholder="End Date" value={calendarEventForm.end_date}
-                    onChange={(e) => setCalendarEventForm({ ...calendarEventForm, end_date: e.target.value })} required />
-                  <button className="dashboard-btn w-full" type="submit">Add Event</button>
-                </form>
-              )}
-
-              <div className="ac-calendar-grid">
-                {academicCalendar.map((event) => (
-                  <div key={event.id} className="ac-calendar-card">
-                    <div className={`ac-calendar-type ${event.event_type}`}>{event.event_type.replace('_', ' ')}</div>
-                    <h3>{event.event_name}</h3>
-                    <p>📅 {new Date(event.start_date).toLocaleDateString()} - {new Date(event.end_date).toLocaleDateString()}</p>
-                    <p>📚 Year: {event.academic_year} | Semester: {event.semester || 'N/A'}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="right-col">
-          {/* Quick Actions */}
-          <div className="panel">
-            <h3>⚡ Quick Actions</h3>
-            <div className="shortcuts">
-              <div className="chip" onClick={() => setActiveTab('timetables')}>📅 Review Timetables</div>
-              <div className="chip" onClick={() => setActiveTab('conflicts')}>⚠️ View Conflicts</div>
-              <div className="chip" onClick={() => setActiveTab('resources')}>🏛️ Manage Resources</div>
-              <div className="chip" onClick={() => setActiveTab('calendar')}>📆 Calendar</div>
-              <div className="chip" onClick={() => setActiveTab('reassignment')}>🧩 Reassign Instructors</div>
-            </div>
-          </div>
-
-          <div className="panel">
-            <div className="flex items-center justify-between mb-3">
-              <h3>📊 Penalty Breakdown (w1–w5)</h3>
-              <button className="dashboard-btn" onClick={loadPenaltyBreakdown} disabled={penaltyLoading}>
-                {penaltyLoading ? 'Loading...' : 'Refresh'}
-              </button>
-            </div>
-            <PenaltyBreakdownChart breakdown={penaltyBreakdown} />
-          </div>
-
-          {/* Add Lecturer Form */}
-          <div className="panel" id="lecturerForm">
-            <h3>➕ Add Lecturer</h3>
-            <form onSubmit={addLecturer} className="ac-form">
-              <input className="ac-input" placeholder="Lecturer name" value={lecturerForm.name}
-                onChange={(e) => setLecturerForm({ ...lecturerForm, name: e.target.value })} required />
-              <input className="ac-input" placeholder="Department" value={lecturerForm.department}
-                onChange={(e) => setLecturerForm({ ...lecturerForm, department: e.target.value })} />
-              <input className="ac-input" placeholder="Email" value={lecturerForm.email}
-                onChange={(e) => setLecturerForm({ ...lecturerForm, email: e.target.value })} />
-              <button className="dashboard-btn" type="submit">Add Lecturer</button>
-            </form>
-          </div>
-
-          {/* Add LIC Form */}
-          <div className="panel" id="licForm">
-            <h3>👔 Add LIC</h3>
-            <form onSubmit={addLic} className="ac-form">
-              <input className="ac-input" placeholder="LIC name" value={licForm.name}
-                onChange={(e) => setLicForm({ ...licForm, name: e.target.value })} required />
-              <input className="ac-input" placeholder="Department" value={licForm.department}
-                onChange={(e) => setLicForm({ ...licForm, department: e.target.value })} />
-              <button className="dashboard-btn" type="submit">Add LIC</button>
-            </form>
-          </div>
-
-          {/* Add Module Form */}
-          <div className="panel" id="moduleForm">
-            <h3>📚 Add Module</h3>
-            <form onSubmit={addModule} className="ac-form">
-              <select className="ac-input" value={selectedCatalogModule}
-                onChange={(e) => setSelectedCatalogModule(e.target.value)}>
-                <option value="">Select from catalog</option>
-                {moduleCatalog.map((module) => (
-                  <option key={`${module.code}-${module.name}`} value={`${module.code}::${module.name}`}>
-                    {module.code} - {module.name}
-                  </option>
-                ))}
-              </select>
-              <button type="button" className="dashboard-btn ac-inline-btn" onClick={applyCatalogModule}>
-                Use Selected
-              </button>
-              <input className="ac-input" placeholder="Module code (required)" value={moduleForm.code}
-                onChange={(e) => setModuleForm({ ...moduleForm, code: e.target.value })} required />
-              <input className="ac-input" placeholder="Module name (required)" value={moduleForm.name}
-                onChange={(e) => setModuleForm({ ...moduleForm, name: e.target.value })} required />
-              <input className="ac-input" placeholder="Credits (optional)" value={moduleForm.credits}
-                onChange={(e) => setModuleForm({ ...moduleForm, credits: e.target.value })} />
-              <input className="ac-input" placeholder="Lectures per week (optional)" value={moduleForm.lectures_per_week}
-                onChange={(e) => setModuleForm({ ...moduleForm, lectures_per_week: e.target.value })} />
-              <button className="dashboard-btn" type="submit">Add Module</button>
-            </form>
-          </div>
-
-          {/* Add Assignment Form */}
-          <div className="panel" id="assignmentForm">
-            <h3>🔗 Assign Module</h3>
-            <form onSubmit={addAssignment} className="ac-form">
-              <select className="ac-input" value={assignmentForm.moduleId}
-                onChange={(e) => setAssignmentForm({ ...assignmentForm, moduleId: e.target.value })} required>
-                <option value="">Select module</option>
-                {modules.map((module) => (
-                  <option key={module.id} value={module.id}>{module.code} - {module.name}</option>
-                ))}
-              </select>
-              <select className="ac-input" value={assignmentForm.lecturerId}
-                onChange={(e) => setAssignmentForm({ ...assignmentForm, lecturerId: e.target.value })} required>
-                <option value="">Select lecturer</option>
-                {lecturers.map((lecturer) => (
-                  <option key={lecturer.id} value={lecturer.id}>{lecturer.name}</option>
-                ))}
-              </select>
-              <select className="ac-input" value={assignmentForm.licId}
-                onChange={(e) => setAssignmentForm({ ...assignmentForm, licId: e.target.value })} required>
-                <option value="">Select LIC</option>
-                {lics.map((lic) => (
-                  <option key={lic.id} value={lic.id}>{lic.name}</option>
-                ))}
-              </select>
-              <select className="ac-input" value={assignmentForm.academicYear}
-                onChange={(e) => setAssignmentForm({ ...assignmentForm, academicYear: e.target.value })}>
-                <option value="1">Year 1</option>
-                <option value="2">Year 2</option>
-                <option value="3">Year 3</option>
-                <option value="4">Year 4</option>
-              </select>
-              <button className="dashboard-btn" type="submit">Create Assignment</button>
-            </form>
-          </div>
-
-          {/* Current Assignments */}
-          <div className="panel">
-            <h3>📋 Current Assignments</h3>
-            <div className="ac-table-wrapper">
-              <table className="ac-table">
-                <thead>
-                  <tr>
-                    <th>Module</th>
-                    <th>Lecturer</th>
-                    <th>Year/Sem</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {assignments.slice(0, 5).map((assignment) => (
-                    <tr key={assignment.id}>
-                      <td>{assignment.module_code}</td>
-                      <td>{assignment.lecturer_name}</td>
-                      <td>Y{assignment.academic_year}/S{assignment.semester}</td>
-                      <td><button className="ac-remove-btn" onClick={() => removeAssignment(assignment.id)}>✗</button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           </div>
         </div>
-      </div>
-)}
-{mainView === 'hallAllocation' && (
-  <HallAllocation apiBase={apiBase} />
-)}
-      {/* 3D Visualization Section */}
-      <div className="ac-3d-card">
-        <h2>🏗️ 3D Campus Visualization</h2>
-        <div className="ac-3d-controls">
-          <label>Rotate X <input type="range" min="-20" max="35" step="1" value={view3d.rotateX}
-            onChange={(e) => setView3d({ ...view3d, rotateX: Number(e.target.value) })} /></label>
-          <label>Rotate Z <input type="range" min="-45" max="45" step="1" value={view3d.rotateZ}
-            onChange={(e) => setView3d({ ...view3d, rotateZ: Number(e.target.value) })} /></label>
-          <label>Zoom <input type="range" min="0.6" max="1.8" step="0.05" value={view3d.zoom}
-            onChange={(e) => setView3d({ ...view3d, zoom: Number(e.target.value) })} /></label>
-          <button className="dashboard-btn" onClick={() => setView3d({ rotateX: 10, rotateZ: -18, zoom: 1 })}>Reset View</button>
+      )}
+
+      {/* Hall Allocation View */}
+      {mainView === 'hallAllocation' && (
+        <HallAllocation apiBase={apiBase} />
+      )}
+
+      {/* 3D Visualization */}
+      <div className="max-w-7xl mx-auto mt-8 bg-white rounded-xl p-6 shadow-md">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">🏗️ 3D Campus Visualization</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <label className="flex flex-col gap-2 text-sm font-medium text-gray-700">
+            Rotate X
+            <input type="range" min="-20" max="35" step="1" value={view3d.rotateX}
+              onChange={(e) => setView3d({ ...view3d, rotateX: Number(e.target.value) })} 
+              className="w-full" />
+          </label>
+          <label className="flex flex-col gap-2 text-sm font-medium text-gray-700">
+            Rotate Z
+            <input type="range" min="-45" max="45" step="1" value={view3d.rotateZ}
+              onChange={(e) => setView3d({ ...view3d, rotateZ: Number(e.target.value) })} 
+              className="w-full" />
+          </label>
+          <label className="flex flex-col gap-2 text-sm font-medium text-gray-700">
+            Zoom
+            <input type="range" min="0.6" max="1.8" step="0.05" value={view3d.zoom}
+              onChange={(e) => setView3d({ ...view3d, zoom: Number(e.target.value) })} 
+              className="w-full" />
+          </label>
         </div>
-        <div className="ac-3d-scene-wrap">
-          <div className="ac-3d-scene" style={{ '--rx': `${view3d.rotateX}deg`, '--rz': `${view3d.rotateZ}deg`, '--zoom': view3d.zoom }}>
-            <div className="ac-3d-camera">
+        <div className="bg-gradient-to-br from-gray-50 to-blue-50 rounded-lg p-4 min-h-[400px] overflow-auto">
+          <div className="relative min-w-[720px] min-h-[380px]" style={{
+            perspective: '900px',
+            transformStyle: 'preserve-3d',
+          }}>
+            <div className="relative w-full min-h-[380px]" style={{
+              transform: `rotateX(${view3d.rotateX}deg) rotateZ(${view3d.rotateZ}deg) scale(${view3d.zoom})`,
+              transformStyle: 'preserve-3d',
+              transformOrigin: 'center 75%',
+            }}>
               {campusStructures.length === 0 && (
-                <div className="ac-3d-empty">No campus structures yet. Add one to generate the 3D layout.</div>
+                <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+                  No campus structures yet. Add one to generate the 3D layout.
+                </div>
               )}
               {campusStructures.map((structure, index) => {
                 const capacity = Number(structure.capacity) || 0;
                 const height = Math.max(40, Math.min(160, capacity ? 28 + Math.round(capacity / 3) : 56));
                 const x = (index % 6) * 74;
                 const z = Math.floor(index / 6) * 66;
+                const hue = (index * 37) % 360;
                 return (
                   <div
                     key={structure.id || index}
-                    className="ac-3d-block"
+                    className="absolute w-14 transition-all hover:scale-105 cursor-pointer"
                     style={{
-                      '--x': `${x}px`,
-                      '--z': `${z}px`,
-                      '--h': `${height}px`,
-                      '--hue': `${(index * 37) % 360}`,
+                      height: `${height}px`,
+                      left: `${x}px`,
+                      bottom: `calc(30px + ${z}px)`,
+                      transform: 'rotateX(57deg) rotateZ(40deg)',
+                      transformStyle: 'preserve-3d',
                     }}
                   >
-                    <div className="ac-3d-label">
-                      <strong>{structure.name}</strong>
-                      <span>Cap: {capacity || '-'}</span>
+                    <div className="absolute inset-0 rounded-md shadow-lg" style={{
+                      background: `linear-gradient(135deg, hsl(${hue}, 75%, 72%), hsl(${hue}, 70%, 55%))`,
+                      transform: 'translateZ(18px)',
+                    }}></div>
+                    <div className="absolute inset-0 rounded-md opacity-95" style={{
+                      background: `linear-gradient(135deg, hsl(${hue}, 60%, 45%), hsl(${hue}, 62%, 34%))`,
+                      transform: 'translateX(14px) translateY(12px) rotateY(90deg)',
+                    }}></div>
+                    <div className="absolute left-16 -top-1 min-w-[175px] bg-white/95 backdrop-blur-sm rounded-lg p-2 shadow-lg border border-gray-200">
+                      <strong className="text-xs block text-gray-800">{structure.name}</strong>
+                      <span className="text-xs text-gray-600">Cap: {capacity || '-'}</span>
                     </div>
                   </div>
                 );
@@ -1124,7 +1254,6 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
           </div>
         </div>
       </div>
-    </div>
     </div>
   );
 };

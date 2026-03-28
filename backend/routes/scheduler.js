@@ -14,7 +14,6 @@ import {
     updateItem,
     runSchedulerBySegments,
     upsertSoftConstraints,
-    updateItem,
     updateModuleAssignment,
 } from '../controllers/schedulerController.js';
 import protect from '../middlewares/auth.js';
