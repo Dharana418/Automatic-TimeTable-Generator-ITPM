@@ -148,8 +148,24 @@
     @apply rounded-lg bg-gradient-to-r from-sky-700 to-blue-800 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-slate-400/40 transition duration-300 hover:-translate-y-0.5 hover:from-sky-800 hover:to-blue-900 disabled:cursor-not-allowed disabled:opacity-70;
   }
 
+<<<<<<< HEAD
   /* .ac-main-menu* styles are defined in frontend/src/styles/tailwind.pcss
      to provide a single source of truth and avoid duplicate selector definitions. */
+=======
+  .ac-menu-btn-content {
+    @apply inline-flex items-center gap-2;
+  }
+
+  .ac-main-menu-btn svg {
+    transition: transform 0.2s ease;
+  }
+
+  .ac-main-menu-btn:hover svg,
+  .ac-main-menu-btn.is-active svg {
+    transform: translateY(-1px) scale(1.06);
+  }
+
+>>>>>>> origin/main
   .action-btn.ac-lecture-action-btn {
     @apply bg-gradient-to-r from-cyan-600 to-blue-700 shadow-cyan-300/60 hover:from-cyan-700 hover:to-blue-800;
   }
@@ -190,6 +206,22 @@
 
   .action-card h3 {
     @apply text-lg text-slate-800;
+  }
+
+  .ac-ui-title {
+    @apply flex items-center gap-2;
+  }
+
+  .ac-ui-icon {
+    @apply grid h-7 w-7 place-items-center rounded-lg border border-blue-100 bg-blue-50 text-blue-700;
+    transition: transform 0.2s ease, background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .panel:hover .ac-ui-icon,
+  .action-card:hover .ac-ui-icon {
+    @apply bg-blue-600 text-white;
+    transform: translateY(-1px) scale(1.05);
+    box-shadow: 0 8px 16px rgba(37, 99, 235, 0.24);
   }
 
   .action-card p {
@@ -236,12 +268,59 @@
     @apply mt-1 text-xs text-slate-500;
   }
 
+  .lic-hero-title {
+    @apply flex items-center gap-3 text-slate-900;
+  }
+
+  .lic-panel-title {
+    @apply mb-3 flex items-center gap-2 text-slate-800;
+  }
+
+  .lic-title-icon {
+    @apply grid h-8 w-8 place-items-center rounded-lg border border-blue-100 bg-blue-50 text-blue-700;
+    transition: transform 0.2s ease, background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .lic-title-icon-lg {
+    @apply h-9 w-9 rounded-xl;
+  }
+
+  .panel:hover .lic-title-icon,
+  .lic-hero-title:hover .lic-title-icon {
+    @apply bg-blue-600 text-white;
+    transform: translateY(-1px) scale(1.04);
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.28);
+  }
+
+  .dashboard-btn.lic-btn {
+    @apply inline-flex items-center gap-2;
+  }
+
+  .dashboard-btn.lic-btn svg {
+    transition: transform 0.2s ease;
+  }
+
+  .dashboard-btn.lic-btn:hover svg {
+    transform: translateX(2px);
+  }
+
+  .ac-remove-btn.lic-remove-btn {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-100 bg-red-50 p-0 text-red-700;
+    transition: transform 0.2s ease, background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .ac-remove-btn.lic-remove-btn:hover {
+    @apply border-red-300 bg-red-600 text-white;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px rgba(220, 38, 38, 0.24);
+  }
+
   .admin-timetable-page {
     @apply relative overflow-hidden;
     isolation: isolate;
     background:
       linear-gradient(135deg, rgba(248, 250, 252, 0.44) 0%, rgba(239, 246, 255, 0.5) 45%, rgba(238, 242, 255, 0.56) 100%),
-      url('./assets/Gemini_Generated_Image_qx3fgpqx3fgpqx3f.png') center / cover no-repeat,
+      url('./assets/SLIIT-Building.jpg') center / cover no-repeat,
       radial-gradient(1000px 520px at -15% -10%, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0) 62%),
       radial-gradient(920px 500px at 110% 0%, rgba(99, 102, 241, 0.2) 0%, rgba(99, 102, 241, 0) 60%),
       linear-gradient(140deg, #eef4ff 0%, #f7f9ff 45%, #eef2ff 100%);
@@ -347,6 +426,18 @@
     @apply cursor-pointer rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 transition duration-200 hover:bg-blue-50 hover:text-blue-700;
   }
 
+  .chip.ac-ui-chip {
+    @apply inline-flex items-center gap-1.5;
+  }
+
+  .chip.ac-ui-chip svg {
+    transition: transform 0.2s ease;
+  }
+
+  .chip.ac-ui-chip:hover svg {
+    transform: translateX(1px) scale(1.08);
+  }
+
   .ac-form {
     @apply flex flex-col gap-2;
   }
@@ -396,12 +487,150 @@
 
   .ac-approve-btn,
   .ac-resolve-btn {
-    @apply mr-2 rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-700;
+    @apply mr-2 inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-700;
   }
 
   .ac-reject-btn,
   .ac-remove-btn {
-    @apply rounded-md bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700;
+    @apply inline-flex items-center gap-1 rounded-md bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700;
+  }
+
+  .dashboard-btn.ac-ui-action {
+    @apply inline-flex items-center gap-2;
+  }
+
+  .dashboard-btn.ac-ui-action svg {
+    transition: transform 0.2s ease;
+  }
+
+  .dashboard-btn.ac-ui-action:hover svg,
+  .ac-approve-btn:hover svg,
+  .ac-reject-btn:hover svg,
+  .ac-remove-btn:hover svg {
+    transform: translateX(1px);
+  }
+
+  .ac-dashboard {
+    position: relative;
+    isolation: isolate;
+    background:
+      radial-gradient(900px 420px at -8% -10%, rgba(14, 165, 233, 0.18) 0%, rgba(14, 165, 233, 0) 66%),
+      radial-gradient(860px 440px at 108% -8%, rgba(59, 130, 246, 0.18) 0%, rgba(59, 130, 246, 0) 64%),
+      linear-gradient(160deg, rgba(248, 252, 255, 0.88) 0%, rgba(239, 246, 255, 0.9) 52%, rgba(245, 250, 255, 0.9) 100%);
+  }
+
+  .ac-dashboard .dashboard-hero {
+    border-color: rgba(147, 197, 253, 0.55);
+    box-shadow: 0 18px 48px rgba(30, 64, 175, 0.12);
+  }
+
+  .ac-dashboard .stat {
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  .ac-dashboard .stat::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 2px;
+    background: linear-gradient(90deg, rgba(59, 130, 246, 0) 0%, rgba(37, 99, 235, 0.7) 45%, rgba(59, 130, 246, 0) 100%);
+    transform: translateX(-100%);
+    transition: transform 0.4s ease;
+  }
+
+  .ac-dashboard .stat:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(37, 99, 235, 0.16);
+  }
+
+  .ac-dashboard .stat:hover::after {
+    transform: translateX(100%);
+  }
+
+  .ac-dashboard .panel,
+  .ac-dashboard .action-card,
+  .ac-dashboard .ac-3d-card {
+    border-color: rgba(191, 219, 254, 0.78);
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  }
+
+  .ac-dashboard .panel:hover,
+  .ac-dashboard .action-card:hover,
+  .ac-dashboard .ac-3d-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(96, 165, 250, 0.65);
+    box-shadow: 0 16px 34px rgba(30, 64, 175, 0.14);
+  }
+
+  .ac-dashboard .action-card {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .ac-dashboard .action-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 4px;
+    background: linear-gradient(180deg, #0ea5e9 0%, #2563eb 100%);
+  }
+
+  .ac-dashboard .ac-main-menu-btn {
+    letter-spacing: 0.6px;
+  }
+
+  .ac-dashboard .chip.ac-ui-chip {
+    border-color: rgba(191, 219, 254, 0.8);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  }
+
+  .ac-dashboard .chip.ac-ui-chip:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 18px rgba(59, 130, 246, 0.16);
+  }
+
+  .ac-dashboard .ac-table tbody tr {
+    transition: background-color 0.2s ease;
+  }
+
+  .ac-dashboard .ac-table tbody tr:hover {
+    background-color: rgba(239, 246, 255, 0.72);
+  }
+
+  .ac-calendar-card {
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  }
+
+  .ac-calendar-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(96, 165, 250, 0.65);
+    box-shadow: 0 14px 28px rgba(30, 64, 175, 0.16);
+  }
+
+  .ac-calendar-type {
+    @apply inline-flex items-center gap-1.5;
+  }
+
+  .ac-calendar-type.semester_start {
+    @apply bg-emerald-100 text-emerald-700;
+  }
+
+  .ac-calendar-type.semester_end {
+    @apply bg-rose-100 text-rose-700;
+  }
+
+  .ac-calendar-type.exam_period {
+    @apply bg-amber-100 text-amber-800;
+  }
+
+  .ac-calendar-type.holiday {
+    @apply bg-sky-100 text-sky-700;
+  }
+
+  .ac-calendar-type.special_event {
+    @apply bg-indigo-100 text-indigo-700;
   }
 
   .ac-message {

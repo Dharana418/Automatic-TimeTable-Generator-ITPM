@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import schedulerApi from '../api/scheduler.js';
 import { showError, showSuccess, showWarning } from '../utils/alerts.js';
 
@@ -49,19 +49,24 @@ export default function Scheduler() {
   const [selectedBlock, setSelectedBlock] = useState(null);
   const [activeNav, setActiveNav] = useState('weekly');
 
-  const fetchList = useCallback(async (t) => {
-    try {
-      const res = await schedulerApi.listItems(t);
-      setItems(res.items || []);
-    } catch (e) {
-      console.error(e);
-      setItems([]);
-    }
-  }, []);
-
   useEffect(() => {
-    fetchList(activeType);
-  }, [activeType, fetchList]);
+    let cancelled = false;
+
+    const loadItems = async () => {
+      try {
+        const res = await schedulerApi.listItems(activeType);
+        if (!cancelled) setItems(res.items || []);
+      } catch (e) {
+        console.error(e);
+        if (!cancelled) setItems([]);
+      }
+    };
+
+    loadItems();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeType]);
 
   async function handleAdd(e){
     e.preventDefault();
@@ -73,7 +78,8 @@ export default function Scheduler() {
       await schedulerApi.addItem(activeType, form);
       setForm({});
       showSuccess('Entry created', `${activeType.slice(0, -1)} added successfully.`);
-      fetchList(activeType);
+      const refreshed = await schedulerApi.listItems(activeType);
+      setItems(refreshed.items || []);
     }catch(err){ showError('Create failed', err.message); }
   }
 
