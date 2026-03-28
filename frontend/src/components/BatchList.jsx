@@ -136,6 +136,16 @@ export default function BatchList({ initialQuery = '' }) {
     }, {});
   }, [batches]);
 
+  const specializationChartData = useMemo(
+    () => SPECIALIZATION_CLOUD_TAGS.map((tag) => ({ label: tag.label, value: specializationCounts[tag.key] || 0 })),
+    [specializationCounts],
+  );
+
+  const specializationChartMax = useMemo(
+    () => Math.max(1, ...specializationChartData.map((item) => item.value)),
+    [specializationChartData],
+  );
+
   const resetForm = () => {
     setEditingId('');
     setForm(formDefaults);
@@ -189,7 +199,7 @@ export default function BatchList({ initialQuery = '' }) {
     const specialization = normalizeSpecialization(form.specialization);
     const payload = {
       // Backend still requires these fields even though UI only asks for four values.
-      name: editingId || nextId,
+      name: nextId,
       department_id: specialization,
       capacity: DEFAULT_CAPACITY,
     };
@@ -199,8 +209,20 @@ export default function BatchList({ initialQuery = '' }) {
       setErrorMessage('');
 
       if (editingId) {
-        await api.updateItem('batches', editingId, payload);
-        showSuccess('Batch updated', 'Batch details were updated successfully.');
+        const duplicateIdExists = nextId !== editingId && batches.some((batch) => batch.id === nextId);
+        if (duplicateIdExists) {
+          showWarning('Validation required', `Batch ID ${nextId} already exists.`);
+          return;
+        }
+
+        if (nextId === editingId) {
+          await api.updateItem('batches', editingId, payload);
+          showSuccess('Batch updated', 'Batch details were updated successfully.');
+        } else {
+          await api.addItem('batches', { id: nextId, ...payload });
+          await api.deleteItem('batches', editingId);
+          showSuccess('Batch updated', `Batch ID changed from ${editingId} to ${nextId}.`);
+        }
       } else {
         await api.addItem('batches', { id: nextId, ...payload });
         showSuccess('Batch created', 'New batch was added successfully.');
@@ -280,6 +302,24 @@ export default function BatchList({ initialQuery = '' }) {
               </span>
             ))}
           </div>
+
+          <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Registered Counts</p>
+            <div className="mt-2 space-y-2">
+              {specializationChartData.map((item, index) => {
+                const width = Math.round((item.value / specializationChartMax) * 100);
+                return (
+                  <div key={`${item.label}-${index}`} className="grid grid-cols-[140px_1fr_28px] items-center gap-2">
+                    <span className="text-xs font-semibold text-slate-700">{item.label}</span>
+                    <div className="h-2.5 overflow-hidden rounded-full bg-slate-200">
+                      <div className="h-full rounded-full bg-blue-600" style={{ width: `${width}%` }} />
+                    </div>
+                    <span className="text-right text-xs font-bold text-slate-700">{item.value}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -289,7 +329,6 @@ export default function BatchList({ initialQuery = '' }) {
             className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
             value={form.year}
             onChange={(e) => setForm((prev) => ({ ...prev, year: e.target.value }))}
-            disabled={Boolean(editingId)}
           >
             {YEAR_OPTIONS.map((year) => (
               <option key={year} value={year}>Year {year}</option>
@@ -300,7 +339,6 @@ export default function BatchList({ initialQuery = '' }) {
             className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
             value={form.semester}
             onChange={(e) => setForm((prev) => ({ ...prev, semester: e.target.value }))}
-            disabled={Boolean(editingId)}
           >
             {SEMESTER_OPTIONS.map((semester) => (
               <option key={semester} value={semester}>Semester {semester}</option>
@@ -311,7 +349,6 @@ export default function BatchList({ initialQuery = '' }) {
             className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
             value={form.mode}
             onChange={(e) => setForm((prev) => ({ ...prev, mode: e.target.value }))}
-            disabled={Boolean(editingId)}
           >
             <option value="WD">Weekday (WD)</option>
             <option value="WE">Weekend (WE)</option>
@@ -321,7 +358,6 @@ export default function BatchList({ initialQuery = '' }) {
             className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
             value={form.specialization}
             onChange={(e) => setForm((prev) => ({ ...prev, specialization: e.target.value }))}
-            disabled={Boolean(editingId)}
           >
             {SPECIALIZATIONS.map((specialization) => (
               <option key={specialization.key} value={specialization.key}>{specialization.label}</option>
@@ -333,7 +369,6 @@ export default function BatchList({ initialQuery = '' }) {
             placeholder="Group (e.g. 01)"
             value={form.group}
             onChange={(e) => setForm((prev) => ({ ...prev, group: e.target.value }))}
-            disabled={Boolean(editingId)}
           />
 
           <input
@@ -341,7 +376,6 @@ export default function BatchList({ initialQuery = '' }) {
             placeholder="Subgroup (e.g. 01)"
             value={form.subgroup}
             onChange={(e) => setForm((prev) => ({ ...prev, subgroup: e.target.value }))}
-            disabled={Boolean(editingId)}
           />
         </div>
 
