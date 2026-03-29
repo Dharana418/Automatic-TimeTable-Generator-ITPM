@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { ToastContainer } from 'react-toastify';
 import Home from "../Home/home.jsx";
 import Login from "../LoginandRegistration/Login.jsx";
 import Navigation from "./components/Navigation.jsx";
@@ -162,8 +163,27 @@ function App() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+
+      <ToastContainer
+        position="top-right"
+        autoClose={2600}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        limit={3}
+      />
     </Router>
   );
 }
 
 export default App;
+
+
+
+
+
+
+
