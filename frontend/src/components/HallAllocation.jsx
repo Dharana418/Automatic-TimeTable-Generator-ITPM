@@ -77,6 +77,7 @@ const HallAllocation = ({ apiBase }) => {
   const [showEditConfirmModal, setShowEditConfirmModal] = useState(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+  const [editTargetHallId, setEditTargetHallId] = useState('');
   const [maintenanceHallId, setMaintenanceHallId] = useState('');
   const [hallForm, setHallForm] = useState({
     hallId: '',
@@ -327,13 +328,19 @@ const HallAllocation = ({ apiBase }) => {
   };
 
   const executeEditHall = async () => {
+    if (!editTargetHallId) {
+      setEditHallError('Unable to update hall. Please close and reopen the edit form.');
+      return;
+    }
+
     setSubmittingEditHall(true);
     try {
-      const response = await fetch(`${apiBase}/api/scheduler/halls/${editHallForm.hallId}`, {
+      const response = await fetch(`${apiBase}/api/scheduler/halls/${editTargetHallId}`, {
         method: 'PUT',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          id: editHallForm.hallId,
           name: editHallForm.hallId,
           capacity: Number(editHallForm.capacity),
           features: {
@@ -356,6 +363,7 @@ const HallAllocation = ({ apiBase }) => {
       await loadData();
       setShowEditConfirmModal(false);
       setShowEditHallModal(false);
+      setEditTargetHallId('');
       setToast({ message: 'Hall updated successfully.', type: 'success' });
       await notifyUser('Hall Updated', `Hall ${editHallForm.hallId} was updated successfully.`);
     } catch (err) {
@@ -373,9 +381,25 @@ const HallAllocation = ({ apiBase }) => {
     e.preventDefault();
     setEditHallError('');
 
-    const validationError = validateHallFormPayload(editHallForm, { validateId: false });
+    if (!editTargetHallId) {
+      setEditHallError('Unable to update hall. Please close and reopen the edit form.');
+      return;
+    }
+
+    const validationError = validateHallFormPayload(editHallForm, { validateId: true });
     if (validationError) {
       setEditHallError(validationError);
+      return;
+    }
+
+    const normalizedHallId = String(editHallForm.hallId || '').trim().toLowerCase();
+    const duplicateHallExists = halls.some((hall) => {
+      const existingId = String(hall?.id || '').trim().toLowerCase();
+      return existingId === normalizedHallId && String(hall?.id || '') !== String(editTargetHallId);
+    });
+
+    if (duplicateHallExists) {
+      setEditHallError('A hall with this ID already exists. Please use a different hall ID.');
       return;
     }
 
@@ -383,6 +407,7 @@ const HallAllocation = ({ apiBase }) => {
   };
 
   const openEditHallModal = (hall) => {
+    setEditTargetHallId(hall.id);
     setEditHallForm({
       hallId: hall.id,
       hallType: hall.features?.hallType || '',
@@ -1334,6 +1359,7 @@ const HallAllocation = ({ apiBase }) => {
           onClick={() => {
             setShowEditHallModal(false);
             setEditHallError('');
+            setEditTargetHallId('');
           }}
         >
           <div className="bg-white w-full max-w-md rounded-xl shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
@@ -1345,6 +1371,7 @@ const HallAllocation = ({ apiBase }) => {
                 onClick={() => {
                   setShowEditHallModal(false);
                   setEditHallError('');
+                  setEditTargetHallId('');
                 }}
               >
                 ✕
@@ -1358,8 +1385,8 @@ const HallAllocation = ({ apiBase }) => {
                   type="text"
                   name="hallId"
                   value={editHallForm.hallId}
-                  className="w-full border rounded-lg px-3 py-2 bg-gray-100"
-                  readOnly
+                  onChange={handleEditHallInputChange}
+                  className="w-full border rounded-lg px-3 py-2"
                 />
               </div>
 
@@ -1433,6 +1460,7 @@ const HallAllocation = ({ apiBase }) => {
                   onClick={() => {
                     setShowEditHallModal(false);
                     setEditHallError('');
+                    setEditTargetHallId('');
                   }}
                 >
                   Cancel

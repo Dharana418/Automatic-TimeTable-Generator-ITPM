@@ -23,6 +23,27 @@ const ALLOWED_HALL_AMENITIES = new Set([
   'whiteboard',
   'sound_system',
 ]);
+const ALLOWED_HALL_STATUSES = new Set(['available', 'occupied', 'maintenance', 'unavailable']);
+
+const normalizeHallStatus = (status) => {
+  const normalizedStatus = String(status || 'available').trim().toLowerCase();
+  return ALLOWED_HALL_STATUSES.has(normalizedStatus) ? normalizedStatus : null;
+};
+
+const validateHallMaintenanceDates = ({ maintenanceStart = '', maintenanceEnd = '' } = {}) => {
+  const normalizedStart = String(maintenanceStart || '').trim();
+  const normalizedEnd = String(maintenanceEnd || '').trim();
+
+  if ((normalizedStart && !normalizedEnd) || (!normalizedStart && normalizedEnd)) {
+    return 'Please provide both maintenance start and end dates';
+  }
+
+  if (normalizedStart && normalizedEnd && normalizedEnd < normalizedStart) {
+    return 'Maintenance end date must be on or after the start date';
+  }
+
+  return null;
+};
 
 const validateHallPayload = ({ id = '', name = '', capacity, features } = {}) => {
   const normalizedId = String(id || '').trim();
@@ -301,21 +322,59 @@ export const addItem = async (req, res) => {
         return res.status(403).json({ error: 'Only Academic Coordinator can add hall structures' });
       }
 
-      const { name = null, capacity = null, features = null } = payload;
+      const {
+        name = null,
+        capacity = null,
+        features = null,
+        status = 'available',
+        maintenanceStart = null,
+        maintenanceEnd = null,
+      } = payload;
       const hallValidationError = validateHallPayload({ id, name, capacity, features });
       if (hallValidationError) {
         return res.status(400).json({ error: hallValidationError });
       }
 
+      const normalizedStatus = normalizeHallStatus(status);
+      if (!normalizedStatus) {
+        return res.status(400).json({ error: 'Invalid hall status value' });
+      }
+
+      const maintenanceValidationError = validateHallMaintenanceDates({ maintenanceStart, maintenanceEnd });
+      if (maintenanceValidationError) {
+        return res.status(400).json({ error: maintenanceValidationError });
+      }
+
+      const normalizedMaintenanceStart = String(maintenanceStart || '').trim() || null;
+      const normalizedMaintenanceEnd = String(maintenanceEnd || '').trim() || null;
+
+      if (normalizedStatus === 'maintenance' && (!normalizedMaintenanceStart || !normalizedMaintenanceEnd)) {
+        return res.status(400).json({ error: 'Maintenance start and end dates are required for maintenance status' });
+      }
+
       const { rows } = await pool.query(
-        `INSERT INTO halls(id, name, capacity, features)
-         VALUES($1, $2, $3, $4)
+        `INSERT INTO halls(id, name, capacity, features, status, maintenance_start, maintenance_end)
+         VALUES($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (id) DO UPDATE SET
            name = EXCLUDED.name,
            capacity = EXCLUDED.capacity,
-           features = EXCLUDED.features
-         RETURNING *`,
-        [id, name, capacity, features ? JSON.stringify(features) : null]
+           features = EXCLUDED.features,
+           status = EXCLUDED.status,
+           maintenance_start = EXCLUDED.maintenance_start,
+           maintenance_end = EXCLUDED.maintenance_end
+         RETURNING id, name, capacity, features, status,
+                   maintenance_start AS "maintenanceStart",
+                   maintenance_end AS "maintenanceEnd",
+                   created_at`,
+        [
+          id,
+          name,
+          capacity,
+          features ? JSON.stringify(features) : null,
+          normalizedStatus,
+          normalizedStatus === 'maintenance' ? normalizedMaintenanceStart : null,
+          normalizedStatus === 'maintenance' ? normalizedMaintenanceEnd : null,
+        ]
       );
       return res.status(201).json({ success: true, item: rows[0] });
     }
@@ -496,6 +555,18 @@ export const listItems = async (req, res) => {
       return res.json({ success: true, items: rows });
     }
 
+    if (type === 'halls') {
+      const { rows } = await pool.query(
+        `SELECT id, name, capacity, features, status,
+                maintenance_start AS "maintenanceStart",
+                maintenance_end AS "maintenanceEnd",
+                created_at
+         FROM halls
+         ORDER BY created_at DESC`
+      );
+      return res.json({ success: true, items: rows });
+    }
+
     const { rows } = await pool.query(`SELECT * FROM ${type} ORDER BY created_at DESC`);
     return res.json({ success: true, items: rows });
   } catch (err) {
@@ -530,15 +601,61 @@ export const updateItem = async (req, res) => {
     if (!id) return res.status(400).json({ error: 'Item id is required' });
 
     if (type === 'halls') {
-      const { name = null, capacity = null, features = null } = payload;
-      const hallValidationError = validateHallPayload({ id, name, capacity, features });
+      const {
+        id: nextId = id,
+        name = null,
+        capacity = null,
+        features = null,
+        status = 'available',
+        maintenanceStart = null,
+        maintenanceEnd = null,
+      } = payload;
+      const hallValidationError = validateHallPayload({ id: nextId, name, capacity, features });
       if (hallValidationError) {
         return res.status(400).json({ error: hallValidationError });
       }
 
+      const normalizedStatus = normalizeHallStatus(status);
+      if (!normalizedStatus) {
+        return res.status(400).json({ error: 'Invalid hall status value' });
+      }
+
+      const maintenanceValidationError = validateHallMaintenanceDates({ maintenanceStart, maintenanceEnd });
+      if (maintenanceValidationError) {
+        return res.status(400).json({ error: maintenanceValidationError });
+      }
+
+      const normalizedMaintenanceStart = String(maintenanceStart || '').trim() || null;
+      const normalizedMaintenanceEnd = String(maintenanceEnd || '').trim() || null;
+
+      if (normalizedStatus === 'maintenance' && (!normalizedMaintenanceStart || !normalizedMaintenanceEnd)) {
+        return res.status(400).json({ error: 'Maintenance start and end dates are required for maintenance status' });
+      }
+
       const { rows, rowCount } = await pool.query(
-        `UPDATE halls SET name=$1, capacity=$2, features=$3 WHERE id=$4 RETURNING *`,
-        [name, capacity, features ? JSON.stringify(features) : null, id]
+        `UPDATE halls
+         SET id=$1,
+             name=$2,
+             capacity=$3,
+             features=$4,
+             status=$5,
+             maintenance_start=$6,
+             maintenance_end=$7
+         WHERE id=$8
+         RETURNING id, name, capacity, features, status,
+                   maintenance_start AS "maintenanceStart",
+                   maintenance_end AS "maintenanceEnd",
+                   created_at`,
+        [
+          String(nextId || '').trim(),
+          name,
+          capacity,
+          features ? JSON.stringify(features) : null,
+          normalizedStatus,
+          normalizedStatus === 'maintenance' ? normalizedMaintenanceStart : null,
+          normalizedStatus === 'maintenance' ? normalizedMaintenanceEnd : null,
+          id,
+        ]
       );
       if (!rowCount) return res.status(404).json({ error: 'Item not found' });
       return res.json({ success: true, item: rows[0] });
