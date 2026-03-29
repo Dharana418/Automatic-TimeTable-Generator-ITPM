@@ -17,6 +17,7 @@ const AMENITIES = [
 
 const HALL_ID_REGEX = /^[A-Za-z0-9][A-Za-z0-9_-]{1,39}$/;
 const HALL_TEXT_REGEX = /^[A-Za-z0-9][A-Za-z0-9 .,&()/-]{1,79}$/;
+const FLOOR_REGEX = /^[A-Za-z0-9][A-Za-z0-9 .,&()/-]{0,28}$/;
 
 const normalizeHallForm = (form) => ({
   hallId: String(form.hallId || '').trim(),
@@ -48,8 +49,13 @@ const validateHallFormPayload = (form, { validateId = true } = {}) => {
     return 'Hall type and building can only include letters, numbers, spaces, and . , & ( ) / -';
   }
 
-  if (normalized.floor && normalized.floor.length > 30) {
-    return 'Floor cannot exceed 30 characters.';
+  if (normalized.floor) {
+    if (normalized.floor.length > 30) {
+      return 'Floor cannot exceed 30 characters.';
+    }
+    if (!FLOOR_REGEX.test(normalized.floor)) {
+      return 'Floor can only include letters, numbers, spaces, and . , & ( ) / -';
+    }
   }
 
   const capacityValue = Number(normalized.capacity);
@@ -714,7 +720,7 @@ const HallAllocation = ({ apiBase }) => {
             className="dashboard-btn hall-primary-btn"
             onClick={() => setShowRecommendationsModal(true)}
           >
-            🎯 Get Recommendations
+             Get Recommendations
           </button>
           <button
             type="button"
