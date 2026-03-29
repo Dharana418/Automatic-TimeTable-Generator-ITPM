@@ -1,7 +1,25 @@
 import Swal from 'sweetalert2';
+import { toast } from 'react-toastify';
 
 const base = {
   confirmButtonColor: '#2563eb',
+};
+
+const compactBox = {
+  width: '24rem',
+  padding: '1rem',
+};
+
+const validationAlertStyle = {
+  ...compactBox,
+  customClass: {
+    container: 'swal-validation-container',
+    popup: 'swal-validation-popup',
+    title: 'swal-validation-title',
+    htmlContainer: 'swal-validation-html',
+    confirmButton: 'swal-validation-confirm',
+    icon: 'swal-validation-icon',
+  },
 };
 
 const escapeHtml = (value = '') =>
@@ -26,6 +44,7 @@ export const showSuccess = (title, text = '') => {
 export const showError = (title, text = '') => {
   return Swal.fire({
     ...base,
+    ...validationAlertStyle,
     icon: 'error',
     title,
     text,
@@ -33,11 +52,13 @@ export const showError = (title, text = '') => {
 };
 
 export const showWarning = (title, text = '') => {
-  return Swal.fire({
-    ...base,
-    icon: 'warning',
-    title,
-    text,
+  const message = text ? `${title}: ${text}` : title;
+
+  return toast.warning(message, {
+    toastId: message,
+    className: 'validation-toast validation-toast--warning',
+    bodyClassName: 'validation-toast__body',
+    progressClassName: 'validation-toast__progress',
   });
 };
 

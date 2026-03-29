@@ -148,10 +148,9 @@
     @apply rounded-lg bg-gradient-to-r from-sky-700 to-blue-800 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-slate-400/40 transition duration-300 hover:-translate-y-0.5 hover:from-sky-800 hover:to-blue-900 disabled:cursor-not-allowed disabled:opacity-70;
   }
 
-<<<<<<< HEAD
   /* .ac-main-menu* styles are defined in frontend/src/styles/tailwind.pcss
      to provide a single source of truth and avoid duplicate selector definitions. */
-=======
+
   .ac-menu-btn-content {
     @apply inline-flex items-center gap-2;
   }
@@ -165,7 +164,6 @@
     transform: translateY(-1px) scale(1.06);
   }
 
->>>>>>> origin/main
   .action-btn.ac-lecture-action-btn {
     @apply bg-gradient-to-r from-cyan-600 to-blue-700 shadow-cyan-300/60 hover:from-cyan-700 hover:to-blue-800;
   }
@@ -1386,6 +1384,112 @@ textarea.swal-beautiful-input {
 
   .swal2-actions button {
     width: 100% !important;
+  }
+}
+
+/* Compact validation alert skin for warning/error messages */
+.swal-validation-container {
+  z-index: 10000;
+}
+
+.swal-validation-popup {
+  background: linear-gradient(145deg, #ffffff 0%, #f7fbff 100%);
+  border-radius: 14px;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  border-top: 4px solid #1d4ed8;
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.16);
+  padding: 18px 16px 14px;
+}
+
+.swal-validation-title {
+  margin: 0 0 6px;
+  font-size: 19px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.2px;
+}
+
+.swal-validation-html {
+  margin: 0;
+  color: #475569;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.swal-validation-confirm {
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  padding: 8px 16px !important;
+  box-shadow: 0 8px 16px rgba(30, 64, 175, 0.28) !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.swal-validation-confirm:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(30, 64, 175, 0.34) !important;
+}
+
+.swal-validation-icon {
+  margin: 0.25em auto 0.45em !important;
+  transform: scale(0.88);
+}
+
+.swal2-icon.swal2-warning.swal-validation-icon {
+  border-color: #f59e0b !important;
+  color: #f59e0b !important;
+}
+
+.swal2-icon.swal2-error.swal-validation-icon {
+  border-color: #dc2626 !important;
+  color: #dc2626 !important;
+}
+
+@media (max-width: 480px) {
+  .swal-validation-popup {
+    width: min(92vw, 22rem) !important;
+    padding: 16px 14px 12px;
+  }
+}
+
+/* React-Toastify validation toasts */
+.validation-toast {
+  border-radius: 12px;
+  border: 1px solid transparent;
+  border-left-width: 4px;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.16);
+  min-height: 54px;
+  padding: 10px 12px;
+  font-family: 'Source Sans 3', 'Segoe UI', sans-serif;
+}
+
+.validation-toast--warning {
+  background: linear-gradient(135deg, #fff8eb 0%, #fff2d9 100%);
+  border-color: rgba(245, 158, 11, 0.35);
+  border-left-color: #d97706;
+  color: #7c2d12;
+}
+
+.validation-toast__body {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0;
+  padding: 0;
+}
+
+.validation-toast__progress {
+  background: linear-gradient(90deg, #f59e0b, #d97706);
+}
+
+@media (max-width: 640px) {
+  .Toastify__toast-container {
+    width: min(94vw, 22rem);
+    right: 0.75rem;
+    left: auto;
   }
 }
 
