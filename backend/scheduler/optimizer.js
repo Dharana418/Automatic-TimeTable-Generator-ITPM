@@ -39,7 +39,21 @@ function isLabModule(module) {
 function getLabSpan(module) {
   const details = module?.details || {};
   const span = Number(details.h_l || details.lab_hours || details.labSpan || module.h_l || module.labSpan || 1);
-  return Number.isFinite(span) ? Math.max(1, Math.round(span)) : 1;
+  const normalizedSpan = Number.isFinite(span) ? Math.max(1, Math.round(span)) : 1;
+
+  const code = String(module?.code || '').toLowerCase();
+  const moduleName = String(module?.name || '').toLowerCase();
+  const isSoftwareEngineering =
+    code.startsWith('se') ||
+    moduleName.includes('software engineering') ||
+    moduleName.includes('software eng');
+
+  // Domain rule: Software Engineering lab sessions must run for at least 2 hourly slots.
+  if (isLabModule(module) && isSoftwareEngineering) {
+    return Math.max(2, normalizedSpan);
+  }
+
+  return normalizedSpan;
 }
 
 function getModuleExpectedSize(module) {
@@ -53,6 +67,25 @@ function getModuleExpectedSize(module) {
 }
 
 function hallMatchesModule(hall, module) {
+  const details = module?.details || {};
+  const preferredHallIdsRaw = [
+    ...(Array.isArray(details.preferredHallIds) ? details.preferredHallIds : []),
+    ...(Array.isArray(module?.preferredHallIds) ? module.preferredHallIds : []),
+    details.preferredHallId,
+    details.allocatedHallId,
+    module?.preferred_hall_id,
+  ];
+
+  const preferredHallIds = new Set(
+    preferredHallIdsRaw
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+  );
+
+  if (preferredHallIds.size > 0 && !preferredHallIds.has(String(hall?.id || '').trim())) {
+    return false;
+  }
+
   const moduleRoomType = String(module?.details?.roomType || module?.details?.room_type || module?.roomType || '').toLowerCase();
   const hallRoomType = String(hall?.features?.roomType || hall?.features?.room_type || '').toLowerCase();
   if (!moduleRoomType || !hallRoomType) return true;

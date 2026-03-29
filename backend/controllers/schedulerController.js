@@ -360,6 +360,100 @@ const withFacultySoftConstraints = async (user, options = {}) => {
   };
 };
 
+const parseJsonSafe = (value, fallback = {}) => {
+  if (!value) return fallback;
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+};
+
+const loadCoordinatorHallAllocationMap = async () => {
+  const allocationMap = new Map();
+
+  // Highest priority: latest approved timetable allocations set by Academic Coordinator.
+  const approvedTimetableRes = await pool.query(
+    `WITH latest_approved AS (
+       SELECT data
+       FROM timetables
+       WHERE status = 'approved' AND data IS NOT NULL
+       ORDER BY created_at DESC
+       LIMIT 1
+     ), schedule_rows AS (
+       SELECT
+         elem->>'moduleId' AS module_id,
+         elem->>'hallId' AS hall_id
+       FROM latest_approved la,
+            LATERAL jsonb_array_elements(
+              CASE
+                WHEN jsonb_typeof(la.data->'schedule') = 'array' THEN la.data->'schedule'
+                ELSE '[]'::jsonb
+              END
+            ) elem
+       WHERE elem->>'moduleId' IS NOT NULL
+         AND elem->>'hallId' IS NOT NULL
+     )
+     SELECT module_id, hall_id, COUNT(*)::int AS usage_count
+     FROM schedule_rows
+     GROUP BY module_id, hall_id
+     ORDER BY module_id, usage_count DESC, hall_id ASC`
+  );
+
+  approvedTimetableRes.rows.forEach((row) => {
+    if (!allocationMap.has(row.module_id)) {
+      allocationMap.set(row.module_id, row.hall_id);
+    }
+  });
+
+  // Fallback: top cached recommendation for modules if approved timetable allocation is absent.
+  const recommendationRes = await pool.query(
+    `SELECT DISTINCT ON (for_module_id)
+        for_module_id,
+        recommended_hall_id
+     FROM hall_recommendations
+     WHERE recommended_hall_id IS NOT NULL
+       AND (expires_at IS NULL OR expires_at >= NOW())
+     ORDER BY for_module_id, score DESC, created_at DESC`
+  );
+
+  recommendationRes.rows.forEach((row) => {
+    if (!allocationMap.has(row.for_module_id)) {
+      allocationMap.set(row.for_module_id, row.recommended_hall_id);
+    }
+  });
+
+  return allocationMap;
+};
+
+const applyCoordinatorHallAllocations = (modules = [], allocationMap = new Map()) => {
+  if (!allocationMap.size) return modules;
+
+  return modules.map((module) => {
+    const preferredHallId = allocationMap.get(module.id) || allocationMap.get(module.code);
+    if (!preferredHallId) return module;
+
+    const details = parseJsonSafe(module.details, {});
+    const preferredHallIds = Array.from(
+      new Set([
+        ...((Array.isArray(details.preferredHallIds) ? details.preferredHallIds : []).map((item) => String(item))),
+        String(preferredHallId),
+      ])
+    );
+
+    return {
+      ...module,
+      preferred_hall_id: String(preferredHallId),
+      details: {
+        ...details,
+        preferredHallIds,
+        hallAllocationSource: 'academic_coordinator',
+      },
+    };
+  });
+};
+
 export const addItem = async (req, res) => {
   try {
     const { type } = req.params;
@@ -1027,7 +1121,8 @@ export const runScheduler = async (req, res) => {
     ]);
 
     const halls = hallsRes.rows;
-    const modules = modulesRes.rows;
+    const hallAllocationMap = await loadCoordinatorHallAllocationMap();
+    const modules = applyCoordinatorHallAllocations(modulesRes.rows, hallAllocationMap);
     const lics = licsRes.rows;
     const instructors = instructorsRes.rows;
     const batches = batchesRes.rows;
@@ -1060,7 +1155,8 @@ export const runSchedulerBySegments = async (req, res) => {
     ]);
 
     const halls = hallsRes.rows;
-    const modules = modulesRes.rows;
+    const hallAllocationMap = await loadCoordinatorHallAllocationMap();
+    const modules = applyCoordinatorHallAllocations(modulesRes.rows, hallAllocationMap);
     const lics = licsRes.rows;
     const instructors = instructorsRes.rows;
     const batches = batchesRes.rows;
