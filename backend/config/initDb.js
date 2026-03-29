@@ -141,11 +141,6 @@ export async function initDb() {
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role_assigned_by UUID REFERENCES users(id) ON DELETE SET NULL`);
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role_assigned_at TIMESTAMP DEFAULT NOW()`);
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role_assignment_note TEXT`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_token_hash TEXT`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_expires_at TIMESTAMP`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_requested_at TIMESTAMP`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_consumed_at TIMESTAMP`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_url TEXT`);
         console.log('✓ users role assignment metadata ensured');
 
         await pool.query(`
