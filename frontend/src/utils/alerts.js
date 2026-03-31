@@ -1,8 +1,34 @@
 import Swal from 'sweetalert2';
+import { toast } from 'react-toastify';
 
 const base = {
   confirmButtonColor: '#2563eb',
 };
+
+const compactBox = {
+  width: '24rem',
+  padding: '1rem',
+};
+
+const validationAlertStyle = {
+  ...compactBox,
+  customClass: {
+    container: 'swal-validation-container',
+    popup: 'swal-validation-popup',
+    title: 'swal-validation-title',
+    htmlContainer: 'swal-validation-html',
+    confirmButton: 'swal-validation-confirm',
+    icon: 'swal-validation-icon',
+  },
+};
+
+const escapeHtml = (value = '') =>
+  String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
 export const showSuccess = (title, text = '') => {
   return Swal.fire({
@@ -18,6 +44,7 @@ export const showSuccess = (title, text = '') => {
 export const showError = (title, text = '') => {
   return Swal.fire({
     ...base,
+    ...validationAlertStyle,
     icon: 'error',
     title,
     text,
@@ -25,11 +52,13 @@ export const showError = (title, text = '') => {
 };
 
 export const showWarning = (title, text = '') => {
-  return Swal.fire({
-    ...base,
-    icon: 'warning',
-    title,
-    text,
+  const message = text ? `${title}: ${text}` : title;
+
+  return toast.warning(message, {
+    toastId: message,
+    className: 'validation-toast validation-toast--warning',
+    bodyClassName: 'validation-toast__body',
+    progressClassName: 'validation-toast__progress',
   });
 };
 
@@ -82,4 +111,100 @@ export const askForText = async ({
   });
 
   return result.isConfirmed ? result.value : null;
+};
+
+export const editBatchPrompt = async ({
+  batchId = '',
+  batchName = '',
+  capacity = '',
+  specializationKey = '',
+  specializationSize = '',
+  specializations = [],
+} = {}) => {
+  const optionsHtml = specializations
+    .map(
+      (s) =>
+        `<option value="${escapeHtml(s.key)}" ${s.key === specializationKey ? 'selected' : ''}>${escapeHtml(s.label)}</option>`,
+    )
+    .join('');
+
+  const html = `
+    <div style="text-align: left; display: flex; flex-direction: column; gap: 12px;">
+      <div>
+        <label style="display: block; font-weight: 600; margin-bottom: 4px; color: #1f2937; font-size: 14px;">Batch Name</label>
+        <input 
+          id="edit-batch-name" 
+          class="swal2-input" 
+          placeholder="Batch Name" 
+          value="${escapeHtml(batchName)}"
+          style="width: 100%;"
+        />
+      </div>
+      <div>
+        <label style="display: block; font-weight: 600; margin-bottom: 4px; color: #1f2937; font-size: 14px;">Batch Size</label>
+        <input 
+          id="edit-batch-capacity" 
+          class="swal2-input" 
+          type="number" 
+          min="0" 
+          placeholder="Batch Size" 
+          value="${escapeHtml(capacity)}"
+          style="width: 100%;"
+        />
+      </div>
+      <div>
+        <label style="display: block; font-weight: 600; margin-bottom: 4px; color: #1f2937; font-size: 14px;">Specialization</label>
+        <select 
+          id="edit-specialization-key"
+          style="width: 100%; padding: 8px; border: 1px solid #E2E8F0; border-radius: 4px; font-size: 14px;"
+        >
+          ${optionsHtml}
+        </select>
+      </div>
+      <div>
+        <label style="display: block; font-weight: 600; margin-bottom: 4px; color: #1f2937; font-size: 14px;">Specialization Size</label>
+        <input 
+          id="edit-specialization-size" 
+          class="swal2-input" 
+          type="number" 
+          min="0" 
+          placeholder="Specialization Size" 
+          value="${escapeHtml(specializationSize)}"
+          style="width: 100%;"
+        />
+      </div>
+    </div>
+  `;
+
+  const result = await Swal.fire({
+    ...base,
+    title: `Edit Batch: ${batchId}`,
+    html,
+    showCancelButton: true,
+    confirmButtonText: 'Update Batch',
+    cancelButtonText: 'Cancel',
+    preConfirm: () => {
+      const nameEl = document.getElementById('edit-batch-name');
+      const capacityEl = document.getElementById('edit-batch-capacity');
+      const specializationKeyEl = document.getElementById('edit-specialization-key');
+      const specializationSizeEl = document.getElementById('edit-specialization-size');
+
+      return {
+        name: nameEl?.value || '',
+        capacity: capacityEl?.value || '',
+        specialization_key: specializationKeyEl?.value || '',
+        specialization_size: specializationSizeEl?.value || '',
+      };
+    },
+    didOpen: () => {
+      // Focus first input
+      document.getElementById('edit-batch-name').focus();
+    },
+  });
+
+  if (!result.isConfirmed) {
+    return null;
+  }
+
+  return result.value;
 };

@@ -1,6 +1,6 @@
 .dashboard-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #334155 100%);
   padding: 2rem;
 }
 
@@ -60,7 +60,7 @@
 }
 
 .dashboard-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #0b4a6f 0%, #1d4f91 100%);
   color: white;
   border: none;
   padding: 0.75rem 1.5rem;
@@ -74,7 +74,7 @@
 
 .dashboard-btn:hover {
   transform: translateX(5px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 12px rgba(15, 58, 110, 0.35);
 }
 
 .dashboard-btn:active {
@@ -86,7 +86,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #334155 100%);
   color: white;
   font-size: 1.5rem;
   font-weight: 500;
@@ -176,8 +176,8 @@
 }
 
 .ac-input:focus {
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+  border-color: #1d4f91;
+  box-shadow: 0 0 0 3px rgba(29, 79, 145, 0.16);
 }
 
 .ac-assignment-card {
@@ -225,8 +225,8 @@
 
 .ac-type-pill {
   display: inline-block;
-  background: rgba(102, 126, 234, 0.12);
-  color: #4457b0;
+  background: rgba(29, 79, 145, 0.12);
+  color: #1e3a5f;
   border-radius: 999px;
   padding: 0.2rem 0.55rem;
   font-size: 0.8rem;

@@ -39,14 +39,21 @@ const Login = ({ apiBase, onAuthSuccess }) => {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Login failed");
+        const backendMessage = String(data?.error || data?.message || "").trim();
+        const isInvalidCredentials = /invalid credentials|wrong email|wrong password|email or password/i.test(backendMessage);
+        const finalMessage = isInvalidCredentials
+          ? "Email or password is incorrect."
+          : (backendMessage || "Login failed");
+
+        throw new Error(finalMessage);
       }
 
       showSuccess("Login successful", "Welcome back.");
       onAuthSuccess(data.user);
     } catch (err) {
-      setError(err.message);
-      showError("Login failed", err.message || "Unable to sign in");
+      const popupMessage = err?.message || "Unable to sign in";
+      setError(popupMessage);
+      showError("Login failed", popupMessage);
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { 
+  Users, BookOpen, Link2, Trash2, PlusCircle,
+  UserPlus, BookPlus, GraduationCap
+} from 'lucide-react';
 import schedulerApi from '../api/scheduler.js';
 import { confirmDelete, showError, showSuccess, showWarning } from '../utils/alerts.js';
 
@@ -25,7 +29,7 @@ const LICDashboard = ({ user }) => {
     setTimeout(() => setMessage({ text: '', type: '' }), 4500);
   };
 
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
     setLoading(true);
     try {
       const [instructorRes, moduleRes, assignmentRes] = await Promise.all([
@@ -42,11 +46,9 @@ const LICDashboard = ({ user }) => {
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    loadAll();
   }, []);
+
+  useEffect(() => { loadAll(); }, [loadAll]);
 
   const addInstructor = async (event) => {
     event.preventDefault();
@@ -149,7 +151,10 @@ const LICDashboard = ({ user }) => {
     <div className="dashboard-container">
       <div className="dashboard-hero">
         <div className="hero-left">
-          <h1>👨‍🏫 LIC Dashboard</h1>
+          <h1 className="lic-hero-title">
+            <span className="lic-title-icon lic-title-icon-lg"><GraduationCap size={20} /></span>
+            LIC Dashboard
+          </h1>
           <p className="hero-sub">Welcome, {user?.name || 'LIC'}. Add and manage instructors/modules under your scope.</p>
           <div className="stat-row">
             <div className="stat">
@@ -177,7 +182,10 @@ const LICDashboard = ({ user }) => {
       <div className="dashboard-main">
         <div className="left-col">
           <div className="panel">
-            <h3>➕ Add Instructor (Under You)</h3>
+            <h3 className="lic-panel-title">
+              <span className="lic-title-icon"><UserPlus size={17} /></span>
+              Add Instructor (Under You)
+            </h3>
             <form onSubmit={addInstructor} className="ac-form">
               <input className="ac-input" required placeholder="Instructor name" value={instructorForm.name}
                 onChange={(e) => setInstructorForm({ ...instructorForm, name: e.target.value })} />
@@ -185,12 +193,18 @@ const LICDashboard = ({ user }) => {
                 onChange={(e) => setInstructorForm({ ...instructorForm, email: e.target.value })} />
               <input className="ac-input" placeholder="Department" value={instructorForm.department}
                 onChange={(e) => setInstructorForm({ ...instructorForm, department: e.target.value })} />
-              <button className="dashboard-btn" type="submit">Add Instructor</button>
+              <button className="dashboard-btn lic-btn" type="submit">
+                <PlusCircle size={16} />
+                Add Instructor
+              </button>
             </form>
           </div>
 
           <div className="panel">
-            <h3>📚 Add Module (Under You)</h3>
+            <h3 className="lic-panel-title">
+              <span className="lic-title-icon"><BookPlus size={17} /></span>
+              Add Module (Under You)
+            </h3>
             <form onSubmit={addModule} className="ac-form">
               <input className="ac-input" required placeholder="Module code" value={moduleForm.code}
                 onChange={(e) => setModuleForm({ ...moduleForm, code: e.target.value })} />
@@ -200,12 +214,18 @@ const LICDashboard = ({ user }) => {
                 onChange={(e) => setModuleForm({ ...moduleForm, credits: e.target.value })} />
               <input className="ac-input" placeholder="Lectures per week" value={moduleForm.lectures_per_week}
                 onChange={(e) => setModuleForm({ ...moduleForm, lectures_per_week: e.target.value })} />
-              <button className="dashboard-btn" type="submit">Add Module</button>
+              <button className="dashboard-btn lic-btn" type="submit">
+                <PlusCircle size={16} />
+                Add Module
+              </button>
             </form>
           </div>
 
           <div className="panel">
-            <h3>🔗 Link Instructor to Module</h3>
+            <h3 className="lic-panel-title">
+              <span className="lic-title-icon"><Link2 size={17} /></span>
+              Link Instructor to Module
+            </h3>
             <form onSubmit={addAssignment} className="ac-form">
               <select className="ac-input" value={assignmentForm.moduleId}
                 onChange={(e) => setAssignmentForm({ ...assignmentForm, moduleId: e.target.value })} required>
@@ -233,14 +253,20 @@ const LICDashboard = ({ user }) => {
                 <option value="1">Semester 1</option>
                 <option value="2">Semester 2</option>
               </select>
-              <button className="dashboard-btn" type="submit">Create Assignment</button>
+              <button className="dashboard-btn lic-btn" type="submit">
+                <Link2 size={16} />
+                Create Assignment
+              </button>
             </form>
           </div>
         </div>
 
         <div className="right-col">
           <div className="panel">
-            <h3>👥 My Instructors</h3>
+            <h3 className="lic-panel-title">
+              <span className="lic-title-icon"><Users size={17} /></span>
+              My Instructors
+            </h3>
             <div className="ac-table-wrapper">
               <table className="ac-table">
                 <thead>
@@ -263,7 +289,10 @@ const LICDashboard = ({ user }) => {
           </div>
 
           <div className="panel">
-            <h3>📋 My Module Assignments</h3>
+            <h3 className="lic-panel-title">
+              <span className="lic-title-icon"><BookOpen size={17} /></span>
+              My Module Assignments
+            </h3>
             <div className="ac-table-wrapper">
               <table className="ac-table">
                 <thead>
@@ -279,7 +308,13 @@ const LICDashboard = ({ user }) => {
                       <td>{assignment.lecturer_name || '-'}</td>
                       <td>Y{assignment.academic_year}/S{assignment.semester || '-'}</td>
                       <td>
-                        <button className="ac-remove-btn" onClick={() => removeAssignment(assignment.id)}>✗</button>
+                        <button
+                          className="ac-remove-btn lic-remove-btn"
+                          onClick={() => removeAssignment(assignment.id)}
+                          aria-label="Remove assignment"
+                        >
+                          <Trash2 size={15} />
+                        </button>
                       </td>
                     </tr>
                   ))}
