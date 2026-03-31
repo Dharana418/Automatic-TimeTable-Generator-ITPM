@@ -23,6 +23,27 @@ const ALLOWED_HALL_AMENITIES = new Set([
   'whiteboard',
   'sound_system',
 ]);
+const ALLOWED_HALL_STATUSES = new Set(['available', 'occupied', 'maintenance', 'unavailable']);
+
+const normalizeHallStatus = (status) => {
+  const normalizedStatus = String(status || 'available').trim().toLowerCase();
+  return ALLOWED_HALL_STATUSES.has(normalizedStatus) ? normalizedStatus : null;
+};
+
+const validateHallMaintenanceDates = ({ maintenanceStart = '', maintenanceEnd = '' } = {}) => {
+  const normalizedStart = String(maintenanceStart || '').trim();
+  const normalizedEnd = String(maintenanceEnd || '').trim();
+
+  if ((normalizedStart && !normalizedEnd) || (!normalizedStart && normalizedEnd)) {
+    return 'Please provide both maintenance start and end dates';
+  }
+
+  if (normalizedStart && normalizedEnd && normalizedEnd < normalizedStart) {
+    return 'Maintenance end date must be on or after the start date';
+  }
+
+  return null;
+};
 
 const validateHallPayload = ({ id = '', name = '', capacity, features } = {}) => {
   const normalizedId = String(id || '').trim();
@@ -360,6 +381,100 @@ const withFacultySoftConstraints = async (user, options = {}) => {
   };
 };
 
+const parseJsonSafe = (value, fallback = {}) => {
+  if (!value) return fallback;
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+};
+
+const loadCoordinatorHallAllocationMap = async () => {
+  const allocationMap = new Map();
+
+  // Highest priority: latest approved timetable allocations set by Academic Coordinator.
+  const approvedTimetableRes = await pool.query(
+    `WITH latest_approved AS (
+       SELECT data
+       FROM timetables
+       WHERE status = 'approved' AND data IS NOT NULL
+       ORDER BY created_at DESC
+       LIMIT 1
+     ), schedule_rows AS (
+       SELECT
+         elem->>'moduleId' AS module_id,
+         elem->>'hallId' AS hall_id
+       FROM latest_approved la,
+            LATERAL jsonb_array_elements(
+              CASE
+                WHEN jsonb_typeof(la.data->'schedule') = 'array' THEN la.data->'schedule'
+                ELSE '[]'::jsonb
+              END
+            ) elem
+       WHERE elem->>'moduleId' IS NOT NULL
+         AND elem->>'hallId' IS NOT NULL
+     )
+     SELECT module_id, hall_id, COUNT(*)::int AS usage_count
+     FROM schedule_rows
+     GROUP BY module_id, hall_id
+     ORDER BY module_id, usage_count DESC, hall_id ASC`
+  );
+
+  approvedTimetableRes.rows.forEach((row) => {
+    if (!allocationMap.has(row.module_id)) {
+      allocationMap.set(row.module_id, row.hall_id);
+    }
+  });
+
+  // Fallback: top cached recommendation for modules if approved timetable allocation is absent.
+  const recommendationRes = await pool.query(
+    `SELECT DISTINCT ON (for_module_id)
+        for_module_id,
+        recommended_hall_id
+     FROM hall_recommendations
+     WHERE recommended_hall_id IS NOT NULL
+       AND (expires_at IS NULL OR expires_at >= NOW())
+     ORDER BY for_module_id, score DESC, created_at DESC`
+  );
+
+  recommendationRes.rows.forEach((row) => {
+    if (!allocationMap.has(row.for_module_id)) {
+      allocationMap.set(row.for_module_id, row.recommended_hall_id);
+    }
+  });
+
+  return allocationMap;
+};
+
+const applyCoordinatorHallAllocations = (modules = [], allocationMap = new Map()) => {
+  if (!allocationMap.size) return modules;
+
+  return modules.map((module) => {
+    const preferredHallId = allocationMap.get(module.id) || allocationMap.get(module.code);
+    if (!preferredHallId) return module;
+
+    const details = parseJsonSafe(module.details, {});
+    const preferredHallIds = Array.from(
+      new Set([
+        ...((Array.isArray(details.preferredHallIds) ? details.preferredHallIds : []).map((item) => String(item))),
+        String(preferredHallId),
+      ])
+    );
+
+    return {
+      ...module,
+      preferred_hall_id: String(preferredHallId),
+      details: {
+        ...details,
+        preferredHallIds,
+        hallAllocationSource: 'academic_coordinator',
+      },
+    };
+  });
+};
+
 export const addItem = async (req, res) => {
   try {
     const { type } = req.params;
@@ -376,21 +491,59 @@ export const addItem = async (req, res) => {
         return res.status(403).json({ error: 'Only Academic Coordinator can add hall structures' });
       }
 
-      const { name = null, capacity = null, features = null } = payload;
+      const {
+        name = null,
+        capacity = null,
+        features = null,
+        status = 'available',
+        maintenanceStart = null,
+        maintenanceEnd = null,
+      } = payload;
       const hallValidationError = validateHallPayload({ id, name, capacity, features });
       if (hallValidationError) {
         return res.status(400).json({ error: hallValidationError });
       }
 
+      const normalizedStatus = normalizeHallStatus(status);
+      if (!normalizedStatus) {
+        return res.status(400).json({ error: 'Invalid hall status value' });
+      }
+
+      const maintenanceValidationError = validateHallMaintenanceDates({ maintenanceStart, maintenanceEnd });
+      if (maintenanceValidationError) {
+        return res.status(400).json({ error: maintenanceValidationError });
+      }
+
+      const normalizedMaintenanceStart = String(maintenanceStart || '').trim() || null;
+      const normalizedMaintenanceEnd = String(maintenanceEnd || '').trim() || null;
+
+      if (normalizedStatus === 'maintenance' && (!normalizedMaintenanceStart || !normalizedMaintenanceEnd)) {
+        return res.status(400).json({ error: 'Maintenance start and end dates are required for maintenance status' });
+      }
+
       const { rows } = await pool.query(
-        `INSERT INTO halls(id, name, capacity, features)
-         VALUES($1, $2, $3, $4)
+        `INSERT INTO halls(id, name, capacity, features, status, maintenance_start, maintenance_end)
+         VALUES($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (id) DO UPDATE SET
            name = EXCLUDED.name,
            capacity = EXCLUDED.capacity,
-           features = EXCLUDED.features
-         RETURNING *`,
-        [id, name, capacity, features ? JSON.stringify(features) : null]
+           features = EXCLUDED.features,
+           status = EXCLUDED.status,
+           maintenance_start = EXCLUDED.maintenance_start,
+           maintenance_end = EXCLUDED.maintenance_end
+         RETURNING id, name, capacity, features, status,
+                   maintenance_start AS "maintenanceStart",
+                   maintenance_end AS "maintenanceEnd",
+                   created_at`,
+        [
+          id,
+          name,
+          capacity,
+          features ? JSON.stringify(features) : null,
+          normalizedStatus,
+          normalizedStatus === 'maintenance' ? normalizedMaintenanceStart : null,
+          normalizedStatus === 'maintenance' ? normalizedMaintenanceEnd : null,
+        ]
       );
       return res.status(201).json({ success: true, item: rows[0] });
     }
@@ -576,6 +729,18 @@ export const listItems = async (req, res) => {
       return res.json({ success: true, items: rows });
     }
 
+    if (type === 'halls') {
+      const { rows } = await pool.query(
+        `SELECT id, name, capacity, features, status,
+                maintenance_start AS "maintenanceStart",
+                maintenance_end AS "maintenanceEnd",
+                created_at
+         FROM halls
+         ORDER BY created_at DESC`
+      );
+      return res.json({ success: true, items: rows });
+    }
+
     const { rows } = await pool.query(`SELECT * FROM ${type} ORDER BY created_at DESC`);
     return res.json({ success: true, items: rows });
   } catch (err) {
@@ -610,15 +775,61 @@ export const updateItem = async (req, res) => {
     if (!id) return res.status(400).json({ error: 'Item id is required' });
 
     if (type === 'halls') {
-      const { name = null, capacity = null, features = null } = payload;
-      const hallValidationError = validateHallPayload({ id, name, capacity, features });
+      const {
+        id: nextId = id,
+        name = null,
+        capacity = null,
+        features = null,
+        status = 'available',
+        maintenanceStart = null,
+        maintenanceEnd = null,
+      } = payload;
+      const hallValidationError = validateHallPayload({ id: nextId, name, capacity, features });
       if (hallValidationError) {
         return res.status(400).json({ error: hallValidationError });
       }
 
+      const normalizedStatus = normalizeHallStatus(status);
+      if (!normalizedStatus) {
+        return res.status(400).json({ error: 'Invalid hall status value' });
+      }
+
+      const maintenanceValidationError = validateHallMaintenanceDates({ maintenanceStart, maintenanceEnd });
+      if (maintenanceValidationError) {
+        return res.status(400).json({ error: maintenanceValidationError });
+      }
+
+      const normalizedMaintenanceStart = String(maintenanceStart || '').trim() || null;
+      const normalizedMaintenanceEnd = String(maintenanceEnd || '').trim() || null;
+
+      if (normalizedStatus === 'maintenance' && (!normalizedMaintenanceStart || !normalizedMaintenanceEnd)) {
+        return res.status(400).json({ error: 'Maintenance start and end dates are required for maintenance status' });
+      }
+
       const { rows, rowCount } = await pool.query(
-        `UPDATE halls SET name=$1, capacity=$2, features=$3 WHERE id=$4 RETURNING *`,
-        [name, capacity, features ? JSON.stringify(features) : null, id]
+        `UPDATE halls
+         SET id=$1,
+             name=$2,
+             capacity=$3,
+             features=$4,
+             status=$5,
+             maintenance_start=$6,
+             maintenance_end=$7
+         WHERE id=$8
+         RETURNING id, name, capacity, features, status,
+                   maintenance_start AS "maintenanceStart",
+                   maintenance_end AS "maintenanceEnd",
+                   created_at`,
+        [
+          String(nextId || '').trim(),
+          name,
+          capacity,
+          features ? JSON.stringify(features) : null,
+          normalizedStatus,
+          normalizedStatus === 'maintenance' ? normalizedMaintenanceStart : null,
+          normalizedStatus === 'maintenance' ? normalizedMaintenanceEnd : null,
+          id,
+        ]
       );
       if (!rowCount) return res.status(404).json({ error: 'Item not found' });
       return res.json({ success: true, item: rows[0] });
@@ -1027,7 +1238,8 @@ export const runScheduler = async (req, res) => {
     ]);
 
     const halls = hallsRes.rows;
-    const modules = modulesRes.rows;
+    const hallAllocationMap = await loadCoordinatorHallAllocationMap();
+    const modules = applyCoordinatorHallAllocations(modulesRes.rows, hallAllocationMap);
     const lics = licsRes.rows;
     const instructors = instructorsRes.rows;
     const batches = batchesRes.rows;
@@ -1060,7 +1272,8 @@ export const runSchedulerBySegments = async (req, res) => {
     ]);
 
     const halls = hallsRes.rows;
-    const modules = modulesRes.rows;
+    const hallAllocationMap = await loadCoordinatorHallAllocationMap();
+    const modules = applyCoordinatorHallAllocations(modulesRes.rows, hallAllocationMap);
     const lics = licsRes.rows;
     const instructors = instructorsRes.rows;
     const batches = batchesRes.rows;

@@ -20,6 +20,9 @@ export async function initDb() {
                 created_at TIMESTAMP DEFAULT NOW()
             )
         `);
+        await pool.query(`ALTER TABLE halls ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'available'`);
+        await pool.query(`ALTER TABLE halls ADD COLUMN IF NOT EXISTS maintenance_start DATE`);
+        await pool.query(`ALTER TABLE halls ADD COLUMN IF NOT EXISTS maintenance_end DATE`);
         console.log('✓ halls table ready');
 
         // Create modules table

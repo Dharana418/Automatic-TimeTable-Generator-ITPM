@@ -17,6 +17,7 @@ const AMENITIES = [
 
 const HALL_ID_REGEX = /^[A-Za-z0-9][A-Za-z0-9_-]{1,39}$/;
 const HALL_TEXT_REGEX = /^[A-Za-z0-9][A-Za-z0-9 .,&()/-]{1,79}$/;
+const FLOOR_REGEX = /^[A-Za-z0-9][A-Za-z0-9 .,&()/-]{0,28}$/;
 
 const normalizeHallForm = (form) => ({
   hallId: String(form.hallId || '').trim(),
@@ -48,8 +49,13 @@ const validateHallFormPayload = (form, { validateId = true } = {}) => {
     return 'Hall type and building can only include letters, numbers, spaces, and . , & ( ) / -';
   }
 
-  if (normalized.floor && normalized.floor.length > 30) {
-    return 'Floor cannot exceed 30 characters.';
+  if (normalized.floor) {
+    if (normalized.floor.length > 30) {
+      return 'Floor cannot exceed 30 characters.';
+    }
+    if (!FLOOR_REGEX.test(normalized.floor)) {
+      return 'Floor can only include letters, numbers, spaces, and . , & ( ) / -';
+    }
   }
 
   const capacityValue = Number(normalized.capacity);
@@ -77,6 +83,7 @@ const HallAllocation = ({ apiBase }) => {
   const [showEditConfirmModal, setShowEditConfirmModal] = useState(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+  const [editTargetHallId, setEditTargetHallId] = useState('');
   const [maintenanceHallId, setMaintenanceHallId] = useState('');
   const [hallForm, setHallForm] = useState({
     hallId: '',
@@ -327,13 +334,19 @@ const HallAllocation = ({ apiBase }) => {
   };
 
   const executeEditHall = async () => {
+    if (!editTargetHallId) {
+      setEditHallError('Unable to update hall. Please close and reopen the edit form.');
+      return;
+    }
+
     setSubmittingEditHall(true);
     try {
-      const response = await fetch(`${apiBase}/api/scheduler/halls/${editHallForm.hallId}`, {
+      const response = await fetch(`${apiBase}/api/scheduler/halls/${editTargetHallId}`, {
         method: 'PUT',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          id: editHallForm.hallId,
           name: editHallForm.hallId,
           capacity: Number(editHallForm.capacity),
           features: {
@@ -356,6 +369,7 @@ const HallAllocation = ({ apiBase }) => {
       await loadData();
       setShowEditConfirmModal(false);
       setShowEditHallModal(false);
+      setEditTargetHallId('');
       setToast({ message: 'Hall updated successfully.', type: 'success' });
       await notifyUser('Hall Updated', `Hall ${editHallForm.hallId} was updated successfully.`);
     } catch (err) {
@@ -373,9 +387,25 @@ const HallAllocation = ({ apiBase }) => {
     e.preventDefault();
     setEditHallError('');
 
-    const validationError = validateHallFormPayload(editHallForm, { validateId: false });
+    if (!editTargetHallId) {
+      setEditHallError('Unable to update hall. Please close and reopen the edit form.');
+      return;
+    }
+
+    const validationError = validateHallFormPayload(editHallForm, { validateId: true });
     if (validationError) {
       setEditHallError(validationError);
+      return;
+    }
+
+    const normalizedHallId = String(editHallForm.hallId || '').trim().toLowerCase();
+    const duplicateHallExists = halls.some((hall) => {
+      const existingId = String(hall?.id || '').trim().toLowerCase();
+      return existingId === normalizedHallId && String(hall?.id || '') !== String(editTargetHallId);
+    });
+
+    if (duplicateHallExists) {
+      setEditHallError('A hall with this ID already exists. Please use a different hall ID.');
       return;
     }
 
@@ -383,6 +413,7 @@ const HallAllocation = ({ apiBase }) => {
   };
 
   const openEditHallModal = (hall) => {
+    setEditTargetHallId(hall.id);
     setEditHallForm({
       hallId: hall.id,
       hallType: hall.features?.hallType || '',
@@ -689,7 +720,7 @@ const HallAllocation = ({ apiBase }) => {
             className="dashboard-btn hall-primary-btn"
             onClick={() => setShowRecommendationsModal(true)}
           >
-            🎯 Get Recommendations
+             Get Recommendations
           </button>
           <button
             type="button"
@@ -1334,6 +1365,7 @@ const HallAllocation = ({ apiBase }) => {
           onClick={() => {
             setShowEditHallModal(false);
             setEditHallError('');
+            setEditTargetHallId('');
           }}
         >
           <div className="bg-white w-full max-w-md rounded-xl shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
@@ -1345,6 +1377,7 @@ const HallAllocation = ({ apiBase }) => {
                 onClick={() => {
                   setShowEditHallModal(false);
                   setEditHallError('');
+                  setEditTargetHallId('');
                 }}
               >
                 ✕
@@ -1358,8 +1391,8 @@ const HallAllocation = ({ apiBase }) => {
                   type="text"
                   name="hallId"
                   value={editHallForm.hallId}
-                  className="w-full border rounded-lg px-3 py-2 bg-gray-100"
-                  readOnly
+                  onChange={handleEditHallInputChange}
+                  className="w-full border rounded-lg px-3 py-2"
                 />
               </div>
 
@@ -1433,6 +1466,7 @@ const HallAllocation = ({ apiBase }) => {
                   onClick={() => {
                     setShowEditHallModal(false);
                     setEditHallError('');
+                    setEditTargetHallId('');
                   }}
                 >
                   Cancel
