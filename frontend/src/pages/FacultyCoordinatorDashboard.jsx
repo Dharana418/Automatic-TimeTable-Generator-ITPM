@@ -1,63 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Menu, Play, AlertCircle, Users, Calendar } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import api from '../api/scheduler.js';
+import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 
-const menuGroups = [
-  {
-    title: 'Workspace',
-    items: [
-      { id: 'overview', label: 'Overview', icon: '📊', to: '/dashboard' },
-      { id: 'timetable', label: 'Timetables', icon: '🗓️', to: '/scheduler' },
-      { id: 'batches', label: 'Batches', icon: '🧩', to: '/faculty/batches' },
-      { id: 'staff-directory', label: 'Staff Directory', icon: '👨‍🏫', to: '/faculty/staff' },
-    ],
-  },
-  {
-    title: 'Coordination',
-    items: [
-      { id: 'resources', label: 'Resources', icon: '🏫', to: '/dashboard' },
-      { id: 'requests', label: 'Requests', icon: '📨', to: '/dashboard' },
-    ],
-  },
-  {
-    title: 'Insights',
-    items: [{ id: 'reports', label: 'Reports', icon: '📈', to: '/dashboard' }],
-  },
-];
+const dayOptions = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-const quickActions = [
-  {
-    title: 'Start Scheduler',
-    description: 'Generate a fresh timetable using optimized constraints.',
-    action: 'Open Scheduler',
-    icon: Calendar,
-    to: '/scheduler',
-  },
-  {
-    title: 'Check Resources',
-    description: 'Monitor LIC availability and instructor readiness.',
-    action: 'View Resources',
-    icon: Users,
-    to: '/dashboard',
-  },
-];
-
-const focusItems = [
-  'Review hall availability for next week',
-  'Approve pending instructor requests',
-  'Validate module conflict warnings',
-  'Export faculty timetable snapshot',
-];
+const sparklineSets = {
+  resources: [45, 55, 58, 64, 67, 70, 72],
+  instructors: [32, 35, 38, 40, 44, 46, 49],
+  sync: [85, 88, 91, 92, 94, 96, 97],
+};
 
 const FacultyCoordinatorDashboard = ({ user }) => {
-  const username = user?.username || 'Coordinator';
+  const username = user?.username || user?.name || 'Coordinator';
   const navigate = useNavigate();
-  const location = useLocation();
 
   const [resources, setResources] = useState([]);
-  const [loadingResources, setLoadingResources] = useState(false);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [_loadingResources, setLoadingResources] = useState(false);
   const [savingSoftConstraints, setSavingSoftConstraints] = useState(false);
   const [softConstraintForm, setSoftConstraintForm] = useState({
     preferredDaysCsv: 'Mon,Tue,Wed,Thu,Fri',
@@ -68,318 +27,291 @@ const FacultyCoordinatorDashboard = ({ user }) => {
 
   useEffect(() => {
     let mounted = true;
-
-    async function load() {
+    const loadData = async () => {
       try {
         setLoadingResources(true);
         const response = await api.getLicsWithInstructors();
-        if (mounted && response?.items) {
-          setResources(response.items);
-        }
-        
-        // Fetch dynamic roles from backend
-        // TODO: Uncomment when backend endpoint is available
-        // const rolesResponse = await api.getRoles();
-        // if (mounted && rolesResponse?.roles) {
-        //   setRoles(rolesResponse.roles);
-        // }
-      } catch (error) {
-        console.error('Failed to load resources', error);
+        if (mounted && response?.items) setResources(response.items);
+      } catch (err) {
+        console.error('Resource load failed', err);
       } finally {
-        if (mounted) {
-          setLoadingResources(false);
-        }
+        if (mounted) setLoadingResources(false);
       }
-    }
+    };
 
-    load();
-
+    loadData();
     return () => {
       mounted = false;
     };
   }, []);
 
+  const selectedDays = useMemo(
+    () =>
+      softConstraintForm.preferredDaysCsv
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+    [softConstraintForm.preferredDaysCsv],
+  );
+
+  const totalInstructors = useMemo(
+    () => resources.reduce((sum, lic) => sum + (lic.instructors?.length || 0), 0),
+    [resources],
+  );
+
+  const syncHealth = resources.length > 0 ? 'Synced' : 'Pending';
+
   const saveSoftConstraints = async () => {
     try {
       setSavingSoftConstraints(true);
-      const preferredDays = softConstraintForm.preferredDaysCsv
-        .split(',')
-        .map((value) => value.trim())
-        .filter(Boolean);
-
-      const preferredTimeSlots = softConstraintForm.preferredSlotsCsv
-        .split(',')
-        .map((value) => value.trim())
-        .filter(Boolean);
-
-      await api.saveSoftConstraints({
-        preferredDays,
-        preferredTimeSlots,
+      const payload = {
+        preferredDays: softConstraintForm.preferredDaysCsv
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        preferredTimeSlots: softConstraintForm.preferredSlotsCsv
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
         w5Weight: Number(softConstraintForm.w5Weight || 0),
         notes: softConstraintForm.notes,
-      });
-
-      window.alert('Soft constraints saved and mapped to w5 penalty weight.');
+      };
+      await api.saveSoftConstraints(payload);
+      window.alert('Constraints updated successfully.');
     } catch (error) {
-      window.alert(error.message || 'Failed to save soft constraints.');
+      window.alert(error.message || 'Update failed.');
     } finally {
       setSavingSoftConstraints(false);
     }
   };
 
-  const totalInstructors = useMemo(
-    () => resources.reduce((sum, lic) => sum + (lic.instructors || []).length, 0),
-    [resources],
-  );
-
-  const handleSidebarNavigation = (to) => {
-    navigate(to);
-    setMobileSidebarOpen(false);
-  };
-
-  const isMenuItemActive = (to) => {
-    if (to === '/dashboard') {
-      return location.pathname === '/dashboard';
-    }
-
-    return location.pathname.startsWith(to);
+  const toggleDay = (day) => {
+    const hasDay = selectedDays.includes(day);
+    const next = hasDay ? selectedDays.filter((item) => item !== day) : [...selectedDays, day];
+    setSoftConstraintForm((prev) => ({
+      ...prev,
+      preferredDaysCsv: next.join(','),
+    }));
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <button
-        type="button"
-        onClick={() => setMobileSidebarOpen(true)}
-        className="fixed left-4 top-4 z-50 rounded-lg bg-blue-600 p-2 text-xs font-semibold text-white shadow-sm transition-all duration-200 hover:bg-blue-700 lg:hidden"
-        aria-label="Open sidebar"
-      >
-        <Menu size={20} strokeWidth={2} />
-      </button>
-
-      {mobileSidebarOpen && (
+    <FacultyCoordinatorShell
+      user={user}
+      title="Faculty Coordinator Workspace"
+      subtitle="Operational overview for scheduling, batches, and faculty resource alignment"
+      badge="Modern Institutional Professional"
+      headerActions={
         <button
           type="button"
-          className="fixed inset-0 z-30 bg-black/40 lg:hidden"
-          onClick={() => setMobileSidebarOpen(false)}
-          aria-label="Close sidebar"
-        />
-      )}
-
-      <aside
-        className={`fixed left-0 top-0 z-40 flex h-screen w-80 flex-col border-r border-slate-200 bg-slate-900 backdrop-blur-sm text-white transition-transform duration-300 ease-in-out lg:translate-x-0 ${
-          mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
-        <div className="border-b border-slate-700 px-6 py-6">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-300">Workspace</p>
-          <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">Coordinator Hub</h2>
-          <p className="mt-1 text-xs text-slate-400">Navigation & Resources</p>
-        </div>
-
-        <nav className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
-          {menuGroups.map((group) => (
-            <section key={group.title} className="rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-sm">
-              <p className="px-2 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-widest text-slate-300">
-                {group.title}
-              </p>
-              <div className="space-y-1">
-                {group.items.map((item) => {
-                  const isActive = isMenuItemActive(item.to);
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => handleSidebarNavigation(item.to)}
-                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-all duration-200 ${
-                        isActive
-                          ? 'bg-blue-600 text-white'
-                          : 'text-slate-300 hover:text-white hover:bg-slate-700'
-                      }`}
-                    >
-                      <span className="text-lg">{item.icon}</span>
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
-        </nav>
-
-        <div className="border-t border-slate-700 p-4">
-          <button
-            type="button"
-            onClick={() => handleSidebarNavigation('/scheduler')}
-            className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-blue-700"
-          >
-            <span className="inline-flex items-center justify-center gap-2">
-              <Play size={16} strokeWidth={2} />
-              Open Scheduler
-            </span>
-          </button>
-        </div>
-      </aside>
-
-      <main className="w-full lg:pl-80">
-        <header className="sticky top-0 z-20 border-b border-slate-200 bg-white shadow-sm px-4 py-3 md:px-6">
-          <div className="mx-auto flex max-w-7xl items-center justify-between pl-12 lg:pl-0">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-600">Faculty Coordinator</p>
-              <h1 className="text-lg font-semibold tracking-tight text-slate-900 md:text-xl">Scheduling Dashboard</h1>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="hidden text-right sm:block">
-                <p className="text-sm font-medium text-slate-900">{username}</p>
-                <p className="text-xs text-slate-600">Role: Faculty Coordinator</p>
-              </div>
-              <div className="grid h-10 w-10 place-items-center rounded-lg bg-blue-600 text-xs font-semibold text-white">
-                {username.slice(0, 1).toUpperCase()}
-              </div>
-            </div>
+          onClick={() => navigate('/scheduler')}
+          className="rounded-xl border border-sky-700 bg-sky-700 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(3,105,161,0.24)] transition hover:-translate-y-0.5 hover:bg-sky-800 active:translate-y-[1px]"
+        >
+          Open Timetables
+        </button>
+      }
+    >
+      <div className="grid gap-5 xl:grid-cols-12">
+        <section className="xl:col-span-12">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <SummaryCard
+              label="LIC Units"
+              value={resources.length}
+              status="Data Active"
+              chart={sparklineSets.resources}
+            />
+            <SummaryCard
+              label="Instructors"
+              value={totalInstructors}
+              status="Faculty Loaded"
+              chart={sparklineSets.instructors}
+            />
+            <SummaryCard
+              label="Sync Health"
+              value={syncHealth}
+              status={resources.length > 0 ? 'Healthy' : 'Awaiting Data'}
+              chart={sparklineSets.sync}
+              pulse={resources.length > 0}
+            />
+            <SummaryCard
+              label="Constraint Profile"
+              value={`w5=${softConstraintForm.w5Weight}`}
+              status="Policy Mode"
+              chart={[35, 42, 54, 52, 61, 60, 68]}
+            />
           </div>
-        </header>
+        </section>
 
-        <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 md:px-6 xl:grid-cols-[1fr_340px]">
-          <section className="space-y-6">
-            <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="text-2xl font-semibold tracking-tight text-slate-900">Welcome back, {username}</h2>
-              <p className="mt-2 text-sm text-slate-600">
-                Coordinate timetables with precision, monitor resources, and optimize scheduling in real-time.
+        <section className="rounded-3xl border border-slate-200 bg-white/88 p-6 shadow-[0_14px_40px_rgba(15,23,42,0.08)] xl:col-span-8">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Workspace Operations</p>
+              <h3 className="mt-2 text-2xl font-semibold text-slate-900">Batch & Timetable Operations Center</h3>
+              <p className="mt-2 max-w-2xl text-sm text-slate-600">
+                Use the coordination tools to maintain specialization balance, resource utilization, and scheduling readiness.
               </p>
-
-              <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-5 shadow-sm hover:border-slate-300 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-600">Total Instructors</p>
-                      <p className="mt-3 text-4xl font-semibold text-blue-600">{totalInstructors}</p>
-                      <p className="mt-1 text-xs text-slate-600">Available for allocation</p>
-                    </div>
-                    <Users className="w-12 h-12 text-slate-300" strokeWidth={1.5} />
-                  </div>
-                </div>
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-5 shadow-sm hover:border-slate-300 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-600">Pending Approvals</p>
-                      <p className="mt-3 text-4xl font-semibold text-blue-600">3</p>
-                      <p className="mt-1 text-xs text-slate-600">Need coordinator action</p>
-                    </div>
-                    <AlertCircle className="w-12 h-12 text-slate-300" strokeWidth={1.5} />
-                  </div>
-                </div>
-              </div>
             </div>
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+              Coordinator Ready
+            </span>
+          </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              {quickActions.map((action) => {
-                const Icon = action.icon;
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
+            <ActionTile
+              title="Batch Control"
+              description="Manage cohorts, capacities, and specialization allocation windows."
+              buttonText="Open Batches"
+              onClick={() => navigate('/faculty/batches')}
+            />
+            <ActionTile
+              title="Module Ledger"
+              description="Inspect departmental modules and review teaching load filters."
+              buttonText="Open Modules"
+              onClick={() => navigate('/faculty/modules')}
+            />
+            <ActionTile
+              title="Timetable Engine"
+              description="Launch timetable generation and evaluate optimization outputs."
+              buttonText="Open Scheduler"
+              onClick={() => navigate('/scheduler')}
+            />
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-slate-200 bg-white/88 p-6 shadow-[0_14px_40px_rgba(15,23,42,0.08)] xl:col-span-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Settings Console</p>
+              <h3 className="mt-2 text-xl font-semibold text-slate-900">Soft Constraints</h3>
+            </div>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+              w5 Policy
+            </span>
+          </div>
+
+          <div className="mt-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">Preferred Days</p>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              {dayOptions.map((day) => {
+                const isSelected = selectedDays.includes(day);
                 return (
-                  <article key={action.title} className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="text-base font-semibold text-slate-900">{action.title}</h3>
-                        <p className="mt-2 text-sm text-slate-600">{action.description}</p>
-                        <button
-                          type="button"
-                          onClick={() => handleSidebarNavigation(action.to)}
-                          className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:bg-blue-700"
-                        >
-                          {action.action}
-                        </button>
-                      </div>
-                      <Icon className="w-10 h-10 text-slate-300 ml-4" strokeWidth={1.5} />
-                    </div>
-                  </article>
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => toggleDay(day)}
+                    className={`rounded-xl border px-2 py-2 text-xs font-semibold transition active:translate-y-[1px] ${
+                      isSelected
+                        ? 'border-sky-500 bg-sky-100 text-sky-900'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    {day}
+                  </button>
                 );
               })}
             </div>
-          </section>
+          </div>
 
-          <aside className="space-y-6">
-            <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-base font-semibold text-slate-900">Campus Resources</h3>
-              <p className="mt-1 text-xs text-slate-600">LIC units and available instructors</p>
+          <div className="mt-4 space-y-3">
+            <Input
+              label="Preferred Slots"
+              val={softConstraintForm.preferredSlotsCsv}
+              onChange={(v) => setSoftConstraintForm({ ...softConstraintForm, preferredSlotsCsv: v })}
+              mono
+            />
+            <Input
+              label="w5 Weight"
+              type="number"
+              val={softConstraintForm.w5Weight}
+              onChange={(v) => setSoftConstraintForm({ ...softConstraintForm, w5Weight: v })}
+            />
+            <Input
+              label="Notes"
+              val={softConstraintForm.notes}
+              onChange={(v) => setSoftConstraintForm({ ...softConstraintForm, notes: v })}
+              placeholder="Constraint context for scheduling runs"
+            />
+          </div>
 
-              {loadingResources ? (
-                <p className="mt-4 text-xs text-slate-600">Loading resources...</p>
-              ) : (
-                <div className="mt-4 space-y-2">
-                  {resources.length === 0 && <p className="text-xs text-slate-600">No resources found.</p>}
-                  {resources.slice(0, 5).map((lic) => (
-                    <div key={lic.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3 shadow-sm">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-xs font-medium text-slate-900">{lic.name || lic.id}</p>
-                        <span className="text-[10px] text-slate-600">{lic.department || 'N/A'}</span>
-                      </div>
-                      <p className="mt-1 text-[10px] text-slate-600">
-                        {(lic.instructors || []).length} instructor{(lic.instructors || []).length === 1 ? '' : 's'}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-base font-semibold text-slate-900">Today's Focus</h3>
-              <ul className="mt-3 space-y-2">
-                {focusItems.slice(0, 3).map((item) => (
-                  <li key={item} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </section>
-
-            <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-base font-semibold text-slate-900">Soft Constraints</h3>
-              <p className="mt-1 text-xs text-slate-600">Faculty preferences penalized through w5 component</p>
-              <div className="mt-4 space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-900 placeholder-slate-500 shadow-sm transition-all focus:outline-none focus:ring-1 focus:ring-blue-600"
-                    placeholder="Preferred days"
-                    value={softConstraintForm.preferredDaysCsv}
-                    onChange={(event) => setSoftConstraintForm({ ...softConstraintForm, preferredDaysCsv: event.target.value })}
-                  />
-                  <input
-                    className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-900 placeholder-slate-500 shadow-sm transition-all focus:outline-none focus:ring-1 focus:ring-blue-600"
-                    placeholder="Preferred slots"
-                    value={softConstraintForm.preferredSlotsCsv}
-                    onChange={(event) => setSoftConstraintForm({ ...softConstraintForm, preferredSlotsCsv: event.target.value })}
-                  />
-                </div>
-                <input
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-900 placeholder-slate-500 shadow-sm transition-all focus:outline-none focus:ring-1 focus:ring-blue-600"
-                  type="number"
-                  min="0"
-                  placeholder="w5 weight"
-                  value={softConstraintForm.w5Weight}
-                  onChange={(event) => setSoftConstraintForm({ ...softConstraintForm, w5Weight: event.target.value })}
-                />
-                <textarea
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-900 placeholder-slate-500 shadow-sm transition-all focus:outline-none focus:ring-1 focus:ring-blue-600"
-                  rows={2}
-                  placeholder="Notes"
-                  value={softConstraintForm.notes}
-                  onChange={(event) => setSoftConstraintForm({ ...softConstraintForm, notes: event.target.value })}
-                />
-                <button
-                  type="button"
-                  onClick={saveSoftConstraints}
-                  disabled={savingSoftConstraints}
-                  className="w-full rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white shadow-sm transition-all duration-200 hover:bg-blue-700 disabled:opacity-60"
-                >
-                  {savingSoftConstraints ? 'Saving...' : 'Save Constraints'}
-                </button>
-              </div>
-            </section>
-          </aside>
-        </div>
-      </main>
-    </div>
+          <button
+            type="button"
+            onClick={saveSoftConstraints}
+            disabled={savingSoftConstraints}
+            className="mt-4 w-full rounded-xl border border-sky-700 bg-sky-700 px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(3,105,161,0.24)] transition hover:-translate-y-0.5 hover:bg-sky-800 active:translate-y-[1px] disabled:opacity-60"
+          >
+            {savingSoftConstraints ? 'Saving...' : 'Save Constraints'}
+          </button>
+          <p className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            Logged in as <span className="font-semibold text-slate-900">{username}</span>
+          </p>
+        </section>
+      </div>
+    </FacultyCoordinatorShell>
   );
 };
+
+const SummaryCard = ({ label, value, status, chart, pulse = false }) => (
+  <article className="rounded-3xl border border-slate-200 bg-white/88 p-4 shadow-[0_12px_35px_rgba(15,23,42,0.08)]">
+    <div className="flex items-center justify-between gap-3">
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">{label}</p>
+        <p className="mt-2 text-2xl font-semibold text-slate-900">{value}</p>
+      </div>
+      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-semibold uppercase text-emerald-700">
+        <span className={`h-2 w-2 rounded-full bg-emerald-500 ${pulse ? 'animate-pulse' : ''}`} />
+        {status}
+      </span>
+    </div>
+    <Sparkline points={chart} />
+  </article>
+);
+
+const Sparkline = ({ points = [] }) => {
+  const max = Math.max(...points, 1);
+  const width = 180;
+  const height = 36;
+  const step = points.length > 1 ? width / (points.length - 1) : width;
+  const d = points
+    .map((point, index) => {
+      const x = index * step;
+      const y = height - (point / max) * height;
+      return `${index === 0 ? 'M' : 'L'}${x},${y}`;
+    })
+    .join(' ');
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="mt-3 h-10 w-full" preserveAspectRatio="none">
+      <path d={d} fill="none" stroke="#0369a1" strokeWidth="2.2" strokeLinecap="round" />
+    </svg>
+  );
+};
+
+const ActionTile = ({ title, description, buttonText, onClick }) => (
+  <article className="rounded-2xl border border-slate-200 bg-slate-50/55 p-4 shadow-[0_8px_20px_rgba(15,23,42,0.05)]">
+    <h4 className="text-sm font-semibold text-slate-900">{title}</h4>
+    <p className="mt-2 text-sm text-slate-600">{description}</p>
+    <button
+      type="button"
+      onClick={onClick}
+      className="mt-4 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-400 active:translate-y-[1px]"
+    >
+      {buttonText}
+    </button>
+  </article>
+);
+
+const Input = ({ label, val, onChange, type = 'text', placeholder = '', mono = false }) => (
+  <label className="block">
+    <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">{label}</span>
+    <input
+      type={type}
+      className={`mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:ring-4 focus:ring-sky-100 ${
+        mono ? 'font-mono' : ''
+      }`}
+      placeholder={placeholder}
+      value={val}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  </label>
+);
 
 export default FacultyCoordinatorDashboard;

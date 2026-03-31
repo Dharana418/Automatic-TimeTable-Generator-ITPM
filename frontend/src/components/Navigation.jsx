@@ -3,11 +3,6 @@ import autoschedule from '../assets/SLIIT_LOGO.png';
 
 const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", theme = 'light', onToggleTheme }) => {
     const location = useLocation();
-    const displayRole = user?.role === 'Admin' ? 'System Admin' : (user?.role || 'User');
-    const displayName = user?.username || user?.name || '';
-    const profilePhoto = user?.profile_photo_url || '';
-    const shouldShowName =
-        displayName && displayName.trim().toLowerCase() !== String(displayRole).trim().toLowerCase();
 
     const handleLogout = async () => {
         try {
@@ -24,66 +19,45 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
     };
     
     return (
-        <nav className="sticky top-0 z-50 border-b border-slate-800 bg-black px-[5%] py-4 shadow-sm shadow-black/50 backdrop-blur-md">
+    <nav className="sticky top-0 z-50 border-b border-gray-200 bg-white px-[5%] py-3 dark:border-gray-800 dark:bg-black">
             <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4">
                 <Link to="/" className="flex items-center gap-3 no-underline">
-                    <h2 className="m-0 text-lg font-bold text-white md:text-2xl">SLIIT Timetable Generator</h2>
-                    <img src={autoschedule} alt="SLIIT Logo" className="h-10 w-auto md:h-12" />
+                    <h2 className="m-0 select-none text-lg font-semibold text-gray-900 md:text-xl dark:text-white">SLIIT Timetable</h2>
+                    <img src={autoschedule} alt="SLIIT Logo" className="h-9 w-auto md:h-10" />
                 </Link>
 
-            <div className="ml-auto flex items-center gap-2 md:gap-3">
+            <div className="flex items-center gap-1.5 md:gap-2">
                 <button
                     onClick={onToggleTheme}
                     type="button"
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 transition duration-200 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400 dark:hover:bg-slate-700"
+                    className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
                     aria-label="Toggle theme"
                 >
-                    {theme === 'dark' ? '☀ Light' : '🌙 Dark'}
+                    {theme === 'dark' ? '☀' : '🌙'}
                 </button>
 
                 {isAuthenticated ? (
                     <>
-                        {profilePhoto ? (
-                            <img
-                                src={profilePhoto}
-                                alt="Profile"
-                                className="h-9 w-9 rounded-full border-2 border-white object-cover"
-                            />
-                        ) : (
-                            <div className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-slate-800 text-xs font-black text-white">
-                                {(displayName || displayRole || 'U').trim().charAt(0).toUpperCase()}
-                            </div>
-                        )}
-
-                        <span className="hidden whitespace-nowrap rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-black text-white md:inline">{displayRole}</span>
-                        {shouldShowName && (
-                            <span className="hidden whitespace-nowrap text-sm font-semibold text-white md:inline">{displayName}</span>
-                        )}
+                        <span className="hidden text-xs font-semibold text-gray-600 dark:text-gray-400 md:inline">{user?.username || user?.name}</span>
 
                         {location.pathname !== '/dashboard' && (
-                            <Link to="/dashboard" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-center text-sm font-semibold text-slate-900 transition duration-200 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400 dark:hover:bg-slate-700 md:w-28">Dashboard</Link>
-                        )}
-
-                        {location.pathname !== '/profile' && (
-                            <Link to="/profile" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-center text-sm font-semibold text-slate-900 transition duration-200 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400 dark:hover:bg-slate-700 md:w-24">Profile</Link>
+                            <Link to="/dashboard" className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 md:w-24">Dashboard</Link>
                         )}
 
                         {user?.role === 'Faculty Coordinator' && location.pathname !== '/scheduler' && (
-                            <Link to="/scheduler" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-center text-sm font-semibold text-slate-900 transition duration-200 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400 dark:hover:bg-slate-700 md:w-28">Scheduler</Link>
+                            <Link to="/scheduler" className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 md:w-24">Scheduler</Link>
                         )}
 
-                        <button onClick={handleLogout} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 transition duration-200 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400 dark:hover:bg-slate-700 md:w-28">
-                            Logout
-                        </button>
+                        <button onClick={handleLogout} className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 md:w-20">Logout</button>
                     </>
                 ) : (
                     <>
                         {location.pathname !== '/' && (
-                            <Link to="/" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-center text-sm font-semibold text-slate-900 transition duration-200 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400 dark:hover:bg-slate-700 md:w-24">Home</Link>
+                            <Link to="/" className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 md:w-20">Home</Link>
                         )}
 
                         {location.pathname !== '/login' && (
-                            <Link to="/login" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-center text-sm font-semibold text-slate-900 transition duration-200 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400 dark:hover:bg-slate-700 md:w-24">Login</Link>
+                            <Link to="/login" className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 md:w-20">Login</Link>
                         )}
                     </>
                 )}

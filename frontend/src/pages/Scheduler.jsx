@@ -1,10 +1,20 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import schedulerApi from '../api/scheduler.js';
 import { showError, showSuccess, showWarning } from '../utils/alerts.js';
 
 const types = ['halls','modules','instructors','lics'];
-const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-const timeSlots = ['08:00 - 10:00', '10:00 - 12:00', '12:00 - 14:00', '14:00 - 16:00', '16:00 - 18:00'];
+const algorithmOptions = ['pso', 'anticolony', 'genetic', 'tabu', 'hybrid'];
+const dayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const dayLabel = {
+  Mon: 'Monday',
+  Tue: 'Tuesday',
+  Wed: 'Wednesday',
+  Thu: 'Thursday',
+  Fri: 'Friday',
+  Sat: 'Saturday',
+  Sun: 'Sunday',
+};
+const defaultSlots = ['09:00-10:00', '10:00-11:00', '11:00-12:00', '13:00-14:00', '14:00-15:00'];
 
 const departmentColors = {
   Computing: { bg: 'rgba(56, 189, 248, 0.18)', border: 'rgba(56, 189, 248, 0.55)' },
@@ -37,6 +47,66 @@ function toCourse(item = {}, index = 0) {
   };
 }
 
+function normalizeDay(value = '') {
+  const key = String(value).trim().toLowerCase().slice(0, 3);
+  const map = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
+  return map[key] || null;
+}
+
+function slotToMinutes(slot = '') {
+  const [start = '00:00'] = String(slot).split('-');
+  const [hours = '0', mins = '0'] = start.trim().split(':');
+  const hh = Number(hours);
+  const mm = Number(mins);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return 0;
+  return hh * 60 + mm;
+}
+
+function pickPreferredAlgorithm(results = {}) {
+  const priority = ['hybrid', 'tabu', 'genetic', 'ant', 'pso'];
+  for (const key of priority) {
+    if (results?.[key]) return { key, data: results[key] };
+  }
+
+  const fallbackKey = Object.keys(results || {})[0];
+  if (!fallbackKey) return { key: null, data: null };
+  return { key: fallbackKey, data: results[fallbackKey] };
+}
+
+function toGeneratedEntry(entry = {}, index = 0, segmentKey = '') {
+  const sourceTitle = entry.moduleName || entry.moduleId || `Session ${index + 1}`;
+  const department = guessDepartment({
+    department: entry.department,
+    code: entry.moduleId,
+    name: sourceTitle,
+  });
+
+  return {
+    id: `${entry.moduleId || sourceTitle}-${entry.day || 'day'}-${entry.slot || index}-${index}-${segmentKey || 'main'}`,
+    moduleId: String(entry.moduleId || sourceTitle),
+    title: sourceTitle,
+    department,
+    lecturer: entry.instructorName || entry.instructorId || 'TBD',
+    room: entry.hallName || entry.hallId || 'TBD',
+    day: normalizeDay(entry.day) || 'Mon',
+    slot: String(entry.slot || '').trim(),
+    slots: Array.isArray(entry.slots) && entry.slots.length ? entry.slots.map((slot) => String(slot)) : [String(entry.slot || '')],
+    batchKeys: Array.isArray(entry.batchKeys) ? entry.batchKeys : [],
+    color: departmentColors[department] || departmentColors.General,
+    segmentKey,
+  };
+}
+
+function toCapitalized(value = '') {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function toReadableLabel(value = '') {
+  return toCapitalized(String(value || '').replace(/_/g, ' '));
+}
+
 export default function Scheduler() {
   const [activeType, setActiveType] = useState('modules');
   const [items, setItems] = useState([]);
@@ -44,24 +114,37 @@ export default function Scheduler() {
   const [result, setResult] = useState(null);
   const [segmentedResult, setSegmentedResult] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [calendarMap, setCalendarMap] = useState({});
-  const [dragPayload, setDragPayload] = useState(null);
+  const [generatedEntries, setGeneratedEntries] = useState([]);
+  const [executionSnapshot, setExecutionSnapshot] = useState({
+    coverage: null,
+    scheduled: 0,
+    totalRequired: 0,
+    conflicts: 0,
+    source: '-',
+  });
   const [selectedBlock, setSelectedBlock] = useState(null);
-  const [activeNav, setActiveNav] = useState('weekly');
-
-  const fetchList = useCallback(async (t) => {
-    try {
-      const res = await schedulerApi.listItems(t);
-      setItems(res.items || []);
-    } catch (e) {
-      console.error(e);
-      setItems([]);
-    }
-  }, []);
+  const [activeNav, setActiveNav] = useState('overview');
+  const [iterations, setIterations] = useState(80);
+  const [selectedAlgorithms, setSelectedAlgorithms] = useState(['pso', 'anticolony', 'genetic', 'tabu', 'hybrid']);
 
   useEffect(() => {
-    fetchList(activeType);
-  }, [activeType, fetchList]);
+    let cancelled = false;
+
+    const loadItems = async () => {
+      try {
+        const res = await schedulerApi.listItems(activeType);
+        if (!cancelled) setItems(res.items || []);
+      } catch (e) {
+        console.error(e);
+        if (!cancelled) setItems([]);
+      }
+    };
+
+    loadItems();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeType]);
 
   async function handleAdd(e){
     e.preventDefault();
@@ -73,15 +156,35 @@ export default function Scheduler() {
       await schedulerApi.addItem(activeType, form);
       setForm({});
       showSuccess('Entry created', `${activeType.slice(0, -1)} added successfully.`);
-      fetchList(activeType);
+      const refreshed = await schedulerApi.listItems(activeType);
+      setItems(refreshed.items || []);
     }catch(err){ showError('Create failed', err.message); }
   }
 
   async function handleRun(){
     setLoading(true); setResult(null); setSegmentedResult(null);
     try{
-      const res = await schedulerApi.runScheduler(['pso','anticolony','genetic','tabu','hybrid'], { iterations: 80 });
+      const algorithms = selectedAlgorithms.length ? selectedAlgorithms : ['hybrid'];
+      const res = await schedulerApi.runScheduler(algorithms, { iterations });
       setResult(res.results);
+
+      const selected = pickPreferredAlgorithm(res.results || {});
+      const schedule = Array.isArray(selected?.data?.schedule) ? selected.data.schedule : [];
+      const entries = schedule.map((entry, index) => toGeneratedEntry(entry, index));
+      const conflicts = Array.isArray(selected?.data?.conflicts) ? selected.data.conflicts.length : 0;
+      const scheduled = Number(selected?.data?.stats?.scheduled || 0);
+      const totalRequired = Number(selected?.data?.stats?.totalRequired || 0);
+      const coverage = selected?.data?.stats?.coverage;
+
+      setGeneratedEntries(entries);
+      setExecutionSnapshot({
+        coverage: typeof coverage === 'number' ? coverage : null,
+        scheduled,
+        totalRequired,
+        conflicts,
+        source: selected?.key ? `${toReadableLabel(selected.key)} (primary)` : '-',
+      });
+
       showSuccess('Scheduler completed', 'Algorithm run completed successfully.');
     }catch(err){ showError('Scheduler failed', err.message); }
     setLoading(false);
@@ -90,87 +193,62 @@ export default function Scheduler() {
   async function handleRunBySegments(){
     setLoading(true); setResult(null); setSegmentedResult(null);
     try{
-      const res = await schedulerApi.runSchedulerBySegments(['hybrid'], { iterations: 80 });
+      const algorithms = selectedAlgorithms.length ? selectedAlgorithms : ['hybrid'];
+      const res = await schedulerApi.runSchedulerBySegments(algorithms, { iterations });
       setSegmentedResult(res);
+
+      const segmentRows = Array.isArray(res?.segmentedResults) ? res.segmentedResults : [];
+      let totalScheduled = 0;
+      let totalRequired = 0;
+      let totalConflicts = 0;
+      const mergedEntries = [];
+
+      segmentRows.forEach((segmentRow, segmentIndex) => {
+        const selected = pickPreferredAlgorithm(segmentRow?.results || {});
+        const schedule = Array.isArray(selected?.data?.schedule) ? selected.data.schedule : [];
+        schedule.forEach((entry, entryIndex) => {
+          mergedEntries.push(toGeneratedEntry(entry, entryIndex, segmentRow?.segment?.key || `segment-${segmentIndex + 1}`));
+        });
+
+        totalScheduled += Number(selected?.data?.stats?.scheduled || 0);
+        totalRequired += Number(selected?.data?.stats?.totalRequired || 0);
+        totalConflicts += Array.isArray(selected?.data?.conflicts) ? selected.data.conflicts.length : 0;
+      });
+
+      setGeneratedEntries(mergedEntries);
+      setExecutionSnapshot({
+        coverage: totalRequired > 0 ? totalScheduled / totalRequired : null,
+        scheduled: totalScheduled,
+        totalRequired,
+        conflicts: totalConflicts,
+        source: `Segmented (${segmentRows.length} segments)`,
+      });
+
       showSuccess('Segmented run completed', 'Scheduler run by segments finished.');
     }catch(err){ showError('Segmented run failed', err.message); }
     setLoading(false);
   }
 
-  const courses = useMemo(() => {
-    if (activeType !== 'modules') return [];
-    return (items || []).map((item, index) => toCourse(item, index));
-  }, [items, activeType]);
-
-  const assignedCourseIds = useMemo(() => new Set(Object.values(calendarMap)), [calendarMap]);
-
-  const unassignedCourses = useMemo(
-    () => courses.filter((course) => !assignedCourseIds.has(course.id)),
-    [courses, assignedCourseIds]
+  const modulesCatalog = useMemo(
+    () => (activeType === 'modules' ? (items || []).map((item, index) => toCourse(item, index)) : []),
+    [items, activeType]
   );
 
-  const coverage = courses.length
-    ? Math.round(((courses.length - unassignedCourses.length) / courses.length) * 100)
-    : 0;
+  const coverageLabel = executionSnapshot.coverage == null
+    ? '-'
+    : `${Math.round(executionSnapshot.coverage * 100)}%`;
+
+  const uniqueScheduledModules = useMemo(
+    () => new Set(generatedEntries.map((entry) => entry.moduleId)).size,
+    [generatedEntries]
+  );
 
   const statsCards = [
-    { label: 'Total Modules', value: courses.length || 0 },
-    { label: 'Assigned Blocks', value: Object.keys(calendarMap).length },
-    { label: 'Unscheduled', value: unassignedCourses.length },
-    { label: 'Coverage', value: `${coverage}%` },
+    { label: 'Catalog Modules', value: modulesCatalog.length || 0 },
+    { label: 'Generated Sessions', value: generatedEntries.length },
+    { label: 'Unique Modules', value: uniqueScheduledModules },
+    { label: 'Coverage', value: coverageLabel },
   ];
-
-  function findCourse(courseId) {
-    return courses.find((course) => course.id === courseId);
-  }
-
-  function handleDragStartFromPool(courseId) {
-    setDragPayload({ source: 'pool', courseId, fromCell: null });
-  }
-
-  function handleDragStartFromCell(courseId, fromCell) {
-    setDragPayload({ source: 'grid', courseId, fromCell });
-  }
-
-  function allowDrop(event) {
-    event.preventDefault();
-  }
-
-  function assignToCell(day, slot) {
-    if (!dragPayload?.courseId) return;
-
-    const cellKey = `${day}__${slot}`;
-
-    setCalendarMap((previous) => {
-      const next = { ...previous };
-
-      Object.keys(next).forEach((key) => {
-        if (next[key] === dragPayload.courseId) {
-          delete next[key];
-        }
-      });
-
-      if (dragPayload.source === 'grid' && dragPayload.fromCell && dragPayload.fromCell !== cellKey) {
-        delete next[dragPayload.fromCell];
-      }
-
-      next[cellKey] = dragPayload.courseId;
-      return next;
-    });
-
-    setDragPayload(null);
-  }
-
-  function unassignCourse(courseId) {
-    setCalendarMap((previous) => {
-      const next = { ...previous };
-      Object.keys(next).forEach((key) => {
-        if (next[key] === courseId) delete next[key];
-      });
-      return next;
-    });
-    setDragPayload(null);
-  }
 
   function handleJsonChange(value) {
     if (!value.trim()) {
@@ -193,6 +271,53 @@ export default function Scheduler() {
         conflicts: value?.conflicts?.length || 0,
       }))
     : [];
+
+  function toggleAlgorithm(algorithm) {
+    setSelectedAlgorithms((previous) => {
+      if (previous.includes(algorithm)) {
+        if (previous.length === 1) return previous;
+        return previous.filter((item) => item !== algorithm);
+      }
+      return [...previous, algorithm];
+    });
+  }
+
+  const activeDays = useMemo(() => {
+    const inSchedule = [...new Set(generatedEntries.map((entry) => entry.day).filter(Boolean))];
+    if (!inSchedule.length) return dayOrder.slice(0, 5);
+    return dayOrder.filter((day) => inSchedule.includes(day));
+  }, [generatedEntries]);
+
+  const activeSlots = useMemo(() => {
+    const slotSet = new Set();
+
+    generatedEntries.forEach((entry) => {
+      if (Array.isArray(entry.slots) && entry.slots.length) {
+        entry.slots.forEach((slot) => slotSet.add(slot));
+      } else if (entry.slot) {
+        slotSet.add(entry.slot);
+      }
+    });
+
+    const list = [...slotSet];
+    if (!list.length) return defaultSlots;
+    return list.sort((left, right) => slotToMinutes(left) - slotToMinutes(right));
+  }, [generatedEntries]);
+
+  const scheduleMap = useMemo(() => {
+    const map = {};
+
+    generatedEntries.forEach((entry) => {
+      const slots = Array.isArray(entry.slots) && entry.slots.length ? entry.slots : [entry.slot];
+      slots.forEach((slot) => {
+        const key = `${entry.day}__${slot}`;
+        if (!map[key]) map[key] = [];
+        map[key].push(entry);
+      });
+    });
+
+    return map;
+  }, [generatedEntries]);
 
   return (
     <div className="scheduler-shell">
@@ -235,7 +360,7 @@ export default function Scheduler() {
         <header className="scheduler-header">
           <div>
             <h1>Automated University Timetable Dashboard</h1>
-            <p>Drag course blocks into weekly slots to compose, compare, and refine institutional schedules.</p>
+            <p>Run scheduling engines using real coordinator allocations, institutional data, and module duration rules.</p>
           </div>
           <div className="header-actions">
             <button className="action primary" onClick={handleRun} disabled={loading}>
@@ -247,60 +372,98 @@ export default function Scheduler() {
           </div>
         </header>
 
-        <section className="scheduler-stats">
-          {statsCards.map((stat) => (
-            <article key={stat.label} className="stat-card">
-              <span>{stat.label}</span>
-              <strong>{stat.value}</strong>
-            </article>
-          ))}
-        </section>
+        {(activeNav === 'overview' || activeNav === 'algorithms') && (
+          <section className="panel-card">
+            <div className="panel-header">
+              <h3>Engine Configuration</h3>
+              <span>Choose algorithms and runtime settings</span>
+            </div>
+
+            <div className="json-form">
+              <label>
+                Iterations
+                <input
+                  className="ac-input"
+                  min={10}
+                  max={500}
+                  type="number"
+                  value={iterations}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    if (!Number.isFinite(value)) return;
+                    setIterations(Math.max(10, Math.min(500, value)));
+                  }}
+                />
+              </label>
+              <div className="course-pool">
+                {algorithmOptions.map((algorithm) => (
+                  <label key={algorithm} className="pool-item generated-block" style={{ background: 'rgba(15, 23, 42, 0.45)', borderColor: 'rgba(148, 163, 184, 0.35)' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedAlgorithms.includes(algorithm)}
+                      onChange={() => toggleAlgorithm(algorithm)}
+                    />
+                    <strong>{toReadableLabel(algorithm)}</strong>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+        {(activeNav === 'overview' || activeNav === 'weekly') && (
+          <section className="scheduler-stats">
+            {statsCards.map((stat) => (
+              <article key={stat.label} className="stat-card">
+                <span>{stat.label}</span>
+                <strong>{stat.value}</strong>
+              </article>
+            ))}
+          </section>
+        )}
 
         <section className="scheduler-grid-layout">
+          {(activeNav === 'overview' || activeNav === 'weekly') && (
           <article className="calendar-panel">
             <div className="panel-header">
               <h3>Weekly Schedule Matrix</h3>
-              <span>Drag & drop blocks • 5 day view</span>
+              <span>Backend generated output • Algorithm driven</span>
             </div>
 
             <div className="calendar-grid">
               <div className="grid-corner">Time</div>
-              {weekdays.map((day) => (
-                <div key={day} className="grid-day-header">{day}</div>
+              {activeDays.map((day) => (
+                <div key={day} className="grid-day-header">{dayLabel[day] || day}</div>
               ))}
 
-              {timeSlots.map((slot) => (
+              {activeSlots.map((slot) => (
                 <React.Fragment key={slot}>
                   <div className="grid-time-label">{slot}</div>
-                  {weekdays.map((day) => {
+                  {activeDays.map((day) => {
                     const cellKey = `${day}__${slot}`;
-                    const courseId = calendarMap[cellKey];
-                    const course = courseId ? findCourse(courseId) : null;
+                    const entries = scheduleMap[cellKey] || [];
                     return (
-                      <div
-                        key={cellKey}
-                        className="grid-cell"
-                        onDragOver={allowDrop}
-                        onDrop={() => assignToCell(day, slot)}
-                      >
-                        {course ? (
-                          <button
-                            className="course-block"
-                            draggable
-                            onDragStart={() => handleDragStartFromCell(course.id, cellKey)}
-                            onClick={() => setSelectedBlock({ day, slot, course })}
-                            style={{
-                              background: course.color.bg,
-                              borderColor: course.color.border,
-                            }}
-                            type="button"
-                          >
-                            <strong>{course.title}</strong>
-                            <span>{course.department}</span>
-                            <span>{course.lecturer}</span>
-                          </button>
+                      <div key={cellKey} className="grid-cell">
+                        {entries.length ? (
+                          <div className="schedule-cell-stack">
+                            {entries.map((entry) => (
+                              <button
+                                key={entry.id}
+                                className="course-block generated-block"
+                                onClick={() => setSelectedBlock(entry)}
+                                style={{
+                                  background: entry.color.bg,
+                                  borderColor: entry.color.border,
+                                }}
+                                type="button"
+                              >
+                                <strong>{entry.title}</strong>
+                                <span>{entry.room}</span>
+                                <span>{entry.lecturer}</span>
+                              </button>
+                            ))}
+                          </div>
                         ) : (
-                          <span className="grid-empty">Drop here</span>
+                          <span className="grid-empty">No generated class</span>
                         )}
                       </div>
                     );
@@ -309,48 +472,52 @@ export default function Scheduler() {
               ))}
             </div>
           </article>
+          )}
 
           <aside className="control-panel">
+            {(activeNav === 'overview' || activeNav === 'resources') && (
             <section className="panel-card">
               <div className="panel-header">
-                <h3>Course Pool</h3>
-                <span>{unassignedCourses.length} unscheduled</span>
+                <h3>Generated Session Feed</h3>
+                <span>{generatedEntries.length} records</span>
               </div>
 
-              <div
-                className="course-pool"
-                onDragOver={allowDrop}
-                onDrop={() => {
-                  if (dragPayload?.courseId) {
-                    unassignCourse(dragPayload.courseId);
-                  }
-                }}
-              >
-                {unassignedCourses.length === 0 ? (
-                  <p className="empty-pool">All modules are currently scheduled.</p>
+              <div className="course-pool">
+                {generatedEntries.length === 0 ? (
+                  <p className="empty-pool">Run scheduler to populate generated timetable sessions.</p>
                 ) : (
-                  unassignedCourses.map((course) => (
+                  generatedEntries.slice(0, 80).map((entry) => (
                     <div
-                      key={course.id}
-                      className="pool-item"
-                      draggable
-                      onDragStart={() => handleDragStartFromPool(course.id)}
+                      key={entry.id}
+                      className="pool-item generated-block"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedBlock(entry)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          setSelectedBlock(entry);
+                        }
+                      }}
                       style={{
-                        background: course.color.bg,
-                        borderColor: course.color.border,
+                        background: entry.color.bg,
+                        borderColor: entry.color.border,
                       }}
                     >
-                      <strong>{course.title}</strong>
-                      <span>{course.department}</span>
+                      <strong>{entry.title}</strong>
+                      <span>{(dayLabel[entry.day] || entry.day)} • {entry.slot}</span>
+                      <span>{entry.room}</span>
                     </div>
                   ))
                 )}
               </div>
             </section>
+            )}
 
+            {(activeNav === 'overview' || activeNav === 'resources') && (
             <section className="panel-card">
               <div className="panel-header">
-                <h3>Add {activeType.slice(0, -1)}</h3>
+                <h3>Add {toCapitalized(activeType.slice(0, -1))}</h3>
                 <span>JSON payload</span>
               </div>
               <form className="json-form" onSubmit={handleAdd}>
@@ -363,7 +530,7 @@ export default function Scheduler() {
               </form>
 
               <div className="existing-list">
-                <h4>Existing {activeType}</h4>
+                <h4>Existing {toCapitalized(activeType)}</h4>
                 {items.slice(0, 30).map((item, index) => (
                   <div key={item.id || item.name || `${activeType}-${index}`}>
                     {item.name || item.code || item.id}
@@ -371,8 +538,9 @@ export default function Scheduler() {
                 ))}
               </div>
             </section>
+            )}
 
-            {(summarizedResults.length > 0 || segmentedResult) && (
+            {(activeNav === 'overview' || activeNav === 'algorithms') && (summarizedResults.length > 0 || segmentedResult) && (
               <section className="panel-card">
                 <div className="panel-header">
                   <h3>Execution Insights</h3>
@@ -381,7 +549,7 @@ export default function Scheduler() {
 
                 {summarizedResults.map((entry) => (
                   <div className="result-row" key={entry.algorithm}>
-                    <strong>{entry.algorithm.toUpperCase()}</strong>
+                    <strong>{toReadableLabel(entry.algorithm)}</strong>
                     <p>
                       Coverage: {typeof entry.coverage === 'number' ? entry.coverage.toFixed(2) : '-'} •
                       {` ${entry.scheduled ?? '-'} / ${entry.totalRequired ?? '-'} `}
@@ -396,6 +564,15 @@ export default function Scheduler() {
                     <p>Total Segments: {segmentedResult.totalSegments}</p>
                   </div>
                 )}
+
+                <div className="result-row">
+                  <strong>Active Schedule Source</strong>
+                  <p>{executionSnapshot.source}</p>
+                  <p>
+                    Scheduled: {executionSnapshot.scheduled} / {executionSnapshot.totalRequired} •
+                    {` Conflicts: ${executionSnapshot.conflicts} `}
+                  </p>
+                </div>
               </section>
             )}
           </aside>
@@ -405,38 +582,28 @@ export default function Scheduler() {
       {selectedBlock && (
         <div className="glass-modal-backdrop" onClick={() => setSelectedBlock(null)}>
           <div className="glass-modal" onClick={(event) => event.stopPropagation()}>
-            <h3>{selectedBlock.course.title}</h3>
-            <p>{selectedBlock.day} • {selectedBlock.slot}</p>
+            <h3>{selectedBlock.title}</h3>
+            <p>{dayLabel[selectedBlock.day] || selectedBlock.day} • {selectedBlock.slot}</p>
             <div className="modal-meta-grid">
               <div>
                 <span>Department</span>
-                <strong>{selectedBlock.course.department}</strong>
+                <strong>{selectedBlock.department}</strong>
               </div>
               <div>
                 <span>Lecturer</span>
-                <strong>{selectedBlock.course.lecturer}</strong>
+                <strong>{selectedBlock.lecturer}</strong>
               </div>
               <div>
                 <span>Room</span>
-                <strong>{selectedBlock.course.room}</strong>
+                <strong>{selectedBlock.room}</strong>
               </div>
               <div>
-                <span>Credits</span>
-                <strong>{selectedBlock.course.credits}</strong>
+                <span>Batches</span>
+                <strong>{selectedBlock.batchKeys.length ? selectedBlock.batchKeys.join(', ') : 'N/A'}</strong>
               </div>
             </div>
             <div className="modal-actions">
               <button className="action" onClick={() => setSelectedBlock(null)} type="button">Close</button>
-              <button
-                className="action danger"
-                onClick={() => {
-                  unassignCourse(selectedBlock.course.id);
-                  setSelectedBlock(null);
-                }}
-                type="button"
-              >
-                Remove From Calendar
-              </button>
             </div>
           </div>
         </div>
