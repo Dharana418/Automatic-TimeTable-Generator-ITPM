@@ -1,3 +1,14 @@
+# ================================
+# FRONTEND .GITIGNORE
+# ================================
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+.env.production.local
+.env.development.local
+
 # Logs
 logs
 *.log
@@ -7,12 +18,20 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Node Modules & Dependencies
 node_modules
 dist
 dist-ssr
 *.local
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
-# Editor directories and files
+# Vite
+.vite
+vite-env.d.ts
+
+# IDE & Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
@@ -22,3 +41,57 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# OS Specific
+Thumbs.db
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Testing & Coverage
+coverage/
+.nyc_output/
+*.lcov
+test-results/
+
+# Cache
+.eslintcache
+.stylelintcache
+.cache/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# React DevTools
+# (browser extension, not part of repo)
+
+# Yarn berry specific
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
