@@ -1,6 +1,7 @@
 import { body, param, validationResult } from 'express-validator';
 
 const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9])(?=\S+$).{8,64}$/;
+const VALID_NAME_CHARS_REGEX = /^[A-Za-z][A-Za-z\s'.-]{2,99}$/;
 
 const VALID_USER_ROLES = [
   'Admin',
@@ -23,8 +24,55 @@ const strongPasswordValidation = (fieldName = 'password') =>
     .matches(STRONG_PASSWORD_REGEX)
     .withMessage('Password must be 8-64 characters and include uppercase, lowercase, number, and special character');
 
+const humanNameValidation = (fieldName = 'name') =>
+  body(fieldName)
+    .trim()
+    .notEmpty()
+    .withMessage('Name is required')
+    .isLength({ min: 3, max: 100 })
+    .withMessage('Name must be between 3 and 100 characters')
+    .matches(VALID_NAME_CHARS_REGEX)
+    .withMessage("Name can contain only letters, spaces, apostrophes, dots, and hyphens")
+    .custom((value) => {
+      const name = String(value || '').trim();
+      const parts = name.split(/\s+/).filter(Boolean);
+      if (parts.length < 2) {
+        throw new Error('Please provide full name (first and last name)');
+      }
+
+      if (parts.some((part) => part.replace(/[^A-Za-z]/g, '').length < 2)) {
+        throw new Error('Each name part should contain at least 2 letters');
+      }
+
+      const lettersOnly = name.toLowerCase().replace(/[^a-z]/g, '');
+      if (lettersOnly.length < 4) {
+        throw new Error('Please enter a realistic human name');
+      }
+
+      if (/(.)\1{3,}/.test(lettersOnly)) {
+        throw new Error('Name appears repetitive and not human-like');
+      }
+
+      if (/[bcdfghjklmnpqrstvwxyz]{6,}/.test(lettersOnly) || /[aeiou]{5,}/.test(lettersOnly)) {
+        throw new Error('Name appears invalid and not human-like');
+      }
+
+      const uniqueChars = new Set(lettersOnly).size;
+      if (lettersOnly.length >= 8 && uniqueChars <= 3) {
+        throw new Error('Name appears repetitive and not human-like');
+      }
+
+      const vowelCount = (lettersOnly.match(/[aeiou]/g) || []).length;
+      const vowelRatio = vowelCount / lettersOnly.length;
+      if (vowelCount < 2 || vowelRatio < 0.2 || vowelRatio > 0.8) {
+        throw new Error('Name does not appear human-like');
+      }
+
+      return true;
+    });
+
 export const registerValidation = [
-  body('name').trim().notEmpty().withMessage('Name is required').isLength({ max: 100 }).withMessage('Name cannot exceed 100 characters'),
+  humanNameValidation('name'),
   body('email').trim().isEmail().withMessage('Valid email is required').normalizeEmail(),
   strongPasswordValidation('password'),
   body('address').optional().isString(),
@@ -36,7 +84,7 @@ export const registerValidation = [
 ];
 
 export const adminCreateUserValidation = [
-  body('name').trim().notEmpty().withMessage('Name is required').isLength({ max: 100 }).withMessage('Name cannot exceed 100 characters'),
+  humanNameValidation('name'),
   body('email').trim().isEmail().withMessage('Valid email is required').normalizeEmail(),
   strongPasswordValidation('password'),
   body('address').optional().isString(),
@@ -57,7 +105,7 @@ export const adminCreateUserValidation = [
 ];
 
 export const bootstrapAdminValidation = [
-  body('name').trim().notEmpty().withMessage('Name is required').isLength({ max: 100 }).withMessage('Name cannot exceed 100 characters'),
+  humanNameValidation('name'),
   body('email').trim().isEmail().withMessage('Valid email is required').normalizeEmail(),
   strongPasswordValidation('password'),
   body('address').optional().isString(),

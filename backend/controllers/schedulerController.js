@@ -12,6 +12,102 @@ const ENGINEERING_SPECIALIZATIONS = new Set(['CS', 'ISE', 'CSNE', 'IM']);
 const normalizeAlgorithmKey = (value) => String(value || '').trim().toLowerCase();
 const normalizeRole = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
+const HALL_ID_REGEX = /^[A-Za-z0-9][A-Za-z0-9_-]{1,39}$/;
+const HALL_TEXT_REGEX = /^[A-Za-z0-9][A-Za-z0-9 .,&()\/-]{1,79}$/;
+const ALLOWED_HALL_AMENITIES = new Set([
+  'projector',
+  'wifi',
+  'ac',
+  'lab_equipment',
+  'accessibility',
+  'whiteboard',
+  'sound_system',
+]);
+const ALLOWED_HALL_STATUSES = new Set(['available', 'occupied', 'maintenance', 'unavailable']);
+
+const normalizeHallStatus = (status) => {
+  const normalizedStatus = String(status || 'available').trim().toLowerCase();
+  return ALLOWED_HALL_STATUSES.has(normalizedStatus) ? normalizedStatus : null;
+};
+
+const validateHallMaintenanceDates = ({ maintenanceStart = '', maintenanceEnd = '' } = {}) => {
+  const normalizedStart = String(maintenanceStart || '').trim();
+  const normalizedEnd = String(maintenanceEnd || '').trim();
+
+  if ((normalizedStart && !normalizedEnd) || (!normalizedStart && normalizedEnd)) {
+    return 'Please provide both maintenance start and end dates';
+  }
+
+  if (normalizedStart && normalizedEnd && normalizedEnd < normalizedStart) {
+    return 'Maintenance end date must be on or after the start date';
+  }
+
+  return null;
+};
+
+const validateHallPayload = ({ id = '', name = '', capacity, features } = {}) => {
+  const normalizedId = String(id || '').trim();
+  const normalizedName = String(name || '').trim();
+
+  if (!normalizedId || !HALL_ID_REGEX.test(normalizedId)) {
+    return 'Hall id must be 2-40 characters and contain only letters, numbers, underscore, or hyphen';
+  }
+
+  if (!normalizedName || !HALL_TEXT_REGEX.test(normalizedName)) {
+    return 'Hall name must be 2-80 characters and can include letters, numbers, spaces, and . , & ( ) / -';
+  }
+
+  const numericCapacity = Number(capacity);
+  if (!Number.isInteger(numericCapacity) || numericCapacity < 1 || numericCapacity > 2000) {
+    return 'Hall capacity must be an integer between 1 and 2000';
+  }
+
+  // Treat features as optional; validate only when provided
+  if (features != null) {
+    if (typeof features !== 'object' || Array.isArray(features)) {
+      return 'Hall features must be a valid object';
+    }
+
+    if (features.hallType != null) {
+      const hallType = String(features.hallType || '').trim();
+      if (!hallType || hallType.length < 2 || hallType.length > 60) {
+        return 'Hall type must be between 2 and 60 characters';
+      }
+    }
+
+    if (features.building != null) {
+      const building = String(features.building || '').trim();
+      if (!building || building.length < 2 || building.length > 80) {
+        return 'Building must be between 2 and 80 characters';
+      }
+    }
+
+    if (features.floor != null) {
+      const floor = String(features.floor).trim();
+      if (floor && floor.length > 30) {
+        return 'Floor cannot exceed 30 characters';
+      }
+    }
+
+    if (features.amenities != null) {
+      if (typeof features.amenities !== 'object' || Array.isArray(features.amenities)) {
+        return 'Amenities must be a key/value object';
+      }
+
+      for (const [key, value] of Object.entries(features.amenities)) {
+        if (!ALLOWED_HALL_AMENITIES.has(key)) {
+          return `Unsupported amenity: ${key}`;
+        }
+        if (typeof value !== 'boolean') {
+          return `Amenity '${key}' must be true or false`;
+        }
+      }
+    }
+  }
+
+  return null;
+};
+
 const isAcademicCoordinator = (user) => normalizeRole(user?.role) === 'academiccoordinator';
 const isLic = (user) => normalizeRole(user?.role) === 'lic';
 const isFacultyCoordinator = (user) => normalizeRole(user?.role) === 'facultycoordinator';
@@ -47,6 +143,73 @@ const inferModuleYear = (module) => {
   const code = String(module?.code || '').toUpperCase();
   const match = code.match(/^[A-Z]+(\d)/);
   return match ? Number(match[1]) : null;
+};
+
+const parseBatchSubgroupIdentity = (batchId = '') => {
+  const [yearToken = '', semesterToken = '', modeToken = '', specializationToken = '', groupToken = '', subgroupToken = ''] = String(batchId)
+    .trim()
+    .split('.');
+
+  if (!yearToken || !semesterToken || !modeToken || !specializationToken || !groupToken || !subgroupToken) {
+    return null;
+  }
+
+  return {
+    scopeKey: [
+      String(yearToken).toUpperCase(),
+      String(semesterToken).toUpperCase(),
+      String(modeToken).toUpperCase(),
+      String(specializationToken).toUpperCase(),
+      String(groupToken).trim(),
+    ].join('.'),
+    subgroup: String(subgroupToken).trim(),
+  };
+};
+
+const validateBatchSubgroupRules = async ({ batchId, ignoreId = null }) => {
+  const candidate = parseBatchSubgroupIdentity(batchId);
+  if (!candidate) {
+    return null;
+  }
+
+  if (!/^\d+$/.test(candidate.subgroup)) {
+    return 'Subgroup must be numeric';
+  }
+
+  const subgroupNumber = Number(candidate.subgroup);
+  if (!Number.isInteger(subgroupNumber) || subgroupNumber < 1 || subgroupNumber > 2) {
+    return 'Subgroup must be 1 or 2 (e.g. 01 or 02)';
+  }
+
+  const { rows } = await pool.query(
+    'SELECT id FROM batches WHERE UPPER(id) LIKE $1',
+    [`${candidate.scopeKey}.%`]
+  );
+
+  const siblingSubgroups = new Set();
+
+  for (const row of rows) {
+    if (ignoreId && row.id === ignoreId) {
+      continue;
+    }
+
+    const identity = parseBatchSubgroupIdentity(row.id);
+    if (!identity || identity.scopeKey !== candidate.scopeKey) {
+      continue;
+    }
+
+    if (identity.subgroup === candidate.subgroup) {
+      return 'This subgroup already exists for the selected group';
+    }
+
+    siblingSubgroups.add(identity.subgroup);
+  }
+
+  if (!siblingSubgroups.has(candidate.subgroup) && siblingSubgroups.size >= 2) {
+    return 'A group cannot have more than 2 subgroups';
+  }
+
+  return null;
 };
 
 const runSelectedAlgorithms = (constraints, algorithms, options) => {
@@ -218,6 +381,100 @@ const withFacultySoftConstraints = async (user, options = {}) => {
   };
 };
 
+const parseJsonSafe = (value, fallback = {}) => {
+  if (!value) return fallback;
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+};
+
+const loadCoordinatorHallAllocationMap = async () => {
+  const allocationMap = new Map();
+
+  // Highest priority: latest approved timetable allocations set by Academic Coordinator.
+  const approvedTimetableRes = await pool.query(
+    `WITH latest_approved AS (
+       SELECT data
+       FROM timetables
+       WHERE status = 'approved' AND data IS NOT NULL
+       ORDER BY created_at DESC
+       LIMIT 1
+     ), schedule_rows AS (
+       SELECT
+         elem->>'moduleId' AS module_id,
+         elem->>'hallId' AS hall_id
+       FROM latest_approved la,
+            LATERAL jsonb_array_elements(
+              CASE
+                WHEN jsonb_typeof(la.data->'schedule') = 'array' THEN la.data->'schedule'
+                ELSE '[]'::jsonb
+              END
+            ) elem
+       WHERE elem->>'moduleId' IS NOT NULL
+         AND elem->>'hallId' IS NOT NULL
+     )
+     SELECT module_id, hall_id, COUNT(*)::int AS usage_count
+     FROM schedule_rows
+     GROUP BY module_id, hall_id
+     ORDER BY module_id, usage_count DESC, hall_id ASC`
+  );
+
+  approvedTimetableRes.rows.forEach((row) => {
+    if (!allocationMap.has(row.module_id)) {
+      allocationMap.set(row.module_id, row.hall_id);
+    }
+  });
+
+  // Fallback: top cached recommendation for modules if approved timetable allocation is absent.
+  const recommendationRes = await pool.query(
+    `SELECT DISTINCT ON (for_module_id)
+        for_module_id,
+        recommended_hall_id
+     FROM hall_recommendations
+     WHERE recommended_hall_id IS NOT NULL
+       AND (expires_at IS NULL OR expires_at >= NOW())
+     ORDER BY for_module_id, score DESC, created_at DESC`
+  );
+
+  recommendationRes.rows.forEach((row) => {
+    if (!allocationMap.has(row.for_module_id)) {
+      allocationMap.set(row.for_module_id, row.recommended_hall_id);
+    }
+  });
+
+  return allocationMap;
+};
+
+const applyCoordinatorHallAllocations = (modules = [], allocationMap = new Map()) => {
+  if (!allocationMap.size) return modules;
+
+  return modules.map((module) => {
+    const preferredHallId = allocationMap.get(module.id) || allocationMap.get(module.code);
+    if (!preferredHallId) return module;
+
+    const details = parseJsonSafe(module.details, {});
+    const preferredHallIds = Array.from(
+      new Set([
+        ...((Array.isArray(details.preferredHallIds) ? details.preferredHallIds : []).map((item) => String(item))),
+        String(preferredHallId),
+      ])
+    );
+
+    return {
+      ...module,
+      preferred_hall_id: String(preferredHallId),
+      details: {
+        ...details,
+        preferredHallIds,
+        hallAllocationSource: 'academic_coordinator',
+      },
+    };
+  });
+};
+
 export const addItem = async (req, res) => {
   try {
     const { type } = req.params;
@@ -234,16 +491,59 @@ export const addItem = async (req, res) => {
         return res.status(403).json({ error: 'Only Academic Coordinator can add hall structures' });
       }
 
-      const { name = null, capacity = null, features = null } = payload;
+      const {
+        name = null,
+        capacity = null,
+        features = null,
+        status = 'available',
+        maintenanceStart = null,
+        maintenanceEnd = null,
+      } = payload;
+      const hallValidationError = validateHallPayload({ id, name, capacity, features });
+      if (hallValidationError) {
+        return res.status(400).json({ error: hallValidationError });
+      }
+
+      const normalizedStatus = normalizeHallStatus(status);
+      if (!normalizedStatus) {
+        return res.status(400).json({ error: 'Invalid hall status value' });
+      }
+
+      const maintenanceValidationError = validateHallMaintenanceDates({ maintenanceStart, maintenanceEnd });
+      if (maintenanceValidationError) {
+        return res.status(400).json({ error: maintenanceValidationError });
+      }
+
+      const normalizedMaintenanceStart = String(maintenanceStart || '').trim() || null;
+      const normalizedMaintenanceEnd = String(maintenanceEnd || '').trim() || null;
+
+      if (normalizedStatus === 'maintenance' && (!normalizedMaintenanceStart || !normalizedMaintenanceEnd)) {
+        return res.status(400).json({ error: 'Maintenance start and end dates are required for maintenance status' });
+      }
+
       const { rows } = await pool.query(
-        `INSERT INTO halls(id, name, capacity, features)
-         VALUES($1, $2, $3, $4)
+        `INSERT INTO halls(id, name, capacity, features, status, maintenance_start, maintenance_end)
+         VALUES($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (id) DO UPDATE SET
            name = EXCLUDED.name,
            capacity = EXCLUDED.capacity,
-           features = EXCLUDED.features
-         RETURNING *`,
-        [id, name, capacity, features ? JSON.stringify(features) : null]
+           features = EXCLUDED.features,
+           status = EXCLUDED.status,
+           maintenance_start = EXCLUDED.maintenance_start,
+           maintenance_end = EXCLUDED.maintenance_end
+         RETURNING id, name, capacity, features, status,
+                   maintenance_start AS "maintenanceStart",
+                   maintenance_end AS "maintenanceEnd",
+                   created_at`,
+        [
+          id,
+          name,
+          capacity,
+          features ? JSON.stringify(features) : null,
+          normalizedStatus,
+          normalizedStatus === 'maintenance' ? normalizedMaintenanceStart : null,
+          normalizedStatus === 'maintenance' ? normalizedMaintenanceEnd : null,
+        ]
       );
       return res.status(201).json({ success: true, item: rows[0] });
     }
@@ -386,6 +686,11 @@ export const addItem = async (req, res) => {
       const { name = null, department_id = null, capacity = null } = payload;
       if (!name) return res.status(400).json({ error: 'Batch name is required' });
 
+      const batchValidationError = await validateBatchSubgroupRules({ batchId: id });
+      if (batchValidationError) {
+        return res.status(400).json({ error: batchValidationError });
+      }
+
       const { rows } = await pool.query(
         `INSERT INTO batches(id, name, department_id, capacity)
          VALUES($1, $2, $3, $4)
@@ -424,6 +729,18 @@ export const listItems = async (req, res) => {
       return res.json({ success: true, items: rows });
     }
 
+    if (type === 'halls') {
+      const { rows } = await pool.query(
+        `SELECT id, name, capacity, features, status,
+                maintenance_start AS "maintenanceStart",
+                maintenance_end AS "maintenanceEnd",
+                created_at
+         FROM halls
+         ORDER BY created_at DESC`
+      );
+      return res.json({ success: true, items: rows });
+    }
+
     const { rows } = await pool.query(`SELECT * FROM ${type} ORDER BY created_at DESC`);
     return res.json({ success: true, items: rows });
   } catch (err) {
@@ -458,10 +775,61 @@ export const updateItem = async (req, res) => {
     if (!id) return res.status(400).json({ error: 'Item id is required' });
 
     if (type === 'halls') {
-      const { name = null, capacity = null, features = null } = payload;
+      const {
+        id: nextId = id,
+        name = null,
+        capacity = null,
+        features = null,
+        status = 'available',
+        maintenanceStart = null,
+        maintenanceEnd = null,
+      } = payload;
+      const hallValidationError = validateHallPayload({ id: nextId, name, capacity, features });
+      if (hallValidationError) {
+        return res.status(400).json({ error: hallValidationError });
+      }
+
+      const normalizedStatus = normalizeHallStatus(status);
+      if (!normalizedStatus) {
+        return res.status(400).json({ error: 'Invalid hall status value' });
+      }
+
+      const maintenanceValidationError = validateHallMaintenanceDates({ maintenanceStart, maintenanceEnd });
+      if (maintenanceValidationError) {
+        return res.status(400).json({ error: maintenanceValidationError });
+      }
+
+      const normalizedMaintenanceStart = String(maintenanceStart || '').trim() || null;
+      const normalizedMaintenanceEnd = String(maintenanceEnd || '').trim() || null;
+
+      if (normalizedStatus === 'maintenance' && (!normalizedMaintenanceStart || !normalizedMaintenanceEnd)) {
+        return res.status(400).json({ error: 'Maintenance start and end dates are required for maintenance status' });
+      }
+
       const { rows, rowCount } = await pool.query(
-        `UPDATE halls SET name=$1, capacity=$2, features=$3 WHERE id=$4 RETURNING *`,
-        [name, capacity, features ? JSON.stringify(features) : null, id]
+        `UPDATE halls
+         SET id=$1,
+             name=$2,
+             capacity=$3,
+             features=$4,
+             status=$5,
+             maintenance_start=$6,
+             maintenance_end=$7
+         WHERE id=$8
+         RETURNING id, name, capacity, features, status,
+                   maintenance_start AS "maintenanceStart",
+                   maintenance_end AS "maintenanceEnd",
+                   created_at`,
+        [
+          String(nextId || '').trim(),
+          name,
+          capacity,
+          features ? JSON.stringify(features) : null,
+          normalizedStatus,
+          normalizedStatus === 'maintenance' ? normalizedMaintenanceStart : null,
+          normalizedStatus === 'maintenance' ? normalizedMaintenanceEnd : null,
+          id,
+        ]
       );
       if (!rowCount) return res.status(404).json({ error: 'Item not found' });
       return res.json({ success: true, item: rows[0] });
@@ -509,6 +877,12 @@ export const updateItem = async (req, res) => {
 
     if (type === 'batches') {
       const { name = null, department_id = null, capacity = null } = payload;
+
+      const batchValidationError = await validateBatchSubgroupRules({ batchId: id, ignoreId: id });
+      if (batchValidationError) {
+        return res.status(400).json({ error: batchValidationError });
+      }
+
       const { rows, rowCount } = await pool.query(
         `UPDATE batches SET name=$1, department_id=$2, capacity=$3 WHERE id=$4 RETURNING *`,
         [name, department_id, capacity, id]
@@ -864,7 +1238,8 @@ export const runScheduler = async (req, res) => {
     ]);
 
     const halls = hallsRes.rows;
-    const modules = modulesRes.rows;
+    const hallAllocationMap = await loadCoordinatorHallAllocationMap();
+    const modules = applyCoordinatorHallAllocations(modulesRes.rows, hallAllocationMap);
     const lics = licsRes.rows;
     const instructors = instructorsRes.rows;
     const batches = batchesRes.rows;
@@ -897,7 +1272,8 @@ export const runSchedulerBySegments = async (req, res) => {
     ]);
 
     const halls = hallsRes.rows;
-    const modules = modulesRes.rows;
+    const hallAllocationMap = await loadCoordinatorHallAllocationMap();
+    const modules = applyCoordinatorHallAllocations(modulesRes.rows, hallAllocationMap);
     const lics = licsRes.rows;
     const instructors = instructorsRes.rows;
     const batches = batchesRes.rows;

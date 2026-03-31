@@ -47,8 +47,27 @@ const HallResourcesPanel = ({ hallId, apiBase }) => {
 
   const handleAddResource = async (e) => {
     e.preventDefault();
-    if (!resourceForm.resourceName) {
+    const resourceName = String(resourceForm.resourceName || '').trim();
+    const quantity = Number(resourceForm.quantity);
+    const notes = String(resourceForm.notes || '').trim();
+
+    if (!resourceName) {
       setToast({ message: 'Resource name is required', type: 'error' });
+      return;
+    }
+
+    if (resourceName.length < 2 || resourceName.length > 120) {
+      setToast({ message: 'Resource name must be between 2 and 120 characters', type: 'error' });
+      return;
+    }
+
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 500) {
+      setToast({ message: 'Quantity must be an integer between 1 and 500', type: 'error' });
+      return;
+    }
+
+    if (notes.length > 500) {
+      setToast({ message: 'Notes cannot exceed 500 characters', type: 'error' });
       return;
     }
 
@@ -59,7 +78,10 @@ const HallResourcesPanel = ({ hallId, apiBase }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           hallId,
-          ...resourceForm
+          ...resourceForm,
+          resourceName,
+          quantity,
+          notes
         })
       });
       const data = await res.json();

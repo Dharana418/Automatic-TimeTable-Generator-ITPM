@@ -15,6 +15,65 @@ const AMENITIES = [
   { id: 'sound_system', label: 'Sound System', icon: '🔊' },
 ];
 
+const HALL_ID_REGEX = /^[A-Za-z0-9][A-Za-z0-9_-]{1,39}$/;
+const HALL_TEXT_REGEX = /^[A-Za-z0-9][A-Za-z0-9 .,&()/-]{1,79}$/;
+const FLOOR_REGEX = /^[A-Za-z0-9][A-Za-z0-9 .,&()/-]{0,28}$/;
+
+const normalizeHallForm = (form) => ({
+  hallId: String(form.hallId || '').trim(),
+  hallType: String(form.hallType || '').trim(),
+  capacity: String(form.capacity || '').trim(),
+  building: String(form.building || '').trim(),
+  floor: String(form.floor || '').trim(),
+  amenities: form.amenities || {},
+  maintenanceStart: String(form.maintenanceStart || '').trim(),
+  maintenanceEnd: String(form.maintenanceEnd || '').trim(),
+});
+
+const validateHallFormPayload = (form, { validateId = true } = {}) => {
+  const normalized = normalizeHallForm(form);
+
+  if (validateId && !HALL_ID_REGEX.test(normalized.hallId)) {
+    return 'Hall ID must be 2-40 characters with letters, numbers, underscore, or hyphen.';
+  }
+
+  if (!normalized.hallType || normalized.hallType.length < 2 || normalized.hallType.length > 60) {
+    return 'Hall type must be between 2 and 60 characters.';
+  }
+
+  if (!normalized.building || normalized.building.length < 2 || normalized.building.length > 80) {
+    return 'Building must be between 2 and 80 characters.';
+  }
+
+  if (!HALL_TEXT_REGEX.test(normalized.hallType) || !HALL_TEXT_REGEX.test(normalized.building)) {
+    return 'Hall type and building can only include letters, numbers, spaces, and . , & ( ) / -';
+  }
+
+  if (normalized.floor) {
+    if (normalized.floor.length > 30) {
+      return 'Floor cannot exceed 30 characters.';
+    }
+    if (!FLOOR_REGEX.test(normalized.floor)) {
+      return 'Floor can only include letters, numbers, spaces, and . , & ( ) / -';
+    }
+  }
+
+  const capacityValue = Number(normalized.capacity);
+  if (!Number.isInteger(capacityValue) || capacityValue < 1 || capacityValue > 2000) {
+    return 'Capacity must be an integer between 1 and 2000.';
+  }
+
+  if ((normalized.maintenanceStart && !normalized.maintenanceEnd) || (!normalized.maintenanceStart && normalized.maintenanceEnd)) {
+    return 'Please provide both maintenance start and end dates.';
+  }
+
+  if (normalized.maintenanceStart && normalized.maintenanceEnd && normalized.maintenanceEnd < normalized.maintenanceStart) {
+    return 'Maintenance end date must be on or after the start date.';
+  }
+
+  return null;
+};
+
 const HallAllocation = ({ apiBase }) => {
   const [halls, setHalls] = useState([]);
   const [timetables, setTimetables] = useState([]);
@@ -24,6 +83,7 @@ const HallAllocation = ({ apiBase }) => {
   const [showEditConfirmModal, setShowEditConfirmModal] = useState(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+  const [editTargetHallId, setEditTargetHallId] = useState('');
   const [maintenanceHallId, setMaintenanceHallId] = useState('');
   const [hallForm, setHallForm] = useState({
     hallId: '',
@@ -52,6 +112,8 @@ const HallAllocation = ({ apiBase }) => {
   const [submittingHall, setSubmittingHall] = useState(false);
   const [submittingEditHall, setSubmittingEditHall] = useState(false);
   const [deletingHallId, setDeletingHallId] = useState('');
+  const [submittingMaintenance, setSubmittingMaintenance] = useState(false);
+  const [updatingStatusHallId, setUpdatingStatusHallId] = useState('');
   const [hallToDelete, setHallToDelete] = useState('');
   const [toast, setToast] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -68,6 +130,7 @@ const HallAllocation = ({ apiBase }) => {
   const [selectedHall, setSelectedHall] = useState(null);
   const [showRecommendationsModal, setShowRecommendationsModal] = useState(false);
   const pageSize = 8;
+  const todayDate = new Date().toISOString().split('T')[0];
 
   const normalizeHall = useCallback((hall) => {
     let features = hall?.features;
@@ -96,8 +159,19 @@ const HallAllocation = ({ apiBase }) => {
   }, [timetables]);
 
   const getHallAvailability = useCallback((hall) => {
-    if (hall.status === 'maintenance') {
+    const today = new Date().toISOString().split('T')[0];
+    const maintenanceStart = String(hall.maintenanceStart || '').trim();
+    const maintenanceEnd = String(hall.maintenanceEnd || '').trim();
+    const inMaintenanceRange = Boolean(
+      maintenanceStart && maintenanceEnd && today >= maintenanceStart && today <= maintenanceEnd
+    );
+
+    if (hall.status === 'maintenance' || inMaintenanceRange) {
       return { status: 'maintenance', label: 'Under Maintenance', color: 'bg-red-100 text-red-800' };
+    }
+
+    if (hall.status === 'unavailable') {
+      return { status: 'unavailable', label: 'Unavailable', color: 'bg-slate-200 text-slate-800' };
     }
 
     const bookingCount = getHallBookingCount(hall);
@@ -188,14 +262,23 @@ const HallAllocation = ({ apiBase }) => {
     e.preventDefault();
     setHallError('');
 
-    if (!hallForm.hallId || !hallForm.hallType || !hallForm.capacity || !hallForm.building) {
-      setHallError('Please fill all hall fields.');
+    const validationError = validateHallFormPayload(hallForm, { validateId: true });
+    if (validationError) {
+      setHallError(validationError);
       return;
     }
 
-    const capacityValue = Number(hallForm.capacity);
-    if (!Number.isFinite(capacityValue) || capacityValue <= 0) {
-      setHallError('Capacity must be a positive number.');
+    const normalizedForm = normalizeHallForm(hallForm);
+    const capacityValue = Number(normalizedForm.capacity);
+
+    const normalizedHallName = normalizedForm.hallId.toLowerCase();
+    const duplicateHallExists = halls.some((hall) => {
+      const existingName = String(hall?.name || hall?.id || '').trim().toLowerCase();
+      return existingName === normalizedHallName;
+    });
+
+    if (duplicateHallExists) {
+      setHallError('A hall with this name already exists. Please use a different hall name.');
       return;
     }
 
@@ -206,14 +289,14 @@ const HallAllocation = ({ apiBase }) => {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: hallForm.hallId,
-          name: hallForm.hallId,
+          id: normalizedForm.hallId,
+          name: normalizedForm.hallId,
           capacity: capacityValue,
           features: {
-            hallType: hallForm.hallType,
-            building: hallForm.building,
-            floor: hallForm.floor,
-            amenities: hallForm.amenities,
+            hallType: normalizedForm.hallType,
+            building: normalizedForm.building,
+            floor: normalizedForm.floor,
+            amenities: normalizedForm.amenities,
           },
           status: hallForm.status,
         }),
@@ -238,7 +321,7 @@ const HallAllocation = ({ apiBase }) => {
       });
       setShowAddHallModal(false);
       setToast({ message: 'Hall added successfully.', type: 'success' });
-      await notifyUser('Hall Added', `Hall ${hallForm.hallId} was added successfully.`);
+      await notifyUser('Hall Added', `Hall ${normalizedForm.hallId} was added successfully.`);
     } catch (err) {
       console.error('Add hall error:', err);
       const errorMessage = err.message || 'Failed to add hall';
@@ -251,13 +334,19 @@ const HallAllocation = ({ apiBase }) => {
   };
 
   const executeEditHall = async () => {
+    if (!editTargetHallId) {
+      setEditHallError('Unable to update hall. Please close and reopen the edit form.');
+      return;
+    }
+
     setSubmittingEditHall(true);
     try {
-      const response = await fetch(`${apiBase}/api/scheduler/halls/${editHallForm.hallId}`, {
+      const response = await fetch(`${apiBase}/api/scheduler/halls/${editTargetHallId}`, {
         method: 'PUT',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          id: editHallForm.hallId,
           name: editHallForm.hallId,
           capacity: Number(editHallForm.capacity),
           features: {
@@ -280,6 +369,7 @@ const HallAllocation = ({ apiBase }) => {
       await loadData();
       setShowEditConfirmModal(false);
       setShowEditHallModal(false);
+      setEditTargetHallId('');
       setToast({ message: 'Hall updated successfully.', type: 'success' });
       await notifyUser('Hall Updated', `Hall ${editHallForm.hallId} was updated successfully.`);
     } catch (err) {
@@ -297,14 +387,25 @@ const HallAllocation = ({ apiBase }) => {
     e.preventDefault();
     setEditHallError('');
 
-    if (!editHallForm.hallId || !editHallForm.hallType || !editHallForm.capacity || !editHallForm.building) {
-      setEditHallError('Please fill all hall fields.');
+    if (!editTargetHallId) {
+      setEditHallError('Unable to update hall. Please close and reopen the edit form.');
       return;
     }
 
-    const capacityValue = Number(editHallForm.capacity);
-    if (!Number.isFinite(capacityValue) || capacityValue <= 0) {
-      setEditHallError('Capacity must be a positive number.');
+    const validationError = validateHallFormPayload(editHallForm, { validateId: true });
+    if (validationError) {
+      setEditHallError(validationError);
+      return;
+    }
+
+    const normalizedHallId = String(editHallForm.hallId || '').trim().toLowerCase();
+    const duplicateHallExists = halls.some((hall) => {
+      const existingId = String(hall?.id || '').trim().toLowerCase();
+      return existingId === normalizedHallId && String(hall?.id || '') !== String(editTargetHallId);
+    });
+
+    if (duplicateHallExists) {
+      setEditHallError('A hall with this ID already exists. Please use a different hall ID.');
       return;
     }
 
@@ -312,6 +413,7 @@ const HallAllocation = ({ apiBase }) => {
   };
 
   const openEditHallModal = (hall) => {
+    setEditTargetHallId(hall.id);
     setEditHallForm({
       hallId: hall.id,
       hallType: hall.features?.hallType || '',
@@ -327,9 +429,74 @@ const HallAllocation = ({ apiBase }) => {
     setShowEditHallModal(true);
   };
 
+  const openMaintenanceModal = (hall) => {
+    setMaintenanceHallId(hall.id);
+    setEditHallForm({
+      hallId: hall.id,
+      hallType: hall.features?.hallType || '',
+      capacity: hall.capacity?.toString() || '',
+      building: hall.features?.building || '',
+      floor: hall.features?.floor || hall.floor || '',
+      amenities: hall.features?.amenities || {},
+      status: hall.status || 'available',
+      maintenanceStart: '',
+      maintenanceEnd: '',
+    });
+    setShowMaintenanceModal(true);
+  };
+
   const requestDeleteHall = (hallId) => {
     setHallToDelete(hallId);
     setShowDeleteConfirmModal(true);
+  };
+
+  const updateHallStatus = async (hall, nextStatus) => {
+    setUpdatingStatusHallId(hall.id);
+    try {
+      const response = await fetch(`${apiBase}/api/scheduler/halls/${hall.id}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: hall.name || hall.id,
+          capacity: Number(hall.capacity),
+          features: {
+            hallType: hall.features?.hallType || '',
+            building: hall.features?.building || '',
+            floor: hall.features?.floor || hall.floor || '',
+            amenities: hall.features?.amenities || {},
+          },
+          status: nextStatus,
+          maintenanceStart: nextStatus === 'maintenance' ? hall.maintenanceStart : '',
+          maintenanceEnd: nextStatus === 'maintenance' ? hall.maintenanceEnd : '',
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to update hall status');
+      }
+
+      setHalls((previous) =>
+        previous.map((item) =>
+          item.id === hall.id
+            ? {
+                ...item,
+                status: nextStatus,
+                maintenanceStart: nextStatus === 'maintenance' ? item.maintenanceStart : '',
+                maintenanceEnd: nextStatus === 'maintenance' ? item.maintenanceEnd : '',
+              }
+            : item
+        )
+      );
+
+      setToast({ message: `Hall ${hall.id} status changed to ${nextStatus}.`, type: 'success' });
+    } catch (error) {
+      console.error('Update status error:', error);
+      setToast({ message: error.message || 'Failed to update hall status', type: 'error' });
+    } finally {
+      setUpdatingStatusHallId('');
+    }
   };
 
   const executeDeleteHall = async (hallId) => {
@@ -481,7 +648,7 @@ const HallAllocation = ({ apiBase }) => {
       const availability = getHallAvailability(hall);
       acc[availability.status] = (acc[availability.status] || 0) + 1;
       return acc;
-    }, { available: 0, occupied: 0, maintenance: 0 });
+    }, { available: 0, occupied: 0, maintenance: 0, unavailable: 0 });
   }, [halls, getHallAvailability]);
 
   const totalCapacity = useMemo(() => {
@@ -553,7 +720,7 @@ const HallAllocation = ({ apiBase }) => {
             className="dashboard-btn hall-primary-btn"
             onClick={() => setShowRecommendationsModal(true)}
           >
-            🎯 Get Recommendations
+             Get Recommendations
           </button>
           <button
             type="button"
@@ -781,8 +948,26 @@ const HallAllocation = ({ apiBase }) => {
                     {(() => {
                       const availability = getHallAvailability(hall);
                       return (
-                        <div className={`mt-2 px-3 py-1 rounded-lg text-sm font-semibold inline-block ${availability.color}`}>
-                          {availability.label}
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <div className={`px-3 py-1 rounded-lg text-sm font-semibold inline-block ${availability.color}`}>
+                            {availability.label}
+                          </div>
+                          <button
+                            type="button"
+                            className="hall-action-btn"
+                            disabled={updatingStatusHallId === hall.id || hall.status === 'available'}
+                            onClick={() => updateHallStatus(hall, 'available')}
+                          >
+                            {updatingStatusHallId === hall.id ? 'Saving...' : 'Set Available'}
+                          </button>
+                          <button
+                            type="button"
+                            className="hall-action-btn hall-action-btn--warning"
+                            disabled={updatingStatusHallId === hall.id || hall.status === 'unavailable'}
+                            onClick={() => updateHallStatus(hall, 'unavailable')}
+                          >
+                            {updatingStatusHallId === hall.id ? 'Saving...' : 'Set Unavailable'}
+                          </button>
                         </div>
                       );
                     })()}
@@ -806,16 +991,7 @@ const HallAllocation = ({ apiBase }) => {
                       <button
                         type="button"
                         className="hall-action-btn hall-action-btn--warning"
-                        onClick={() => {
-                          setMaintenanceHallId(hall.id);
-                          setEditHallForm({
-                            ...editHallForm,
-                            hallId: hall.id,
-                            maintenanceStart: '',
-                            maintenanceEnd: '',
-                          });
-                          setShowMaintenanceModal(true);
-                        }}
+                        onClick={() => openMaintenanceModal(hall)}
                       >
                         Set Maintenance
                       </button>
@@ -854,9 +1030,27 @@ const HallAllocation = ({ apiBase }) => {
                               <td className="px-3 py-2">{hall.features?.hallType || '-'}</td>
                               <td className="px-3 py-2">{getHallFloor(hall)}</td>
                               <td className="px-3 py-2">
-                                <span className={`px-2 py-1 rounded-md text-xs font-semibold ${availability.color}`}>
-                                  {availability.label}
-                                </span>
+                                <div className="flex flex-wrap items-center gap-1">
+                                  <span className={`px-2 py-1 rounded-md text-xs font-semibold ${availability.color}`}>
+                                    {availability.label}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="hall-action-btn"
+                                    disabled={updatingStatusHallId === hall.id || hall.status === 'available'}
+                                    onClick={() => updateHallStatus(hall, 'available')}
+                                  >
+                                    {updatingStatusHallId === hall.id ? 'Saving...' : 'Available'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="hall-action-btn hall-action-btn--warning"
+                                    disabled={updatingStatusHallId === hall.id || hall.status === 'unavailable'}
+                                    onClick={() => updateHallStatus(hall, 'unavailable')}
+                                  >
+                                    {updatingStatusHallId === hall.id ? 'Saving...' : 'Unavailable'}
+                                  </button>
+                                </div>
                               </td>
                               <td className="px-3 py-2">
                                 <div className="flex flex-wrap gap-1">
@@ -937,6 +1131,10 @@ const HallAllocation = ({ apiBase }) => {
               <div className="rounded-lg border border-red-200 bg-red-50 p-3">
                 <div className="text-xs text-red-700">Maintenance</div>
                 <div className="text-xl font-bold text-red-800">{statusBreakdown.maintenance}</div>
+              </div>
+              <div className="rounded-lg border border-slate-300 bg-slate-100 p-3">
+                <div className="text-xs text-slate-700">Unavailable</div>
+                <div className="text-xl font-bold text-slate-800">{statusBreakdown.unavailable}</div>
               </div>
             </div>
 
@@ -1167,6 +1365,7 @@ const HallAllocation = ({ apiBase }) => {
           onClick={() => {
             setShowEditHallModal(false);
             setEditHallError('');
+            setEditTargetHallId('');
           }}
         >
           <div className="bg-white w-full max-w-md rounded-xl shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
@@ -1178,6 +1377,7 @@ const HallAllocation = ({ apiBase }) => {
                 onClick={() => {
                   setShowEditHallModal(false);
                   setEditHallError('');
+                  setEditTargetHallId('');
                 }}
               >
                 ✕
@@ -1191,8 +1391,8 @@ const HallAllocation = ({ apiBase }) => {
                   type="text"
                   name="hallId"
                   value={editHallForm.hallId}
-                  className="w-full border rounded-lg px-3 py-2 bg-gray-100"
-                  readOnly
+                  onChange={handleEditHallInputChange}
+                  className="w-full border rounded-lg px-3 py-2"
                 />
               </div>
 
@@ -1266,6 +1466,7 @@ const HallAllocation = ({ apiBase }) => {
                   onClick={() => {
                     setShowEditHallModal(false);
                     setEditHallError('');
+                    setEditTargetHallId('');
                   }}
                 >
                   Cancel
@@ -1371,20 +1572,65 @@ const HallAllocation = ({ apiBase }) => {
             </div>
 
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
-                const hallIndex = halls.findIndex(h => h.id === maintenanceHallId);
-                if (hallIndex >= 0) {
-                  const updatedHalls = [...halls];
-                  updatedHalls[hallIndex] = {
-                    ...updatedHalls[hallIndex],
-                    status: 'maintenance',
-                    maintenanceStart: editHallForm.maintenanceStart,
-                    maintenanceEnd: editHallForm.maintenanceEnd,
-                  };
-                  setHalls(updatedHalls);
+                const maintenanceValidationError = validateHallFormPayload(editHallForm, { validateId: false });
+                if (maintenanceValidationError) {
+                  setToast({ message: maintenanceValidationError, type: 'error' });
+                  return;
+                }
+                if (editHallForm.maintenanceStart && editHallForm.maintenanceStart < todayDate) {
+                  setToast({ message: 'Maintenance start date must be today or later.', type: 'error' });
+                  return;
+                }
+                setSubmittingMaintenance(true);
+                try {
+                  const response = await fetch(`${apiBase}/api/scheduler/halls/${maintenanceHallId}`, {
+                    method: 'PUT',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      name: editHallForm.hallId,
+                      capacity: Number(editHallForm.capacity),
+                      features: {
+                        hallType: editHallForm.hallType,
+                        building: editHallForm.building,
+                        floor: editHallForm.floor,
+                        amenities: editHallForm.amenities,
+                      },
+                      status: 'maintenance',
+                      maintenanceStart: editHallForm.maintenanceStart,
+                      maintenanceEnd: editHallForm.maintenanceEnd,
+                    }),
+                  });
+
+                  const data = await response.json();
+                  if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Failed to set maintenance period');
+                  }
+
+                  setHalls((previous) =>
+                    previous.map((hall) =>
+                      hall.id === maintenanceHallId
+                        ? {
+                            ...hall,
+                            status: 'maintenance',
+                            maintenanceStart: editHallForm.maintenanceStart,
+                            maintenanceEnd: editHallForm.maintenanceEnd,
+                          }
+                        : hall
+                    )
+                  );
                   setToast({ message: `Hall ${maintenanceHallId} set to maintenance.`, type: 'success' });
-                  notifyUser('Maintenance Scheduled', `Hall ${maintenanceHallId} is now under maintenance.`);
+                  await notifyUser('Maintenance Scheduled', `Hall ${maintenanceHallId} is now under maintenance.`);
+                } catch (error) {
+                  console.error('Set maintenance error:', error);
+                  const errorMessage = error.message || 'Failed to set maintenance period';
+                  setToast({ message: errorMessage, type: 'error' });
+                  await notifyUser('Maintenance Update Failed', errorMessage);
+                  return;
+                } finally {
+                  setSubmittingMaintenance(false);
                 }
                 setShowMaintenanceModal(false);
                 setMaintenanceHallId('');
@@ -1396,6 +1642,7 @@ const HallAllocation = ({ apiBase }) => {
                 <input
                   type="date"
                   value={editHallForm.maintenanceStart}
+                  min={todayDate}
                   onChange={(e) => {
                     const updatedForm = { ...editHallForm, maintenanceStart: e.target.value };
                     setEditHallForm(updatedForm);
@@ -1409,6 +1656,7 @@ const HallAllocation = ({ apiBase }) => {
                 <input
                   type="date"
                   value={editHallForm.maintenanceEnd}
+                  min={editHallForm.maintenanceStart || todayDate}
                   onChange={(e) => {
                     const updatedForm = { ...editHallForm, maintenanceEnd: e.target.value };
                     setEditHallForm(updatedForm);
@@ -1428,8 +1676,8 @@ const HallAllocation = ({ apiBase }) => {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="dashboard-btn">
-                  Set Maintenance
+                <button type="submit" className="dashboard-btn" disabled={submittingMaintenance}>
+                  {submittingMaintenance ? 'Saving...' : 'Set Maintenance'}
                 </button>
               </div>
             </form>
