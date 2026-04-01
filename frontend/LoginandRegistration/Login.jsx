@@ -110,8 +110,25 @@ const Login = ({ apiBase, onAuthSuccess }) => {
 
         {error && <div className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-center text-sm text-red-600">{error}</div>}
 
-        <button type="submit" className="mt-2 rounded-xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-slate-900 px-4 py-3 font-bold text-white shadow-lg shadow-indigo-500/30 transition hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70" disabled={loading}>
-          {loading ? "Signing In..." : "Sign In"}
+        <button
+          type="submit"
+          className="group relative mt-2 inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl border border-indigo-300/60 bg-gradient-to-r from-blue-700 via-indigo-700 to-slate-900 px-4 py-3 font-bold text-white shadow-[0_14px_30px_rgba(30,64,175,0.35)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_34px_rgba(30,64,175,0.45)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
+          disabled={loading}
+        >
+          <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition duration-700 group-hover:translate-x-full" aria-hidden />
+          <span className="relative inline-flex items-center gap-2">
+            {loading ? "Signing In..." : "Sign In"}
+            <svg
+              className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
+              viewBox="0 0 20 20"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden
+            >
+              <path d="M4.5 10H15.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              <path d="M11.5 6L15.5 10L11.5 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
         </button>
       </form>
     </div>
