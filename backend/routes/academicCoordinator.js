@@ -475,4 +475,72 @@ router.get('/modules/summary/year-semester', async (req, res) => {
   }
 });
 
+// Initialize academic years for all modules (Admin/Academic Coordinator only)
+router.post('/modules/initialize-years', authorize('admin', 'academiccoordinator', 'Admin', 'Academic Coordinator'), async (req, res) => {
+  try {
+    const { academicYear, semester, modules } = req.body;
+
+    if (!academicYear) {
+      return res.status(400).json({
+        success: false,
+        error: 'Academic year is required',
+      });
+    }
+
+    if (!modules || !Array.isArray(modules) || modules.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Modules array is required and must not be empty',
+      });
+    }
+
+    // Update each module with academic year and semester
+    const updatePromises = modules.map((moduleId) =>
+      pool.query(
+        `UPDATE modules 
+         SET academic_year = $1, semester = $2, created_by = $3
+         WHERE id = $4 AND academic_year IS NULL
+         RETURNING id, code, name, academic_year, semester`,
+        [academicYear, semester || '1', req.user?.id || null, moduleId]
+      )
+    );
+
+    const results = await Promise.all(updatePromises);
+    const updated = results.filter((r) => r.rowCount > 0).map((r) => r.rows[0]);
+
+    return res.json({
+      success: true,
+      message: `Successfully initialized ${updated.length} modules with academic year and semester`,
+      data: updated,
+      academic_year: academicYear,
+      semester: semester || '1',
+      total_initialized: updated.length,
+    });
+  } catch (err) {
+    console.error('Error initializing academic years:', err.message);
+    return res.status(500).json({ success: false, error: 'Failed to initialize academic years' });
+  }
+});
+
+// Get all modules without academic year assignment
+router.get('/modules/unassigned-years', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT id, code, name, batch_size, credits, lectures_per_week
+      FROM modules
+      WHERE academic_year IS NULL
+      ORDER BY code ASC
+    `);
+
+    return res.json({
+      success: true,
+      data: rows,
+      total_unassigned: rows.length,
+    });
+  } catch (err) {
+    console.error('Error fetching unassigned modules:', err.message);
+    return res.status(500).json({ success: false, error: 'Failed to fetch unassigned modules' });
+  }
+});
+
 export default router;
