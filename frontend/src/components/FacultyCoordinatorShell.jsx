@@ -58,7 +58,7 @@ const NAV_GROUPS = [
     title: 'Workspace',
     items: [
       { id: 'overview', label: 'Overview', to: '/dashboard', icon: Icon.grid },
-      { id: 'timetable', label: 'Timetables', to: '/scheduler', icon: Icon.calendar },
+      { id: 'timetable', label: 'Timetables', to: '/scheduler/by-year', icon: Icon.calendar },
     ],
   },
   {
