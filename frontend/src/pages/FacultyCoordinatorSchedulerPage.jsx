@@ -1,108 +1,136 @@
 import React from 'react';
 import TimetableGenerationByYearSemester from '../components/TimetableGenerationByYearSemester.jsx';
+import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
+import facultyDashboardBg from '../assets/Gemini_Generated_Image_hqfdrqhqfdrqhqfd.png';
 
-/**
- * FacultyCoordinatorSchedulerPage
- * 
- * Allows faculty coordinators to:
- * 1. Generate timetables for specific year/semester combinations
- * 2. View and manage generated timetables
- * 3. Approve/Reject timetables
- * 4. Export schedules
- * 
- * This page integrates the core timetable generation workflow with
- * hall allocations and faculty soft constraints.
- */
-const FacultyCoordinatorSchedulerPage = () => {
-  const stats = {
-    totalTimetables: 0,
-    approvedCount: 0,
-    pendingCount: 0,
-    rejectedCount: 0,
-  };
+const stats = [
+  { label: 'Year / Semester', value: 'Y1 - Y4', note: 'Filtered scheduling scope' },
+  { label: 'Specializations', value: 'IT • SE • CS', note: 'Department-aware planning' },
+  { label: 'Academic Modules', value: 'Live Sync', note: 'Fetched from Academic Coordinator' },
+  { label: 'Export Mode', value: 'CSV Ready', note: 'Download and review output' },
+];
 
+const workflow = [
+  'Select the academic year, semester, and specialization.',
+  'Review the module set fetched from Academic Coordinator records.',
+  'Choose the scheduling algorithm mix and generate the timetable.',
+  'Approve, reject, or export the generated result after review.',
+];
+
+const accentChips = ['Specialization-aware', 'Academic Coordinator sync', 'Approval workflow', 'CSV export'];
+
+const InfoIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+    <circle cx="12" cy="12" r="10" />
+    <path d="M12 16v-4" />
+    <path d="M12 8h.01" />
+  </svg>
+);
+
+const FacultyCoordinatorSchedulerPage = ({ user }) => {
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          <h1 className="text-4xl font-bold text-gray-900">
-            Timetable Scheduler
-          </h1>
-          <p className="mt-2 text-gray-600">
-            Generate and manage specialization, year, and semester timetables with optimized scheduling
-          </p>
-        </div>
-      </div>
+    <FacultyCoordinatorShell
+      user={user}
+      title="Schedule Generation Workspace"
+      subtitle="Plan specialization, year, and semester timetables from Academic Coordinator module data."
+      badge="Timetable Planning"
+      backgroundImage={facultyDashboardBg}
+      footerNote="Faculty Coordinator scheduling workspace"
+    >
+      <div className="flex flex-col gap-6">
+        <section className="overflow-hidden rounded-[28px] border border-white/12 bg-gradient-to-br from-slate-950/92 via-slate-900/90 to-blue-950/88 p-6 text-white shadow-[0_22px_60px_rgba(15,23,42,0.28)] backdrop-blur-xl md:p-8">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <div className="mb-4 flex flex-wrap gap-2">
+                {accentChips.map((chip) => (
+                  <span key={chip} className="rounded-full border border-cyan-200/20 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
+                    {chip}
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-200/80">Faculty Coordinator Scheduler</p>
+              <h1 className="mt-3 text-4xl font-bold leading-tight text-white md:text-5xl">
+                Build timetables by year, semester, and specialization.
+              </h1>
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-200 md:text-base">
+                This workspace is designed for scheduling review and generation. Modules are fetched from the Academic Coordinator data set, then filtered by academic year and specialization before timetable generation.
+              </p>
+            </div>
 
-      {/* Stats */}
-      <div className="max-w-7xl mx-auto px-6 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <div className="text-sm text-gray-600">Total Timetables</div>
-            <div className="text-3xl font-bold text-gray-900 mt-2">
-              {stats.totalTimetables}
+            <div className="rounded-2xl border border-white/10 bg-white/8 p-4 backdrop-blur-sm lg:min-w-[290px]">
+              <div className="flex items-center gap-2 text-sm font-semibold text-cyan-100">
+                <InfoIcon />
+                Quick Workflow
+              </div>
+              <ol className="mt-3 space-y-2 text-sm text-slate-200">
+                {workflow.map((step, index) => (
+                  <li key={step} className="flex gap-3">
+                    <span className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-cyan-400/15 text-xs font-bold text-cyan-100">
+                      {index + 1}
+                    </span>
+                    <span className="leading-6">{step}</span>
+                  </li>
+                ))}
+              </ol>
             </div>
           </div>
-          <div className="bg-white p-6 rounded-lg shadow">
-            <div className="text-sm text-green-600">Approved</div>
-            <div className="text-3xl font-bold text-green-600 mt-2">
-              {stats.approvedCount}
-            </div>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow">
-            <div className="text-sm text-yellow-600">Pending</div>
-            <div className="text-3xl font-bold text-yellow-600 mt-2">
-              {stats.pendingCount}
-            </div>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow">
-            <div className="text-sm text-red-600">Rejected</div>
-            <div className="text-3xl font-bold text-red-600 mt-2">
-              {stats.rejectedCount}
-            </div>
-          </div>
-        </div>
-      </div>
+        </section>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 pb-12">
-        <TimetableGenerationByYearSemester />
-      </div>
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {stats.map((item, index) => (
+            <article
+              key={item.label}
+              className="rounded-2xl border border-slate-200/80 bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)] backdrop-blur"
+              style={{ animationDelay: `${index * 60}ms` }}
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{item.label}</p>
+              <h2 className="mt-2 text-2xl font-bold text-slate-900">{item.value}</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">{item.note}</p>
+            </article>
+          ))}
+        </section>
 
-      {/* Information Section */}
-      <div className="max-w-7xl mx-auto px-6 pb-12">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <h3 className="font-semibold text-blue-900 mb-2">
-            About Timetable Generation
-          </h3>
-          <ul className="list-disc list-inside space-y-1 text-blue-800 text-sm">
-            <li>
-              Select specialization, academic year, and semester to generate timetables
-            </li>
-            <li>
-              Modules are fetched from Academic Coordinator records for Faculty Coordinator review
-            </li>
-            <li>
-              Choose optimization algorithm(s): Hybrid (recommended), PSO, Genetic
-              Algorithm, Ant Colony, or Tabu Search
-            </li>
-            <li>
-              Hall allocations from approved timetables are automatically applied
-            </li>
-            <li>
-              Your soft constraints (preferences) are loaded for scheduling
-            </li>
-            <li>
-              Export generated timetables to CSV for further analysis
-            </li>
-            <li>
-              Approve or reject timetables before they're finalized
-            </li>
-          </ul>
-        </div>
+        <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.45fr_0.85fr]">
+          <div className="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/96 p-4 shadow-[0_18px_40px_rgba(15,23,42,0.1)] backdrop-blur md:p-6">
+            <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-600">Timetable Generator</p>
+                <h2 className="mt-1 text-2xl font-bold text-slate-900">Year and Semester Scheduling</h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                  Use the controls below to select the academic year, semester, and specialization. The system will preview modules, run the selected algorithm mix, and keep the coordinator view synchronized with approval status.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900 shadow-sm">
+                Academic module sync enabled
+              </div>
+            </div>
+
+            <TimetableGenerationByYearSemester />
+          </div>
+
+          <aside className="space-y-6">
+            <div className="overflow-hidden rounded-[28px] border border-slate-200/80 bg-gradient-to-br from-white to-slate-50 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-600">Review Focus</p>
+              <h3 className="mt-2 text-xl font-bold text-slate-900">What the Faculty Coordinator sees</h3>
+              <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
+                <li className="rounded-xl border border-slate-200 bg-white px-4 py-3">Academic Coordinator modules filtered by year and semester.</li>
+                <li className="rounded-xl border border-slate-200 bg-white px-4 py-3">Specialization-specific module grouping for clean generation.</li>
+                <li className="rounded-xl border border-slate-200 bg-white px-4 py-3">Generated timetable approvals and rejections in one place.</li>
+                <li className="rounded-xl border border-slate-200 bg-white px-4 py-3">CSV export for timetable analysis and reporting.</li>
+              </ul>
+            </div>
+
+            <div className="overflow-hidden rounded-[28px] border border-blue-200/60 bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 p-5 text-white shadow-[0_18px_42px_rgba(15,23,42,0.2)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-200/80">Why this page matters</p>
+              <h3 className="mt-2 text-xl font-bold">Designed for operational review</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-200">
+                The timetable generation page is now aligned with the Faculty Coordinator workflow, so the coordinator can inspect available modules before producing a final schedule.
+              </p>
+            </div>
+          </aside>
+        </section>
       </div>
-    </div>
+    </FacultyCoordinatorShell>
   );
 };
 
