@@ -99,16 +99,15 @@ const StatCard = ({ label, value, status, chart, pulse = false, iconEl, accent =
   <article
     className="fc-card-hover"
     style={{
-      borderRadius: 20, padding: '20px',
-      background: 'linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(7,20,43,0.95) 100%)',
-      border: '1px solid rgba(148,163,184,0.12)',
-      boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-      backdropFilter: 'blur(20px)',
+      borderRadius: 16, padding: '18px',
+      background: 'linear-gradient(180deg, #ffffff 0%, #f4f8fc 100%)',
+      border: '1px solid #d8e3ee',
+      boxShadow: '0 10px 22px rgba(20, 55, 90, 0.08)',
       position: 'relative', overflow: 'hidden',
     }}
   >
     {/* glow accent */}
-    <div style={{ position: 'absolute', top: -40, right: -40, width: 120, height: 120, borderRadius: '50%', background: `radial-gradient(circle, ${accent}22 0%, transparent 70%)`, pointerEvents: 'none' }} />
+    <div style={{ position: 'absolute', top: -40, right: -40, width: 120, height: 120, borderRadius: '50%', background: `radial-gradient(circle, ${accent}1f 0%, transparent 70%)`, pointerEvents: 'none' }} />
 
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -120,19 +119,19 @@ const StatCard = ({ label, value, status, chart, pulse = false, iconEl, accent =
           {iconEl}
         </div>
         <div>
-          <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>{label}</p>
-          <p style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#f1f5f9', lineHeight: 1.2, marginTop: 2 }}>{value}</p>
+          <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#5f7389' }}>{label}</p>
+          <p style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#12293f', lineHeight: 1.2, marginTop: 2 }}>{value}</p>
         </div>
       </div>
       <div style={{ textAlign: 'right' }}>
         <span style={{
           display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px',
           borderRadius: 20, fontSize: 10, fontWeight: 700,
-          background: pulse ? 'rgba(52,211,153,0.15)' : 'rgba(148,163,184,0.1)',
-          border: `1px solid ${pulse ? 'rgba(52,211,153,0.3)' : 'rgba(148,163,184,0.15)'}`,
-          color: pulse ? '#34d399' : '#94a3b8',
+          background: pulse ? 'rgba(22,163,74,0.12)' : 'rgba(117,138,160,0.12)',
+          border: `1px solid ${pulse ? 'rgba(22,163,74,0.25)' : 'rgba(117,138,160,0.2)'}`,
+          color: pulse ? '#166534' : '#64748b',
         }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: pulse ? '#34d399' : '#64748b', display: 'inline-block' }} className={pulse ? 'fc-pulse-dot' : ''} />
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: pulse ? '#22c55e' : '#64748b', display: 'inline-block' }} className={pulse ? 'fc-pulse-dot' : ''} />
           {status}
         </span>
         <p style={{ margin: '4px 0 0', fontSize: 11, fontWeight: 600, color: accent }}>{trend}</p>
@@ -150,11 +149,10 @@ const ActionTile = ({ title, description, buttonText, onClick, iconEl, accent = 
   <article
     className="fc-card-hover"
     style={{
-      borderRadius: 18, padding: '22px',
-      background: gradient || 'rgba(15,23,42,0.8)',
-      border: '1px solid rgba(148,163,184,0.1)',
-      boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
-      backdropFilter: 'blur(16px)',
+      borderRadius: 14, padding: '18px',
+      background: gradient || 'linear-gradient(180deg, #ffffff 0%, #f5f9fd 100%)',
+      border: '1px solid #d7e3ee',
+      boxShadow: '0 8px 20px rgba(20,55,90,0.08)',
       display: 'flex', flexDirection: 'column', gap: 12,
     }}
   >
@@ -166,8 +164,8 @@ const ActionTile = ({ title, description, buttonText, onClick, iconEl, accent = 
       {iconEl}
     </div>
     <div>
-      <h4 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#f1f5f9' }}>{title}</h4>
-      <p style={{ margin: '6px 0 0', fontSize: 13, color: 'rgba(148,163,184,0.8)', lineHeight: 1.5 }}>{description}</p>
+      <h4 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#14314b' }}>{title}</h4>
+      <p style={{ margin: '6px 0 0', fontSize: 13, color: '#5f7389', lineHeight: 1.5 }}>{description}</p>
     </div>
     <button
       type="button"
@@ -176,8 +174,8 @@ const ActionTile = ({ title, description, buttonText, onClick, iconEl, accent = 
       style={{
         marginTop: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8,
         padding: '9px 16px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer',
-        background: `linear-gradient(90deg, ${accent}28, ${accent}18)`,
-        border: `1px solid ${accent}40`,
+        background: `linear-gradient(90deg, ${accent}22, ${accent}12)`,
+        border: `1px solid ${accent}4a`,
         color: accent,
       }}
     >
@@ -217,6 +215,8 @@ const FacultyCoordinatorDashboard = ({ user }) => {
   const navigate = useNavigate();
 
   const [resources, setResources] = useState([]);
+  const [savedTimetables, setSavedTimetables] = useState([]);
+  const [loadingTimetables, setLoadingTimetables] = useState(false);
   const [_loadingResources, setLoadingResources] = useState(false);
   const [savingSoftConstraints, setSavingSoftConstraints] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -232,12 +232,18 @@ const FacultyCoordinatorDashboard = ({ user }) => {
     const loadData = async () => {
       try {
         setLoadingResources(true);
-        const response = await api.getLicsWithInstructors();
-        if (mounted && response?.items) setResources(response.items);
+        setLoadingTimetables(true);
+        const [resourceResponse, timetableResponse] = await Promise.all([
+          api.getLicsWithInstructors(),
+          api.getAcademicCoordinatorTimetables().catch(() => ({ data: [] })),
+        ]);
+        if (mounted && resourceResponse?.items) setResources(resourceResponse.items);
+        if (mounted) setSavedTimetables(Array.isArray(timetableResponse?.data) ? timetableResponse.data : []);
       } catch (err) {
         console.error('Resource load failed', err);
       } finally {
         if (mounted) setLoadingResources(false);
+        if (mounted) setLoadingTimetables(false);
       }
     };
     loadData();
@@ -292,6 +298,64 @@ const FacultyCoordinatorDashboard = ({ user }) => {
     { label: 'Constraint', value: `w5 = ${softConstraintForm.w5Weight}`, status: 'Policy Mode', chart: sparklineSets.constraint, pulse: false, iconEl: Icon.sliders('#f59e0b'), accent: '#f59e0b', trend: 'Configured' },
   ];
 
+  const extractSchedule = (timetable) => {
+    const rawData = timetable?.data;
+    const parsed = typeof rawData === 'string' ? (() => {
+      try {
+        return JSON.parse(rawData);
+      } catch {
+        return {};
+      }
+    })() : (rawData || {});
+
+    return Array.isArray(parsed.schedule) ? parsed.schedule : [];
+  };
+
+  const downloadTimetableCsv = (timetable) => {
+    const schedule = extractSchedule(timetable);
+    if (!schedule.length) {
+      window.alert('No schedule rows available for this timetable.');
+      return;
+    }
+
+    const headers = ['Module', 'Hall', 'Day', 'Slot', 'Instructor', 'Batch Keys'];
+    const rows = schedule.map((row) => [
+      row.moduleName || row.moduleId || '',
+      row.hallName || row.hallId || '',
+      row.day || '',
+      row.slot || (Array.isArray(row.slots) ? row.slots.join(' | ') : ''),
+      row.instructorName || row.instructorId || '',
+      Array.isArray(row.batchKeys) ? row.batchKeys.join(' | ') : '',
+    ]);
+
+    const csv = [headers, ...rows]
+      .map((line) => line.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    const fileName = `${String(timetable?.name || 'timetable').replace(/[^a-zA-Z0-9-_]/g, '_')}.csv`;
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const refreshTimetables = async () => {
+    try {
+      setLoadingTimetables(true);
+      const response = await api.getAcademicCoordinatorTimetables();
+      setSavedTimetables(Array.isArray(response?.data) ? response.data : []);
+    } catch (error) {
+      window.alert(error.message || 'Failed to load timetables');
+    } finally {
+      setLoadingTimetables(false);
+    }
+  };
+
   return (
     <FacultyCoordinatorShell
       user={user}
@@ -324,19 +388,18 @@ const FacultyCoordinatorDashboard = ({ user }) => {
 
       {/* ── Welcome banner ── */}
       <div style={{
-        borderRadius: 24, padding: '28px 32px', marginBottom: 28,
-        background: 'linear-gradient(135deg, rgba(14,165,233,0.34) 0%, rgba(99,102,241,0.32) 50%, rgba(139,92,246,0.28) 100%)',
-        border: '1px solid rgba(56,189,248,0.36)',
-        boxShadow: '0 10px 40px rgba(14,165,233,0.2)',
-        backdropFilter: 'blur(20px)',
+        borderRadius: 18, padding: '24px 28px', marginBottom: 24,
+        background: 'linear-gradient(130deg, #0f5d99 0%, #2f80c3 52%, #5ea4da 100%)',
+        border: '1px solid rgba(255,255,255,0.35)',
+        boxShadow: '0 16px 30px rgba(15, 93, 153, 0.25)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16,
         position: 'relative', overflow: 'hidden',
       }}>
-        <div style={{ position: 'absolute', top: -60, right: -60, width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(99,102,241,0.2) 0%, transparent 70%)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', top: -80, right: -70, width: 220, height: 220, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%)', pointerEvents: 'none' }} />
         <div>
-          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#38bdf8' }}>{greeting}, {username} 👋</p>
-          <h2 style={{ margin: '6px 0 0', fontSize: 22, fontWeight: 800, color: '#f1f5f9' }}>Scheduling coordination is ready</h2>
-          <p style={{ margin: '6px 0 0', fontSize: 13, color: 'rgba(148,163,184,0.85)' }}>
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(226,242,255,0.9)' }}>{greeting}, {username}</p>
+          <h2 style={{ margin: '6px 0 0', fontSize: 22, fontWeight: 800, color: '#ffffff' }}>Scheduling coordination is ready</h2>
+          <p style={{ margin: '6px 0 0', fontSize: 13, color: 'rgba(237,246,255,0.92)' }}>
             Manage batches, modules, and soft constraints from a single workspace.
           </p>
         </div>
@@ -352,9 +415,9 @@ const FacultyCoordinatorDashboard = ({ user }) => {
               className="fc-btn"
               style={{
                 padding: '9px 18px', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                background: 'rgba(15,23,42,0.68)', border: `1px solid ${q.color}75`,
-                color: '#f8fafc', backdropFilter: 'blur(8px)',
-                boxShadow: '0 4px 14px rgba(2,6,23,0.32)',
+                background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.45)',
+                color: '#ffffff',
+                boxShadow: '0 4px 14px rgba(2,6,23,0.2)',
               }}
             >
               {q.label}
@@ -378,23 +441,22 @@ const FacultyCoordinatorDashboard = ({ user }) => {
 
           {/* Action tiles */}
           <section style={{
-            borderRadius: 22, padding: '26px',
-            background: 'linear-gradient(135deg, rgba(15,23,42,0.9), rgba(7,20,43,0.95))',
-            border: '1px solid rgba(148,163,184,0.1)',
-            boxShadow: '0 8px 40px rgba(0,0,0,0.35)',
-            backdropFilter: 'blur(20px)',
+            borderRadius: 16, padding: '22px',
+            background: 'linear-gradient(180deg, #ffffff 0%, #f5f9fd 100%)',
+            border: '1px solid #d8e3ee',
+            boxShadow: '0 10px 24px rgba(20,55,90,0.08)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 22 }}>
               <div>
-                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#38bdf8' }}>Workspace Operations</p>
-                <h3 style={{ margin: '6px 0 0', fontSize: 18, fontWeight: 800, color: '#f1f5f9' }}>Operations Center</h3>
-                <p style={{ margin: '4px 0 0', fontSize: 13, color: 'rgba(148,163,184,0.75)', maxWidth: 480 }}>
+                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#1f6fa8' }}>Workspace Operations</p>
+                <h3 style={{ margin: '6px 0 0', fontSize: 18, fontWeight: 800, color: '#14314b' }}>Operations Center</h3>
+                <p style={{ margin: '4px 0 0', fontSize: 13, color: '#5f7389', maxWidth: 480 }}>
                   Coordinate batches, inspect modules, and launch the timetable generation engine.
                 </p>
               </div>
               <span style={{
                 padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-                background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399',
+                background: 'rgba(22,163,74,0.12)', border: '1px solid rgba(22,163,74,0.25)', color: '#166534',
               }}>
                 Coordinator Ready
               </span>
@@ -430,14 +492,13 @@ const FacultyCoordinatorDashboard = ({ user }) => {
 
           {/* Activity feed placeholder */}
           <section style={{
-            borderRadius: 22, padding: '26px',
-            background: 'linear-gradient(135deg, rgba(15,23,42,0.9), rgba(7,20,43,0.95))',
-            border: '1px solid rgba(148,163,184,0.1)',
-            boxShadow: '0 8px 40px rgba(0,0,0,0.35)',
-            backdropFilter: 'blur(20px)',
+            borderRadius: 16, padding: '22px',
+            background: 'linear-gradient(180deg, #ffffff 0%, #f5f9fd 100%)',
+            border: '1px solid #d8e3ee',
+            boxShadow: '0 10px 24px rgba(20,55,90,0.08)',
           }}>
-            <p style={{ margin: '0 0 16px', fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#a78bfa' }}>Recent Activity</p>
-            <h3 style={{ margin: '0 0 18px', fontSize: 16, fontWeight: 800, color: '#f1f5f9' }}>System Log</h3>
+            <p style={{ margin: '0 0 16px', fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#1f6fa8' }}>Recent Activity</p>
+            <h3 style={{ margin: '0 0 18px', fontSize: 16, fontWeight: 800, color: '#14314b' }}>System Log</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {[
                 { time: 'Just now', text: 'Soft constraints profile loaded', col: '#38bdf8' },
@@ -445,33 +506,85 @@ const FacultyCoordinatorDashboard = ({ user }) => {
                 { time: '10 min ago', text: 'Batch registry updated', col: '#a78bfa' },
                 { time: '1 hr ago', text: 'Timetable engine last run', col: '#f59e0b' },
               ].map((item, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 12, background: 'rgba(15,23,42,0.5)', border: '1px solid rgba(148,163,184,0.07)' }}>
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 12, background: '#ffffff', border: '1px solid #d9e4ee' }}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: item.col, flexShrink: 0 }} />
-                  <span style={{ fontSize: 13, color: '#e2e8f0', flex: 1 }}>{item.text}</span>
-                  <span style={{ fontSize: 11, color: 'rgba(148,163,184,0.5)', whiteSpace: 'nowrap' }}>{item.time}</span>
+                  <span style={{ fontSize: 13, color: '#1e3a52', flex: 1 }}>{item.text}</span>
+                  <span style={{ fontSize: 11, color: '#6b8198', whiteSpace: 'nowrap' }}>{item.time}</span>
                 </div>
               ))}
             </div>
+          </section>
+
+          <section style={{
+            borderRadius: 16, padding: '22px',
+            background: 'linear-gradient(180deg, #ffffff 0%, #f5f9fd 100%)',
+            border: '1px solid #d8e3ee',
+            boxShadow: '0 10px 24px rgba(20,55,90,0.08)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#1f6fa8' }}>Saved Timetables</p>
+                <h3 style={{ margin: '6px 0 0', fontSize: 16, fontWeight: 800, color: '#14314b' }}>View & Download (CSV for Excel)</h3>
+              </div>
+              <button
+                type="button"
+                onClick={refreshTimetables}
+                className="fc-btn"
+                style={{
+                  padding: '8px 12px', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                  background: 'linear-gradient(90deg, #0f5d99, #2f80c3)', border: 'none', color: '#fff',
+                }}
+              >
+                {loadingTimetables ? 'Refreshing...' : 'Refresh'}
+              </button>
+            </div>
+
+            {loadingTimetables ? (
+              <p style={{ margin: 0, fontSize: 13, color: '#5f7389' }}>Loading timetables...</p>
+            ) : savedTimetables.length === 0 ? (
+              <p style={{ margin: 0, fontSize: 13, color: '#5f7389' }}>No saved timetables available yet.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {savedTimetables.slice(0, 20).map((tt) => (
+                  <div key={tt.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 12px', borderRadius: 10, border: '1px solid #d8e3ee', background: '#fff' }}>
+                    <div>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#14314b' }}>{tt.name || `Timetable ${tt.id}`}</p>
+                      <p style={{ margin: '4px 0 0', fontSize: 12, color: '#5f7389' }}>Year {tt.year || '-'} • Semester {tt.semester || '-'} • Status: {tt.status || 'pending'}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => downloadTimetableCsv(tt)}
+                      className="fc-btn"
+                      style={{
+                        padding: '8px 12px', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                        background: 'rgba(15,93,153,0.12)', border: '1px solid rgba(15,93,153,0.28)', color: '#0f5d99',
+                      }}
+                    >
+                      Download CSV
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         </div>
 
         {/* Right – Soft Constraints Panel */}
         <section style={{
-          borderRadius: 22, padding: '26px',
-          background: 'linear-gradient(135deg, rgba(15,23,42,0.92), rgba(7,20,43,0.97))',
-          border: '1px solid rgba(148,163,184,0.12)',
-          boxShadow: '0 8px 40px rgba(0,0,0,0.4)',
-          backdropFilter: 'blur(20px)',
+          borderRadius: 16, padding: '22px',
+          background: 'linear-gradient(180deg, #ffffff 0%, #f5f9fd 100%)',
+          border: '1px solid #d8e3ee',
+          boxShadow: '0 10px 24px rgba(20,55,90,0.08)',
           position: 'sticky', top: 80,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
             <div>
-              <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#f59e0b' }}>Settings Console</p>
-              <h3 style={{ margin: '6px 0 0', fontSize: 16, fontWeight: 800, color: '#f1f5f9' }}>Soft Constraints</h3>
+              <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#1f6fa8' }}>Settings Console</p>
+              <h3 style={{ margin: '6px 0 0', fontSize: 16, fontWeight: 800, color: '#14314b' }}>Soft Constraints</h3>
             </div>
             <span style={{
               padding: '4px 10px', borderRadius: 20, fontSize: 10, fontWeight: 700,
-              background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)', color: '#f59e0b',
+              background: 'rgba(15,93,153,0.12)', border: '1px solid rgba(15,93,153,0.24)', color: '#0f5d99',
             }}>
               w5 Policy
             </span>
@@ -479,7 +592,7 @@ const FacultyCoordinatorDashboard = ({ user }) => {
 
           {/* Day selector */}
           <div style={{ marginBottom: 20 }}>
-            <p style={{ margin: '0 0 10px', fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>Preferred Days</p>
+            <p style={{ margin: '0 0 10px', fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#5f7389' }}>Preferred Days</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
               {dayOptions.map((day) => {
                 const isOn = selectedDays.includes(day);
@@ -491,10 +604,10 @@ const FacultyCoordinatorDashboard = ({ user }) => {
                     className="fc-day-btn"
                     style={{
                       padding: '9px 4px', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                      background: isOn ? 'linear-gradient(90deg, rgba(56,189,248,0.3), rgba(99,102,241,0.25))' : 'rgba(15,23,42,0.6)',
-                      border: isOn ? '1px solid rgba(56,189,248,0.5)' : '1px solid rgba(148,163,184,0.12)',
-                      color: isOn ? '#38bdf8' : 'rgba(148,163,184,0.6)',
-                      boxShadow: isOn ? '0 0 12px rgba(56,189,248,0.2)' : 'none',
+                      background: isOn ? 'linear-gradient(90deg, rgba(15,93,153,0.14), rgba(30,120,188,0.14))' : '#ffffff',
+                      border: isOn ? '1px solid rgba(15,93,153,0.45)' : '1px solid #d8e3ee',
+                      color: isOn ? '#0f5d99' : '#6b8198',
+                      boxShadow: isOn ? '0 4px 12px rgba(15,93,153,0.12)' : 'none',
                     }}
                   >
                     {day}
@@ -547,10 +660,10 @@ const FacultyCoordinatorDashboard = ({ user }) => {
           </button>
 
           {/* Logged-in note */}
-          <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 12, background: 'rgba(15,23,42,0.6)', border: '1px solid rgba(148,163,184,0.08)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 12, background: '#ffffff', border: '1px solid #d8e3ee', display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#34d399', flexShrink: 0 }} className="fc-pulse-dot" />
-            <p style={{ margin: 0, fontSize: 12, color: 'rgba(148,163,184,0.7)' }}>
-              Logged in as <strong style={{ color: '#f1f5f9' }}>{username}</strong>
+            <p style={{ margin: 0, fontSize: 12, color: '#6b8198' }}>
+              Logged in as <strong style={{ color: '#14314b' }}>{username}</strong>
             </p>
           </div>
         </section>
