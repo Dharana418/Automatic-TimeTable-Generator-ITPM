@@ -51,8 +51,6 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
 
                 {isAuthenticated ? (
                     <>
-                        <span className="hidden rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 md:inline">{user?.username || user?.name}</span>
-
                         {location.pathname !== '/dashboard' && (
                             <Link to="/dashboard" className={`${navBtnNeutral} md:w-24`}>Dashboard</Link>
                         )}

@@ -30,7 +30,7 @@ const FacultyCoordinatorSchedulerPage = () => {
             Timetable Scheduler
           </h1>
           <p className="mt-2 text-gray-600">
-            Generate and manage semester-based timetables with optimized scheduling
+            Generate and manage specialization, year, and semester timetables with optimized scheduling
           </p>
         </div>
       </div>
@@ -78,7 +78,10 @@ const FacultyCoordinatorSchedulerPage = () => {
           </h3>
           <ul className="list-disc list-inside space-y-1 text-blue-800 text-sm">
             <li>
-              Select an academic year and semester to generate timetables
+              Select specialization, academic year, and semester to generate timetables
+            </li>
+            <li>
+              Modules are fetched from Academic Coordinator records for Faculty Coordinator review
             </li>
             <li>
               Choose optimization algorithm(s): Hybrid (recommended), PSO, Genetic
