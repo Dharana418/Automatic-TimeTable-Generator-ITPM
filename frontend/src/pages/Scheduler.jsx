@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import schedulerApi from '../api/scheduler.js';
 import { showError, showSuccess, showWarning } from '../utils/alerts.js';
 
@@ -180,6 +180,8 @@ export default function Scheduler() {
   const [selectedAlgorithms, setSelectedAlgorithms] = useState(['pso', 'anticolony', 'genetic', 'tabu', 'hybrid']);
   const [hallStructures3D, setHallStructures3D] = useState([]);
   const [view3d, setView3d] = useState({ rotateX: 10, rotateZ: -18, zoom: 1 });
+  const [selectedHallId, setSelectedHallId] = useState('');
+  const hallBlockRefs = useRef({});
   const [coordinatorHallAllocations, setCoordinatorHallAllocations] = useState([]);
   const [allocationSummary, setAllocationSummary] = useState({
     total: 0,
@@ -238,6 +240,18 @@ export default function Scheduler() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!selectedHallId) return;
+    const target = hallBlockRefs.current[selectedHallId];
+    if (!target || typeof target.scrollIntoView !== 'function') return;
+
+    target.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+      inline: 'center',
+    });
+  }, [selectedHallId, hallStructures3D]);
 
   async function loadCoordinatorHallAllocations() {
     setAllocationLoading(true);
@@ -340,10 +354,34 @@ export default function Scheduler() {
   }
 
   async function handleRun(){
+    const hasSegmentFilters = Boolean(segmentYear || segmentSemester || segmentSpecialization);
+
+    if (hasSegmentFilters) {
+      const moduleFilters = {
+        year: segmentYear ? Number(segmentYear) : undefined,
+        semester: segmentSemester ? Number(segmentSemester) : undefined,
+        specialization: segmentSpecialization ? String(segmentSpecialization).trim().toUpperCase() : undefined,
+      };
+
+      try {
+        const modulesPreview = await schedulerApi.listItems('modules', moduleFilters);
+        const filteredModuleCount = Array.isArray(modulesPreview?.items) ? modulesPreview.items.length : 0;
+        if (filteredModuleCount === 0) {
+          showWarning(
+            'No modules for selected filters',
+            'No modules found for the selected Year/Semester/Specialization. Please adjust filters and try again.'
+          );
+          return;
+        }
+      } catch (previewErr) {
+        showError('Module filter check failed', previewErr.message || 'Unable to validate filtered modules before running scheduler.');
+        return;
+      }
+    }
+
     setLoading(true); setResult(null); setSegmentedResult(null);
     try{
       const algorithms = selectedAlgorithms.length ? selectedAlgorithms : ['hybrid'];
-      const hasSegmentFilters = Boolean(segmentYear || segmentSemester || segmentSpecialization);
 
       if (hasSegmentFilters) {
         const segmentedOptions = {
@@ -586,6 +624,16 @@ export default function Scheduler() {
     });
   }, [items, activeType, segmentYear, segmentSemester, segmentSpecialization]);
 
+  const sidebarHallsPreview = useMemo(() => {
+    if (activeType !== 'halls') return [];
+    const source = filteredItems.length ? filteredItems : hallStructures3D;
+    return (source || []).slice(0, 8);
+  }, [activeType, filteredItems, hallStructures3D]);
+
+  const activeFilterSummary = useMemo(() => {
+    return `${segmentYear ? `Y${segmentYear}` : 'All Years'} • ${segmentSemester ? `S${segmentSemester}` : 'All Semesters'} • ${segmentSpecialization ? segmentSpecialization.toUpperCase() : 'All Specializations'}`;
+  }, [segmentYear, segmentSemester, segmentSpecialization]);
+
   return (
     <div className="scheduler-shell">
       <aside className="scheduler-sidebar">
@@ -616,6 +664,56 @@ export default function Scheduler() {
               </button>
             ))}
           </div>
+
+          {activeType === 'halls' && (
+            <div style={{ marginTop: 12 }}>
+              <h4 style={{ margin: '0 0 6px', fontSize: 12, letterSpacing: '0.06em', textTransform: 'uppercase', opacity: 0.75 }}>
+                Campus Halls
+              </h4>
+              {sidebarHallsPreview.length === 0 ? (
+                <p style={{ margin: 0, fontSize: 12, opacity: 0.8 }}>No halls found.</p>
+              ) : (
+                <div style={{ display: 'grid', gap: 6 }}>
+                  {sidebarHallsPreview.map((hall, index) => (
+                    <button
+                      key={hall.id || `${hall.name || 'hall'}-${index}`}
+                      type="button"
+                      onClick={() => {
+                        setSelectedHallId(String(hall.id || hall.name || ''));
+                        setActiveNav('resources');
+                      }}
+                      style={{
+                        fontSize: 12,
+                        lineHeight: 1.35,
+                        textAlign: 'left',
+                        borderRadius: 8,
+                        border: selectedHallId === String(hall.id || hall.name || '') ? '1px solid rgba(59,130,246,0.9)' : '1px solid rgba(148,163,184,0.35)',
+                        background: selectedHallId === String(hall.id || hall.name || '') ? 'rgba(59,130,246,0.16)' : 'rgba(15,23,42,0.28)',
+                        color: '#e2e8f0',
+                        padding: '8px 10px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <strong>{hall.name || hall.id || `Hall ${index + 1}`}</strong>
+                      <div style={{ opacity: 0.8 }}>
+                        Capacity: {hall.capacity || '-'}
+                        {hall.features?.building ? ` • ${hall.features.building}` : ''}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeType === 'modules' && (
+            <div style={{ marginTop: 12, fontSize: 12, opacity: 0.85 }}>
+              <strong>Filtered Modules:</strong> {filteredItems.length}
+              <div style={{ marginTop: 4 }}>
+                {segmentYear ? `Y${segmentYear}` : 'All Years'} • {segmentSemester ? `S${segmentSemester}` : 'All Semesters'} • {segmentSpecialization ? segmentSpecialization.toUpperCase() : 'All Specializations'}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="sidebar-footer-note">
@@ -638,6 +736,11 @@ export default function Scheduler() {
             </button>
           </div>
         </header>
+
+        <div className="result-row" style={{ marginBottom: 14 }}>
+          <strong>Active Filters</strong>
+          <p>{activeFilterSummary}</p>
+        </div>
 
         {(activeNav === 'overview' || activeNav === 'algorithms') && (
           <section className="panel-card">
@@ -841,16 +944,28 @@ export default function Scheduler() {
                       const height = Math.max(40, Math.min(160, capacity ? 28 + Math.round(capacity / 3) : 56));
                       const x = (index % 6) * 74;
                       const z = Math.floor(index / 6) * 66;
+                      const structureKey = String(structure.id || structure.name || '');
+                      const isSelected = Boolean(selectedHallId) && selectedHallId === structureKey;
 
                       return (
                         <div
                           key={structure.id || `${structure.name || 'hall'}-${index}`}
                           className="ac-3d-block"
+                          ref={(node) => {
+                            if (!structureKey) return;
+                            if (node) {
+                              hallBlockRefs.current[structureKey] = node;
+                            } else {
+                              delete hallBlockRefs.current[structureKey];
+                            }
+                          }}
                           style={{
                             '--x': `${x}px`,
                             '--z': `${z}px`,
                             '--h': `${height}px`,
                             '--hue': `${(index * 37) % 360}`,
+                            outline: isSelected ? '3px solid rgba(59, 130, 246, 0.95)' : 'none',
+                            boxShadow: isSelected ? '0 0 0 2px rgba(15, 23, 42, 0.65), 0 14px 24px rgba(37, 99, 235, 0.45)' : undefined,
                           }}
                         >
                           <div className="ac-3d-label">
