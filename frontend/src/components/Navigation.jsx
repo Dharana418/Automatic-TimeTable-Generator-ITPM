@@ -40,11 +40,11 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
     };
     
     return (
-            <nav className="sticky top-0 z-50 border-b border-cyan-300/35 bg-gradient-to-r from-emerald-900 via-cyan-900 to-blue-900 px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.34)] sm:px-6 lg:px-12 xl:px-16">
+            <nav className="sticky top-0 z-50 border-b border-indigo-300/35 bg-gradient-to-r from-slate-950 via-indigo-900 to-blue-900 px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.34)] sm:px-6 lg:px-12 xl:px-16">
                 <div className="mx-auto flex w-full max-w-none items-center justify-between gap-4">
                 <Link to="/" className="flex items-center gap-3 no-underline">
                     <img src={autoschedule} alt="SLIIT Logo" className="h-9 w-auto rounded-md ring-1 ring-slate-300/60 md:h-10" />
-                            <h2 className="m-0 select-none bg-gradient-to-r from-emerald-100 via-cyan-100 to-blue-100 bg-clip-text text-lg font-bold text-transparent md:text-xl">SLIIT Timetable</h2>
+                            <h2 className="m-0 select-none bg-gradient-to-r from-indigo-100 via-blue-100 to-slate-100 bg-clip-text text-lg font-bold text-transparent md:text-xl">SLIIT Timetable</h2>
                 </Link>
 
             <div className="flex items-center gap-1.5 md:gap-2">
