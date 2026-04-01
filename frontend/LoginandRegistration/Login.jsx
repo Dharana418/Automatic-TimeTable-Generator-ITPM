@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import sliitLogo from "../src/assets/SLIIT_LOGO.png";
+import backgroundImage from "../src/assets/Gemini_Generated_Image_b9cdgeb9cdgeb9cd.png";
 import { showError, showSuccess, showWarning } from "../src/utils/alerts.js";
 
 const Login = ({ apiBase, onAuthSuccess }) => {
@@ -60,7 +61,13 @@ const Login = ({ apiBase, onAuthSuccess }) => {
   };
 
   return (
-    <div className="w-full max-w-md rounded-3xl border border-white/50 bg-white/95 px-8 py-10 text-center shadow-[0_24px_60px_rgba(15,23,42,0.22)] backdrop-blur-md">
+    <div
+      className="relative min-h-screen w-full overflow-hidden bg-cover bg-center bg-no-repeat"
+      style={{ backgroundImage: `url(${backgroundImage})` }}
+    >
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-900/70 via-slate-800/60 to-indigo-900/65" />
+      <div className="relative z-10 flex min-h-screen items-center justify-center px-4">
+        <div className="w-full max-w-md rounded-3xl border border-white/50 bg-white/95 px-8 py-10 text-center shadow-[0_24px_60px_rgba(15,23,42,0.22)] backdrop-blur-md">
       <img src={sliitLogo} alt="SLIIT Logo" className="mx-auto mb-5 block w-20 drop-shadow-sm" />
       <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-indigo-500">Welcome Back</p>
       <h2 className="mb-6 text-3xl text-slate-900">Sign In</h2>
@@ -131,6 +138,8 @@ const Login = ({ apiBase, onAuthSuccess }) => {
           </span>
         </button>
       </form>
+        </div>
+      </div>
     </div>
   );
 };
