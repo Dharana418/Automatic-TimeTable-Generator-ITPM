@@ -1335,3 +1335,131 @@ export const runSchedulerBySegments = async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 };
+
+export const runSchedulerForYearSemester = async (req, res) => {
+  try {
+    const { academicYear, semester, algorithms = ['hybrid'], options = {}, timetableName = null } = req.body;
+
+    // Validation
+    if (!academicYear) {
+      return res.status(400).json({ error: 'Academic year is required' });
+    }
+
+    if (!semester) {
+      return res.status(400).json({ error: 'Semester is required' });
+    }
+
+    // Fetch data with year/semester filters
+    const [hallsRes, modulesRes, licsRes, instructorsRes, batchesRes] = await Promise.all([
+      pool.query('SELECT * FROM halls WHERE status IN ($1, $2)', ['available', 'occupied']),
+      pool.query(
+        'SELECT * FROM modules WHERE academic_year = $1 AND semester = $2',
+        [academicYear, semester]
+      ),
+      pool.query('SELECT * FROM lics'),
+      pool.query('SELECT * FROM instructors'),
+      pool.query('SELECT * FROM batches'),
+    ]);
+
+    const halls = hallsRes.rows;
+    const modules = modulesRes.rows;
+    const lics = licsRes.rows;
+    const instructors = instructorsRes.rows;
+    const batches = batchesRes.rows;
+
+    // Validation
+    if (!halls.length) {
+      return res.status(400).json({
+        error: 'No available halls. Please ensure halls exist and are marked as available or occupied.',
+      });
+    }
+
+    if (!modules.length) {
+      return res.status(400).json({
+        error: `No modules found for academic year ${academicYear}, semester ${semester}. Please add modules first.`,
+      });
+    }
+
+    // Load and apply hall allocations
+    const hallAllocationMap = await loadCoordinatorHallAllocationMap();
+    const modulesWithAllocations = applyCoordinatorHallAllocations(modules, hallAllocationMap);
+
+    // Load faculty soft constraints if user is faculty coordinator
+    const mergedOptions = await withFacultySoftConstraints(req.user, options);
+
+    // Prepare constraints for scheduler
+    const constraints = {
+      halls,
+      modules: modulesWithAllocations,
+      lics,
+      instructors,
+      batches,
+      options: mergedOptions,
+    };
+
+    // Run selected algorithms
+    const results = runSelectedAlgorithms(constraints, algorithms, mergedOptions);
+
+    // Prepare timetable metadata
+    const generatedTimetable = {
+      name: timetableName || `Timetable_${academicYear}_S${semester}`,
+      semester: String(semester),
+      year: String(academicYear),
+      status: 'pending',
+      generated_by: req.user?.id || null,
+      data: {
+        academicYear: String(academicYear),
+        semester: String(semester),
+        generatedAt: new Date().toISOString(),
+        algorithms: Array.isArray(algorithms) ? algorithms : [algorithms],
+        hallAllocations: Object.fromEntries(hallAllocationMap),
+        modulesCount: modules.length,
+        hallsCount: halls.length,
+        schedule: results.hybrid?.schedule || results.pso?.schedule || results.genetic?.schedule || results.ant?.schedule || results.tabu?.schedule || [],
+        allResults: results,
+      },
+    };
+
+    // Save timetable to database
+    const { rows } = await pool.query(
+      `INSERT INTO timetables (name, semester, year, status, generated_by, data)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, name, semester, year, status, generated_by, created_at, data`,
+      [
+        generatedTimetable.name,
+        generatedTimetable.semester,
+        generatedTimetable.year,
+        generatedTimetable.status,
+        generatedTimetable.generated_by,
+        JSON.stringify(generatedTimetable.data),
+      ]
+    );
+
+    const savedTimetable = rows[0];
+
+    return res.status(201).json({
+      success: true,
+      message: `Timetable generated successfully for ${academicYear}, Semester ${semester}`,
+      timetable: {
+        id: savedTimetable.id,
+        name: savedTimetable.name,
+        semester: savedTimetable.semester,
+        year: savedTimetable.year,
+        status: savedTimetable.status,
+        created_at: savedTimetable.created_at,
+      },
+      summary: {
+        modulesScheduled: modules.length,
+        hallsUsed: halls.length,
+        academicYear,
+        semester,
+        algorithmUsed: algorithms[0] || 'hybrid',
+      },
+      results,
+      timetableId: savedTimetable.id,
+    });
+  } catch (err) {
+    console.error('Error running scheduler for year/semester:', err);
+    return res.status(500).json({ error: err.message });
+  }
+};

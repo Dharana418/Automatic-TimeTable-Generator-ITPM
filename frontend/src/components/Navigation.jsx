@@ -9,12 +9,28 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
             const response = await fetch(`${apiBase}/api/auth/logout`, {
                 method: 'POST',
                 credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
             });
+            
             if (response.ok) {
-                window.location.href = '/';
+                // Clear any local storage data
+                localStorage.clear();
+                sessionStorage.clear();
+                
+                // Redirect to home page
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 100);
+            } else {
+                const errorData = await response.json().catch(() => ({}));
+                console.error('Logout failed:', errorData);
+                alert('Logout failed. Please try again.');
             }
         } catch (error) {
             console.error('Logout error:', error);
+            alert('An error occurred during logout. Please try again.');
         }
     };
     
@@ -46,6 +62,10 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
 
                         {user?.role === 'Faculty Coordinator' && location.pathname !== '/scheduler' && (
                             <Link to="/scheduler" className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 md:w-24">Scheduler</Link>
+                        )}
+
+                        {user?.role === 'Faculty Coordinator' && location.pathname !== '/scheduler/by-year' && (
+                            <Link to="/scheduler/by-year" className="rounded-md border border-blue-300 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-600 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-800 md:w-28">Schedule</Link>
                         )}
 
                         <button onClick={handleLogout} className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 md:w-20">Logout</button>

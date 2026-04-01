@@ -13,6 +13,7 @@ import {
     runScheduler,
     updateItem,
     runSchedulerBySegments,
+    runSchedulerForYearSemester,
     upsertSoftConstraints,
     updateModuleAssignment,
 } from '../controllers/schedulerController.js';
@@ -60,6 +61,7 @@ router.delete('/assignments/:id', authorize('admin', 'academiccoordinator', 'fac
 
 router.post('/run', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), runScheduler);
 router.post('/run-by-segments', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), runSchedulerBySegments);
+router.post('/run-for-year-semester', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), runSchedulerForYearSemester);
 router.post('/reset', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), resetData);
 
 // CRUD operations
