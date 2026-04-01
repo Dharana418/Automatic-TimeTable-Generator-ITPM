@@ -126,6 +126,15 @@ export default function Scheduler() {
   const [activeNav, setActiveNav] = useState('overview');
   const [iterations, setIterations] = useState(80);
   const [selectedAlgorithms, setSelectedAlgorithms] = useState(['pso', 'anticolony', 'genetic', 'tabu', 'hybrid']);
+  const [hallStructures3D, setHallStructures3D] = useState([]);
+  const [view3d, setView3d] = useState({ rotateX: 10, rotateZ: -18, zoom: 1 });
+  const [coordinatorHallAllocations, setCoordinatorHallAllocations] = useState([]);
+  const [allocationSummary, setAllocationSummary] = useState({
+    total: 0,
+    fromApprovedTimetable: 0,
+    fromRecommendationFallback: 0,
+  });
+  const [allocationLoading, setAllocationLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -145,6 +154,60 @@ export default function Scheduler() {
       cancelled = true;
     };
   }, [activeType]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadHalls = async () => {
+      try {
+        const response = await schedulerApi.listItems('halls');
+        if (!cancelled) {
+          setHallStructures3D(response?.items || []);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setHallStructures3D([]);
+        }
+        console.error('Failed to load 3D halls:', err);
+      }
+    };
+
+    loadHalls();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function loadCoordinatorHallAllocations() {
+    setAllocationLoading(true);
+    try {
+      const response = await schedulerApi.getCoordinatorHallAllocations();
+      setCoordinatorHallAllocations(response?.data || []);
+      setAllocationSummary(
+        response?.summary || {
+          total: 0,
+          fromApprovedTimetable: 0,
+          fromRecommendationFallback: 0,
+        }
+      );
+    } catch (err) {
+      setCoordinatorHallAllocations([]);
+      setAllocationSummary({
+        total: 0,
+        fromApprovedTimetable: 0,
+        fromRecommendationFallback: 0,
+      });
+      showError('Load failed', err.message || 'Unable to fetch hall allocations from Academic Coordinator.');
+    }
+    setAllocationLoading(false);
+  }
+
+  function handleNavChange(view) {
+    setActiveNav(view);
+    if ((view === 'overview' || view === 'resources') && coordinatorHallAllocations.length === 0) {
+      loadCoordinatorHallAllocations();
+    }
+  }
 
   async function handleAdd(e){
     e.preventDefault();
@@ -329,10 +392,10 @@ export default function Scheduler() {
         </div>
 
         <nav className="sidebar-nav">
-          <button className={activeNav === 'overview' ? 'active' : ''} onClick={() => setActiveNav('overview')}>Overview</button>
-          <button className={activeNav === 'weekly' ? 'active' : ''} onClick={() => setActiveNav('weekly')}>Weekly Calendar</button>
-          <button className={activeNav === 'resources' ? 'active' : ''} onClick={() => setActiveNav('resources')}>Resource Hub</button>
-          <button className={activeNav === 'algorithms' ? 'active' : ''} onClick={() => setActiveNav('algorithms')}>Algorithms</button>
+          <button className={activeNav === 'overview' ? 'active' : ''} onClick={() => handleNavChange('overview')}>Overview</button>
+          <button className={activeNav === 'weekly' ? 'active' : ''} onClick={() => handleNavChange('weekly')}>Weekly Calendar</button>
+          <button className={activeNav === 'resources' ? 'active' : ''} onClick={() => handleNavChange('resources')}>Resource Hub</button>
+          <button className={activeNav === 'algorithms' ? 'active' : ''} onClick={() => handleNavChange('algorithms')}>Algorithms</button>
         </nav>
 
         <div className="sidebar-section">
@@ -475,6 +538,131 @@ export default function Scheduler() {
           )}
 
           <aside className="control-panel">
+            {(activeNav === 'overview' || activeNav === 'resources') && (
+            <section className="panel-card">
+              <div className="panel-header">
+                <h3>3D Halls View</h3>
+                <span>{hallStructures3D.length} halls</span>
+              </div>
+
+              <div className="ac-3d-controls">
+                <label>
+                  Rotate X
+                  <input
+                    type="range"
+                    min="-20"
+                    max="35"
+                    step="1"
+                    value={view3d.rotateX}
+                    onChange={(event) => setView3d((previous) => ({ ...previous, rotateX: Number(event.target.value) }))}
+                  />
+                </label>
+                <label>
+                  Rotate Z
+                  <input
+                    type="range"
+                    min="-45"
+                    max="45"
+                    step="1"
+                    value={view3d.rotateZ}
+                    onChange={(event) => setView3d((previous) => ({ ...previous, rotateZ: Number(event.target.value) }))}
+                  />
+                </label>
+                <label>
+                  Zoom
+                  <input
+                    type="range"
+                    min="0.6"
+                    max="1.8"
+                    step="0.05"
+                    value={view3d.zoom}
+                    onChange={(event) => setView3d((previous) => ({ ...previous, zoom: Number(event.target.value) }))}
+                  />
+                </label>
+                <button className="action" type="button" onClick={() => setView3d({ rotateX: 10, rotateZ: -18, zoom: 1 })}>
+                  Reset View
+                </button>
+              </div>
+
+              <div className="ac-3d-scene-wrap">
+                <div className="ac-3d-scene" style={{ '--rx': `${view3d.rotateX}deg`, '--rz': `${view3d.rotateZ}deg`, '--zoom': view3d.zoom }}>
+                  <div className="ac-3d-camera">
+                    {hallStructures3D.length === 0 && (
+                      <div className="ac-3d-empty">No halls available yet. Add halls to render the 3D layout.</div>
+                    )}
+
+                    {hallStructures3D.map((structure, index) => {
+                      const capacity = Number(structure.capacity) || 0;
+                      const height = Math.max(40, Math.min(160, capacity ? 28 + Math.round(capacity / 3) : 56));
+                      const x = (index % 6) * 74;
+                      const z = Math.floor(index / 6) * 66;
+
+                      return (
+                        <div
+                          key={structure.id || `${structure.name || 'hall'}-${index}`}
+                          className="ac-3d-block"
+                          style={{
+                            '--x': `${x}px`,
+                            '--z': `${z}px`,
+                            '--h': `${height}px`,
+                            '--hue': `${(index * 37) % 360}`,
+                          }}
+                        >
+                          <div className="ac-3d-label">
+                            <strong>{structure.name || structure.id || `Hall ${index + 1}`}</strong>
+                            <span>Cap: {capacity || '-'}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </section>
+            )}
+
+            {(activeNav === 'overview' || activeNav === 'resources') && (
+            <section className="panel-card">
+              <div className="panel-header">
+                <h3>Academic Coordinator Hall Allocations</h3>
+                <button
+                  type="button"
+                  className="action"
+                  onClick={loadCoordinatorHallAllocations}
+                  disabled={allocationLoading}
+                >
+                  {allocationLoading ? 'Refreshing...' : 'Refresh'}
+                </button>
+              </div>
+
+              <div className="result-row">
+                <strong>Total: {allocationSummary.total || 0}</strong>
+                <p>
+                  Approved timetable: {allocationSummary.fromApprovedTimetable || 0} •
+                  {` Fallback recommendations: ${allocationSummary.fromRecommendationFallback || 0}`}
+                </p>
+              </div>
+
+              <div className="course-pool">
+                {allocationLoading ? (
+                  <p className="empty-pool">Loading coordinator allocations...</p>
+                ) : coordinatorHallAllocations.length === 0 ? (
+                  <p className="empty-pool">No hall allocations found from Academic Coordinator.</p>
+                ) : (
+                  coordinatorHallAllocations.map((item) => (
+                    <div key={`${item.moduleId}-${item.hallId}`} className="result-row">
+                      <strong>{item.moduleCode || item.moduleId} → {item.hallName || item.hallId}</strong>
+                      <p>
+                        {item.moduleName || 'Module name unavailable'} • Source: {toReadableLabel(item.source || '')}
+                        {item.timetableName ? ` • Timetable: ${item.timetableName}` : ''}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+            )}
+
             {(activeNav === 'overview' || activeNav === 'resources') && (
             <section className="panel-card">
               <div className="panel-header">

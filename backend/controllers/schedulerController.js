@@ -1215,6 +1215,140 @@ export const getLicDailyTimetable = async (req, res) => {
   }
 };
 
+export const getCoordinatorHallAllocations = async (req, res) => {
+  try {
+    const approvedTimetableRes = await pool.query(
+      `WITH latest_approved AS (
+         SELECT id, name, created_at, data
+         FROM timetables
+         WHERE status = 'approved' AND data IS NOT NULL
+         ORDER BY created_at DESC
+         LIMIT 1
+       ), schedule_rows AS (
+         SELECT
+           la.id AS timetable_id,
+           la.name AS timetable_name,
+           la.created_at AS timetable_created_at,
+           elem->>'moduleId' AS module_id,
+           elem->>'hallId' AS hall_id
+         FROM latest_approved la,
+              LATERAL jsonb_array_elements(
+                CASE
+                  WHEN jsonb_typeof((la.data::jsonb)->'schedule') = 'array' THEN (la.data::jsonb)->'schedule'
+                  ELSE '[]'::jsonb
+                END
+              ) elem
+         WHERE elem->>'moduleId' IS NOT NULL
+           AND elem->>'hallId' IS NOT NULL
+       )
+       SELECT
+         sr.module_id,
+         sr.hall_id,
+         sr.timetable_id,
+         sr.timetable_name,
+         sr.timetable_created_at,
+         m.code AS module_code,
+         m.name AS module_name,
+         h.name AS hall_name,
+         COUNT(*)::int AS usage_count
+       FROM schedule_rows sr
+       LEFT JOIN modules m
+         ON m.id::text = sr.module_id OR m.code = sr.module_id
+       LEFT JOIN halls h
+         ON h.id::text = sr.hall_id OR h.name = sr.hall_id
+       GROUP BY
+         sr.module_id,
+         sr.hall_id,
+         sr.timetable_id,
+         sr.timetable_name,
+         sr.timetable_created_at,
+         m.code,
+         m.name,
+         h.name
+       ORDER BY sr.module_id, usage_count DESC, sr.hall_id ASC`
+    );
+
+    const allocations = [];
+    const seenModules = new Set();
+
+    approvedTimetableRes.rows.forEach((row) => {
+      if (seenModules.has(row.module_id)) return;
+      seenModules.add(row.module_id);
+
+      allocations.push({
+        moduleId: row.module_id,
+        moduleCode: row.module_code || row.module_id,
+        moduleName: row.module_name || null,
+        hallId: row.hall_id,
+        hallName: row.hall_name || row.hall_id,
+        usageCount: Number(row.usage_count || 0),
+        source: 'approved_timetable',
+        timetableId: row.timetable_id || null,
+        timetableName: row.timetable_name || null,
+        timetableCreatedAt: row.timetable_created_at || null,
+      });
+    });
+
+    try {
+      const recommendationRes = await pool.query(
+        `SELECT DISTINCT ON (hr.for_module_id)
+            hr.for_module_id AS module_id,
+            hr.recommended_hall_id AS hall_id,
+            hr.score,
+            hr.created_at,
+            m.code AS module_code,
+            m.name AS module_name,
+            h.name AS hall_name
+         FROM hall_recommendations hr
+         LEFT JOIN modules m
+           ON m.id::text = hr.for_module_id OR m.code = hr.for_module_id
+         LEFT JOIN halls h
+           ON h.id::text = hr.recommended_hall_id OR h.name = hr.recommended_hall_id
+         WHERE hr.recommended_hall_id IS NOT NULL
+           AND (hr.expires_at IS NULL OR hr.expires_at >= NOW())
+         ORDER BY hr.for_module_id, hr.score DESC, hr.created_at DESC`
+      );
+
+      recommendationRes.rows.forEach((row) => {
+        if (seenModules.has(row.module_id)) return;
+        seenModules.add(row.module_id);
+
+        allocations.push({
+          moduleId: row.module_id,
+          moduleCode: row.module_code || row.module_id,
+          moduleName: row.module_name || null,
+          hallId: row.hall_id,
+          hallName: row.hall_name || row.hall_id,
+          usageCount: null,
+          source: 'recommendation_fallback',
+          timetableId: null,
+          timetableName: null,
+          timetableCreatedAt: null,
+        });
+      });
+    } catch (recommendationErr) {
+      // Keep API available even if optional recommendation source is unavailable.
+      console.warn('Hall recommendation fallback skipped:', recommendationErr.message);
+    }
+
+    const approvedCount = allocations.filter((item) => item.source === 'approved_timetable').length;
+    const fallbackCount = allocations.filter((item) => item.source === 'recommendation_fallback').length;
+
+    return res.json({
+      success: true,
+      data: allocations,
+      summary: {
+        total: allocations.length,
+        fromApprovedTimetable: approvedCount,
+        fromRecommendationFallback: fallbackCount,
+      },
+    });
+  } catch (err) {
+    console.error('Error loading coordinator hall allocations:', err);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
 export const resetData = async (req, res) => {
   try {
     await pool.query('TRUNCATE module_assignments, halls, modules, lics, instructors, batches, departments CASCADE');
