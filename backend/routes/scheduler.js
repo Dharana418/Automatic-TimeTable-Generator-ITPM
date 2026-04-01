@@ -6,6 +6,7 @@ import {
     deleteItem,
     getLicDailyTimetable,
     getLicsWithInstructors,
+    getCoordinatorHallAllocations,
     getSoftConstraints,
     listItems,
     listModuleAssignments,
@@ -51,6 +52,7 @@ router.use(
 
 // Specific helpers
 router.get('/lics-with-instructors', getLicsWithInstructors);
+router.get('/hall-allocations/coordinator', getCoordinatorHallAllocations);
 router.get('/lic/daily-timetable', getLicDailyTimetable);
 router.get('/soft-constraints', getSoftConstraints);
 router.post('/soft-constraints', upsertSoftConstraints);
