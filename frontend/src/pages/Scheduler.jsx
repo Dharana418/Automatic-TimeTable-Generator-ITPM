@@ -107,6 +107,55 @@ function toReadableLabel(value = '') {
   return toCapitalized(String(value || '').replace(/_/g, ' '));
 }
 
+function normalizeSpecialization(value = '') {
+  return String(value || '').trim().toUpperCase();
+}
+
+function inferModuleYear(module = {}) {
+  const fromField = Number(module.academic_year || module.academicYear || 0);
+  if ([1, 2, 3, 4].includes(fromField)) return fromField;
+
+  const code = String(module.code || '').toUpperCase();
+  const match = code.match(/^[A-Z]+(\d)/);
+  return match ? Number(match[1]) : null;
+}
+
+function inferModuleSemester(module = {}) {
+  const value = Number(module.semester || module.details?.semester || 0);
+  return [1, 2].includes(value) ? value : null;
+}
+
+function inferModuleSpecialization(module = {}) {
+  const details = module.details || {};
+  const explicit = normalizeSpecialization(
+    details.specialization || details.spec || details.stream || details.department || module.specialization
+  );
+  if (explicit) return explicit;
+
+  const code = String(module.code || '').toUpperCase();
+  if (code.startsWith('IT')) return 'IT';
+  if (code.startsWith('SE')) return 'SE';
+  if (code.startsWith('CS') || code.startsWith('IS') || code.startsWith('IE')) return 'ENGINEERING';
+  return 'GENERAL';
+}
+
+function parseBatchSegment(batch = {}) {
+  const target = String(batch?.name || batch?.id || '');
+  const match = target.match(/^Y(\d+)\.S(\d+)\.(WE|WD)\.([A-Z0-9]+)\./i);
+  if (!match) return null;
+  return {
+    year: Number(match[1]),
+    semester: Number(match[2]),
+    specialization: normalizeSpecialization(match[4]),
+  };
+}
+
+function toDataSourceLabel(type = '') {
+  const normalizedType = String(type || '').trim().toLowerCase();
+  if (normalizedType === 'lics') return 'LICs';
+  return toCapitalized(normalizedType);
+}
+
 export default function Scheduler() {
   const [activeType, setActiveType] = useState('modules');
   const [items, setItems] = useState([]);
@@ -125,14 +174,35 @@ export default function Scheduler() {
   const [selectedBlock, setSelectedBlock] = useState(null);
   const [activeNav, setActiveNav] = useState('overview');
   const [iterations, setIterations] = useState(80);
+  const [segmentYear, setSegmentYear] = useState('');
+  const [segmentSemester, setSegmentSemester] = useState('');
+  const [segmentSpecialization, setSegmentSpecialization] = useState('');
   const [selectedAlgorithms, setSelectedAlgorithms] = useState(['pso', 'anticolony', 'genetic', 'tabu', 'hybrid']);
+  const [hallStructures3D, setHallStructures3D] = useState([]);
+  const [view3d, setView3d] = useState({ rotateX: 10, rotateZ: -18, zoom: 1 });
+  const [coordinatorHallAllocations, setCoordinatorHallAllocations] = useState([]);
+  const [allocationSummary, setAllocationSummary] = useState({
+    total: 0,
+    fromApprovedTimetable: 0,
+    fromRecommendationFallback: 0,
+  });
+  const [allocationLoading, setAllocationLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
     const loadItems = async () => {
       try {
-        const res = await schedulerApi.listItems(activeType);
+        const moduleFilters =
+          activeType === 'modules'
+            ? {
+                year: segmentYear ? Number(segmentYear) : undefined,
+                semester: segmentSemester ? Number(segmentSemester) : undefined,
+                specialization: segmentSpecialization ? String(segmentSpecialization).trim().toUpperCase() : undefined,
+              }
+            : {};
+
+        const res = await schedulerApi.listItems(activeType, moduleFilters);
         if (!cancelled) setItems(res.items || []);
       } catch (e) {
         console.error(e);
@@ -144,7 +214,61 @@ export default function Scheduler() {
     return () => {
       cancelled = true;
     };
-  }, [activeType]);
+  }, [activeType, segmentYear, segmentSemester, segmentSpecialization]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadHalls = async () => {
+      try {
+        const response = await schedulerApi.listItems('halls');
+        if (!cancelled) {
+          setHallStructures3D(response?.items || []);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setHallStructures3D([]);
+        }
+        console.error('Failed to load 3D halls:', err);
+      }
+    };
+
+    loadHalls();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function loadCoordinatorHallAllocations() {
+    setAllocationLoading(true);
+    try {
+      const response = await schedulerApi.getCoordinatorHallAllocations();
+      setCoordinatorHallAllocations(response?.data || []);
+      setAllocationSummary(
+        response?.summary || {
+          total: 0,
+          fromApprovedTimetable: 0,
+          fromRecommendationFallback: 0,
+        }
+      );
+    } catch (err) {
+      setCoordinatorHallAllocations([]);
+      setAllocationSummary({
+        total: 0,
+        fromApprovedTimetable: 0,
+        fromRecommendationFallback: 0,
+      });
+      showError('Load failed', err.message || 'Unable to fetch hall allocations from Academic Coordinator.');
+    }
+    setAllocationLoading(false);
+  }
+
+  function handleNavChange(view) {
+    setActiveNav(view);
+    if ((view === 'overview' || view === 'resources') && coordinatorHallAllocations.length === 0) {
+      loadCoordinatorHallAllocations();
+    }
+  }
 
   async function handleAdd(e){
     e.preventDefault();
@@ -165,27 +289,70 @@ export default function Scheduler() {
     setLoading(true); setResult(null); setSegmentedResult(null);
     try{
       const algorithms = selectedAlgorithms.length ? selectedAlgorithms : ['hybrid'];
-      const res = await schedulerApi.runScheduler(algorithms, { iterations });
-      setResult(res.results);
+      const hasSegmentFilters = Boolean(segmentYear || segmentSemester || segmentSpecialization);
 
-      const selected = pickPreferredAlgorithm(res.results || {});
-      const schedule = Array.isArray(selected?.data?.schedule) ? selected.data.schedule : [];
-      const entries = schedule.map((entry, index) => toGeneratedEntry(entry, index));
-      const conflicts = Array.isArray(selected?.data?.conflicts) ? selected.data.conflicts.length : 0;
-      const scheduled = Number(selected?.data?.stats?.scheduled || 0);
-      const totalRequired = Number(selected?.data?.stats?.totalRequired || 0);
-      const coverage = selected?.data?.stats?.coverage;
+      if (hasSegmentFilters) {
+        const segmentedOptions = {
+          iterations,
+          year: segmentYear ? Number(segmentYear) : undefined,
+          semester: segmentSemester ? Number(segmentSemester) : undefined,
+          specialization: segmentSpecialization ? String(segmentSpecialization).trim().toUpperCase() : undefined,
+        };
 
-      setGeneratedEntries(entries);
-      setExecutionSnapshot({
-        coverage: typeof coverage === 'number' ? coverage : null,
-        scheduled,
-        totalRequired,
-        conflicts,
-        source: selected?.key ? `${toReadableLabel(selected.key)} (primary)` : '-',
-      });
+        const res = await schedulerApi.runSchedulerBySegments(algorithms, segmentedOptions);
+        setSegmentedResult(res);
 
-      showSuccess('Scheduler completed', 'Algorithm run completed successfully.');
+        const segmentRows = Array.isArray(res?.segmentedResults) ? res.segmentedResults : [];
+        let totalScheduled = 0;
+        let totalRequired = 0;
+        let totalConflicts = 0;
+        const mergedEntries = [];
+
+        segmentRows.forEach((segmentRow, segmentIndex) => {
+          const selected = pickPreferredAlgorithm(segmentRow?.results || {});
+          const schedule = Array.isArray(selected?.data?.schedule) ? selected.data.schedule : [];
+          schedule.forEach((entry, entryIndex) => {
+            mergedEntries.push(toGeneratedEntry(entry, entryIndex, segmentRow?.segment?.key || `segment-${segmentIndex + 1}`));
+          });
+
+          totalScheduled += Number(selected?.data?.stats?.scheduled || 0);
+          totalRequired += Number(selected?.data?.stats?.totalRequired || 0);
+          totalConflicts += Array.isArray(selected?.data?.conflicts) ? selected.data.conflicts.length : 0;
+        });
+
+        setGeneratedEntries(mergedEntries);
+        setExecutionSnapshot({
+          coverage: totalRequired > 0 ? totalScheduled / totalRequired : null,
+          scheduled: totalScheduled,
+          totalRequired,
+          conflicts: totalConflicts,
+          source: `Filtered Segments (${segmentRows.length})`,
+        });
+
+        showSuccess('Scheduler completed', 'Filtered timetable generated with selected year/semester/specialization.');
+      } else {
+        const res = await schedulerApi.runScheduler(algorithms, { iterations });
+        setResult(res.results);
+
+        const selected = pickPreferredAlgorithm(res.results || {});
+        const schedule = Array.isArray(selected?.data?.schedule) ? selected.data.schedule : [];
+        const entries = schedule.map((entry, index) => toGeneratedEntry(entry, index));
+        const conflicts = Array.isArray(selected?.data?.conflicts) ? selected.data.conflicts.length : 0;
+        const scheduled = Number(selected?.data?.stats?.scheduled || 0);
+        const totalRequired = Number(selected?.data?.stats?.totalRequired || 0);
+        const coverage = selected?.data?.stats?.coverage;
+
+        setGeneratedEntries(entries);
+        setExecutionSnapshot({
+          coverage: typeof coverage === 'number' ? coverage : null,
+          scheduled,
+          totalRequired,
+          conflicts,
+          source: selected?.key ? `${toReadableLabel(selected.key)} (primary)` : '-',
+        });
+
+        showSuccess('Scheduler completed', 'Algorithm run completed successfully.');
+      }
     }catch(err){ showError('Scheduler failed', err.message); }
     setLoading(false);
   }
@@ -194,7 +361,13 @@ export default function Scheduler() {
     setLoading(true); setResult(null); setSegmentedResult(null);
     try{
       const algorithms = selectedAlgorithms.length ? selectedAlgorithms : ['hybrid'];
-      const res = await schedulerApi.runSchedulerBySegments(algorithms, { iterations });
+      const segmentedOptions = {
+        iterations,
+        year: segmentYear ? Number(segmentYear) : undefined,
+        semester: segmentSemester ? Number(segmentSemester) : undefined,
+        specialization: segmentSpecialization ? String(segmentSpecialization).trim().toUpperCase() : undefined,
+      };
+      const res = await schedulerApi.runSchedulerBySegments(algorithms, segmentedOptions);
       setSegmentedResult(res);
 
       const segmentRows = Array.isArray(res?.segmentedResults) ? res.segmentedResults : [];
@@ -319,6 +492,46 @@ export default function Scheduler() {
     return map;
   }, [generatedEntries]);
 
+  const filteredItems = useMemo(() => {
+    const requestedYear = segmentYear ? Number(segmentYear) : null;
+    const requestedSemester = segmentSemester ? Number(segmentSemester) : null;
+    const requestedSpecialization = segmentSpecialization ? normalizeSpecialization(segmentSpecialization) : '';
+
+    if (!requestedYear && !requestedSemester && !requestedSpecialization) {
+      return items;
+    }
+
+    return (items || []).filter((item) => {
+      if (activeType === 'modules') {
+        const moduleYear = inferModuleYear(item);
+        const moduleSemester = inferModuleSemester(item);
+        const moduleSpecialization = inferModuleSpecialization(item);
+
+        if (requestedYear && moduleYear && moduleYear !== requestedYear) return false;
+        if (requestedSemester && moduleSemester && moduleSemester !== requestedSemester) return false;
+        if (requestedSpecialization && moduleSpecialization !== requestedSpecialization) return false;
+        return true;
+      }
+
+      if (activeType === 'batches') {
+        const segment = parseBatchSegment(item);
+        if (!segment) return true;
+        if (requestedYear && segment.year !== requestedYear) return false;
+        if (requestedSemester && segment.semester !== requestedSemester) return false;
+        if (requestedSpecialization && segment.specialization !== requestedSpecialization) return false;
+        return true;
+      }
+
+      if (activeType === 'lics' || activeType === 'instructors') {
+        if (!requestedSpecialization) return true;
+        const department = normalizeSpecialization(item.department || item.details?.department || '');
+        return department.includes(requestedSpecialization);
+      }
+
+      return true;
+    });
+  }, [items, activeType, segmentYear, segmentSemester, segmentSpecialization]);
+
   return (
     <div className="scheduler-shell">
       <aside className="scheduler-sidebar">
@@ -329,10 +542,10 @@ export default function Scheduler() {
         </div>
 
         <nav className="sidebar-nav">
-          <button className={activeNav === 'overview' ? 'active' : ''} onClick={() => setActiveNav('overview')}>Overview</button>
-          <button className={activeNav === 'weekly' ? 'active' : ''} onClick={() => setActiveNav('weekly')}>Weekly Calendar</button>
-          <button className={activeNav === 'resources' ? 'active' : ''} onClick={() => setActiveNav('resources')}>Resource Hub</button>
-          <button className={activeNav === 'algorithms' ? 'active' : ''} onClick={() => setActiveNav('algorithms')}>Algorithms</button>
+          <button className={activeNav === 'overview' ? 'active' : ''} onClick={() => handleNavChange('overview')}>Overview</button>
+          <button className={activeNav === 'weekly' ? 'active' : ''} onClick={() => handleNavChange('weekly')}>Weekly Calendar</button>
+          <button className={activeNav === 'resources' ? 'active' : ''} onClick={() => handleNavChange('resources')}>Resource Hub</button>
+          <button className={activeNav === 'algorithms' ? 'active' : ''} onClick={() => handleNavChange('algorithms')}>Algorithms</button>
         </nav>
 
         <div className="sidebar-section">
@@ -345,7 +558,7 @@ export default function Scheduler() {
                 onClick={() => setActiveType(type)}
                 type="button"
               >
-                {type}
+                {toDataSourceLabel(type)}
               </button>
             ))}
           </div>
@@ -367,7 +580,7 @@ export default function Scheduler() {
               {loading ? 'Running...' : 'Run Scheduler'}
             </button>
             <button className="action" onClick={handleRunBySegments} disabled={loading}>
-              {loading ? 'Running...' : 'Run by Segments'}
+              {loading ? 'Running...' : 'Run by Semester & Specialization'}
             </button>
           </div>
         </header>
@@ -395,6 +608,47 @@ export default function Scheduler() {
                   }}
                 />
               </label>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+                <label>
+                  Year Filter
+                  <select
+                    className="ac-input"
+                    value={segmentYear}
+                    onChange={(event) => setSegmentYear(event.target.value)}
+                  >
+                    <option value="">All Years</option>
+                    <option value="1">Year 1</option>
+                    <option value="2">Year 2</option>
+                    <option value="3">Year 3</option>
+                    <option value="4">Year 4</option>
+                  </select>
+                </label>
+
+                <label>
+                  Semester Filter
+                  <select
+                    className="ac-input"
+                    value={segmentSemester}
+                    onChange={(event) => setSegmentSemester(event.target.value)}
+                  >
+                    <option value="">All Semesters</option>
+                    <option value="1">Semester 1</option>
+                    <option value="2">Semester 2</option>
+                  </select>
+                </label>
+
+                <label>
+                  Specialization
+                  <input
+                    className="ac-input"
+                    placeholder="IT / SE / CS"
+                    value={segmentSpecialization}
+                    onChange={(event) => setSegmentSpecialization(event.target.value)}
+                  />
+                </label>
+              </div>
+
               <div className="course-pool">
                 {algorithmOptions.map((algorithm) => (
                   <label key={algorithm} className="pool-item generated-block" style={{ background: 'rgba(15, 23, 42, 0.45)', borderColor: 'rgba(148, 163, 184, 0.35)' }}>
@@ -478,6 +732,131 @@ export default function Scheduler() {
             {(activeNav === 'overview' || activeNav === 'resources') && (
             <section className="panel-card">
               <div className="panel-header">
+                <h3>3D Halls View</h3>
+                <span>{hallStructures3D.length} halls</span>
+              </div>
+
+              <div className="ac-3d-controls">
+                <label>
+                  Rotate X
+                  <input
+                    type="range"
+                    min="-20"
+                    max="35"
+                    step="1"
+                    value={view3d.rotateX}
+                    onChange={(event) => setView3d((previous) => ({ ...previous, rotateX: Number(event.target.value) }))}
+                  />
+                </label>
+                <label>
+                  Rotate Z
+                  <input
+                    type="range"
+                    min="-45"
+                    max="45"
+                    step="1"
+                    value={view3d.rotateZ}
+                    onChange={(event) => setView3d((previous) => ({ ...previous, rotateZ: Number(event.target.value) }))}
+                  />
+                </label>
+                <label>
+                  Zoom
+                  <input
+                    type="range"
+                    min="0.6"
+                    max="1.8"
+                    step="0.05"
+                    value={view3d.zoom}
+                    onChange={(event) => setView3d((previous) => ({ ...previous, zoom: Number(event.target.value) }))}
+                  />
+                </label>
+                <button className="action" type="button" onClick={() => setView3d({ rotateX: 10, rotateZ: -18, zoom: 1 })}>
+                  Reset View
+                </button>
+              </div>
+
+              <div className="ac-3d-scene-wrap">
+                <div className="ac-3d-scene" style={{ '--rx': `${view3d.rotateX}deg`, '--rz': `${view3d.rotateZ}deg`, '--zoom': view3d.zoom }}>
+                  <div className="ac-3d-camera">
+                    {hallStructures3D.length === 0 && (
+                      <div className="ac-3d-empty">No halls available yet. Add halls to render the 3D layout.</div>
+                    )}
+
+                    {hallStructures3D.map((structure, index) => {
+                      const capacity = Number(structure.capacity) || 0;
+                      const height = Math.max(40, Math.min(160, capacity ? 28 + Math.round(capacity / 3) : 56));
+                      const x = (index % 6) * 74;
+                      const z = Math.floor(index / 6) * 66;
+
+                      return (
+                        <div
+                          key={structure.id || `${structure.name || 'hall'}-${index}`}
+                          className="ac-3d-block"
+                          style={{
+                            '--x': `${x}px`,
+                            '--z': `${z}px`,
+                            '--h': `${height}px`,
+                            '--hue': `${(index * 37) % 360}`,
+                          }}
+                        >
+                          <div className="ac-3d-label">
+                            <strong>{structure.name || structure.id || `Hall ${index + 1}`}</strong>
+                            <span>Cap: {capacity || '-'}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </section>
+            )}
+
+            {(activeNav === 'overview' || activeNav === 'resources') && (
+            <section className="panel-card">
+              <div className="panel-header">
+                <h3>Academic Coordinator Hall Allocations</h3>
+                <button
+                  type="button"
+                  className="action"
+                  onClick={loadCoordinatorHallAllocations}
+                  disabled={allocationLoading}
+                >
+                  {allocationLoading ? 'Refreshing...' : 'Refresh'}
+                </button>
+              </div>
+
+              <div className="result-row">
+                <strong>Total: {allocationSummary.total || 0}</strong>
+                <p>
+                  Approved timetable: {allocationSummary.fromApprovedTimetable || 0} •
+                  {` Fallback recommendations: ${allocationSummary.fromRecommendationFallback || 0}`}
+                </p>
+              </div>
+
+              <div className="course-pool">
+                {allocationLoading ? (
+                  <p className="empty-pool">Loading coordinator allocations...</p>
+                ) : coordinatorHallAllocations.length === 0 ? (
+                  <p className="empty-pool">No hall allocations found from Academic Coordinator.</p>
+                ) : (
+                  coordinatorHallAllocations.map((item) => (
+                    <div key={`${item.moduleId}-${item.hallId}`} className="result-row">
+                      <strong>{item.moduleCode || item.moduleId} → {item.hallName || item.hallId}</strong>
+                      <p>
+                        {item.moduleName || 'Module name unavailable'} • Source: {toReadableLabel(item.source || '')}
+                        {item.timetableName ? ` • Timetable: ${item.timetableName}` : ''}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+            )}
+
+            {(activeNav === 'overview' || activeNav === 'resources') && (
+            <section className="panel-card">
+              <div className="panel-header">
                 <h3>Generated Session Feed</h3>
                 <span>{generatedEntries.length} records</span>
               </div>
@@ -531,7 +910,7 @@ export default function Scheduler() {
 
               <div className="existing-list">
                 <h4>Existing {toCapitalized(activeType)}</h4>
-                {items.slice(0, 30).map((item, index) => (
+                {filteredItems.slice(0, 30).map((item, index) => (
                   <div key={item.id || item.name || `${activeType}-${index}`}>
                     {item.name || item.code || item.id}
                   </div>
