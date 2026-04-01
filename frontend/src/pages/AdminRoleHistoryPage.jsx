@@ -231,16 +231,16 @@ export default function AdminRoleHistoryPage({ apiBase }) {
   };
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 dark:bg-black dark:text-gray-100">
+    <div className="min-h-screen bg-white text-gray-900">
       <div className="mx-auto grid min-h-screen max-w-[1600px] lg:grid-cols-[240px_1fr]">
         
         {/* Sidebar */}
-        <aside className="sticky top-0 hidden h-screen border-r border-gray-200 bg-white p-4 lg:flex lg:flex-col dark:border-gray-800 dark:bg-gray-950">
+        <aside className="sticky top-0 hidden h-screen border-r border-gray-200 bg-white p-4 lg:flex lg:flex-col">
           <div className="mb-8 flex items-center gap-2 px-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded border border-gray-300 bg-gray-50 text-[#059669] dark:border-gray-700 dark:bg-gray-900">
+            <div className="flex h-9 w-9 items-center justify-center rounded border border-gray-300 bg-gray-50 text-[#059669]">
               <KeyRound size={16} />
             </div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Admin</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Admin</h2>
           </div>
           <nav className="space-y-0.5">
             <NavItem to="/dashboard" label="Create Staff" icon="👤" />
@@ -249,42 +249,42 @@ export default function AdminRoleHistoryPage({ apiBase }) {
         </aside>
 
         <main className="p-4 md:p-6 lg:p-8">
-          <header className="mb-6 border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-950">
+          <header className="mb-6 border border-gray-200 bg-white p-5">
             <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded border border-gray-300 bg-gray-50 text-[#059669] dark:border-gray-700 dark:bg-gray-900">
+              <div className="flex h-12 w-12 items-center justify-center rounded border border-gray-300 bg-gray-50 text-[#059669]">
                 <Activity size={24} />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-gray-400">Role Management</p>
-                <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Assignment Logs</h1>
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Role Management</p>
+                <h1 className="text-2xl font-semibold text-gray-900">Assignment Logs</h1>
               </div>
             </div>
-            <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">Audit trail of faculty role assignments and security records.</p>
+            <p className="mt-3 text-sm text-gray-600">Audit trail of faculty role assignments and security records.</p>
             <div className="mt-4 flex flex-wrap gap-2">
-              <button onClick={fetchAssignments} className="rounded border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800">
+              <button onClick={fetchAssignments} className="rounded border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50">
                 Refresh
               </button>
-              <button onClick={handleCreateHistory} className="rounded border border-[#059669] bg-[#059669] px-3 py-2 text-xs font-semibold text-white transition hover:bg-green-700 dark:border-green-600 dark:bg-green-700 dark:hover:bg-green-600">
+              <button onClick={handleCreateHistory} className="rounded border border-[#059669] bg-[#059669] px-3 py-2 text-xs font-semibold text-white transition hover:bg-green-700">
                 + New Entry
               </button>
             </div>
           </header>
 
-          <section className="mb-6 border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-950">
+          <section className="mb-6 border border-gray-200 bg-white p-4">
             <div className="mb-3 flex items-center gap-2">
               <ShieldCheck size={16} className="text-[#059669]" />
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-gray-400">Distribution</p>
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Distribution</p>
             </div>
             <div className="space-y-2">
               {groupedAssignments.map(([roleName, roleAssignments]) => {
                 const percentage = Math.max(2, Math.round((roleAssignments.length / totalAssignments) * 100));
                 return (
                   <div key={`distribution-${roleName}`}>
-                    <div className="mb-1 flex items-center justify-between text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    <div className="mb-1 flex items-center justify-between text-xs font-semibold text-gray-700">
                       <span>{roleName}</span>
                       <span>{percentage}%</span>
                     </div>
-                    <div className="h-1.5 rounded bg-gray-200 dark:bg-gray-800">
+                    <div className="h-1.5 rounded bg-gray-200">
                       <div className="h-1.5 rounded bg-[#059669]" style={{ width: `${percentage}%` }} />
                     </div>
                   </div>
@@ -300,66 +300,66 @@ export default function AdminRoleHistoryPage({ apiBase }) {
               <EmptyState />
             ) : (
               groupedAssignments.map(([roleName, roleAssignments]) => (
-                <div key={roleName} className="overflow-hidden border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
-                  <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-800 dark:bg-gray-900">
-                    <h2 className="text-sm font-semibold text-gray-900 dark:text-white">{roleName}</h2>
-                    <span className="inline-flex items-center rounded bg-gray-200 px-2 py-1 text-xs font-semibold text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                <div key={roleName} className="overflow-hidden border border-gray-200 bg-white">
+                  <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-3">
+                    <h2 className="text-sm font-semibold text-gray-900">{roleName}</h2>
+                    <span className="inline-flex items-center rounded bg-gray-200 px-2 py-1 text-xs font-semibold text-gray-700">
                       {roleAssignments.length}
                     </span>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                       <thead>
-                        <tr className="border-b border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-900">
-                          <th className="border-r border-gray-200 px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-600 dark:border-gray-800 dark:text-gray-400">Staff</th>
-                          <th className="border-r border-gray-200 px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-600 dark:border-gray-800 dark:text-gray-400">Email</th>
-                          <th className="border-r border-gray-200 px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-600 dark:border-gray-800 dark:text-gray-400">Role</th>
-                          <th className="border-r border-gray-200 px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-600 dark:border-gray-800 dark:text-gray-400">Assigned By</th>
-                          <th className="border-r border-gray-200 px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-600 dark:border-gray-800 dark:text-gray-400">Timestamp</th>
-                          <th className="border-r border-gray-200 px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-gray-600 dark:border-gray-800 dark:text-gray-400">Security</th>
-                          <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400">Actions</th>
+                        <tr className="border-b border-gray-200 bg-gray-50">
+                          <th className="border-r border-gray-200 px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-600">Staff</th>
+                          <th className="border-r border-gray-200 px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-600">Email</th>
+                          <th className="border-r border-gray-200 px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-600">Role</th>
+                          <th className="border-r border-gray-200 px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-600">Assigned By</th>
+                          <th className="border-r border-gray-200 px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-600">Timestamp</th>
+                          <th className="border-r border-gray-200 px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-gray-600">Security</th>
+                          <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-600">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+                      <tbody className="divide-y divide-gray-200">
                         {roleAssignments.map((item) => (
-                          <tr key={item.id} className="bg-white transition-colors hover:bg-gray-50 dark:bg-gray-950 dark:hover:bg-gray-900">
-                            <td className="border-r border-gray-200 px-4 py-3 dark:border-gray-800">
+                          <tr key={item.id} className="bg-white transition-colors hover:bg-gray-50">
+                            <td className="border-r border-gray-200 px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <div className="flex h-8 w-8 items-center justify-center rounded border border-gray-300 bg-gray-100 font-semibold text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                                <div className="flex h-8 w-8 items-center justify-center rounded border border-gray-300 bg-gray-100 font-semibold text-gray-700">
                                   {item.name?.[0]?.toUpperCase()}
                                 </div>
-                                <p className="font-semibold text-gray-900 dark:text-white">{item.name}</p>
+                                <p className="font-semibold text-gray-900">{item.name}</p>
                               </div>
                             </td>
-                            <td className="border-r border-gray-200 px-4 py-3 text-sm text-gray-600 dark:border-gray-800 dark:text-gray-400">{item.email}</td>
-                            <td className="border-r border-gray-200 px-4 py-3 dark:border-gray-800">
-                              <span className="inline-flex items-center rounded bg-gray-200 px-2 py-1 text-xs font-semibold text-gray-800 dark:bg-gray-800 dark:text-gray-200">
+                            <td className="border-r border-gray-200 px-4 py-3 text-sm text-gray-600">{item.email}</td>
+                            <td className="border-r border-gray-200 px-4 py-3">
+                              <span className="inline-flex items-center rounded bg-gray-200 px-2 py-1 text-xs font-semibold text-gray-800">
                                 {item.role}
                               </span>
                             </td>
-                            <td className="border-r border-gray-200 px-4 py-3 dark:border-gray-800">
-                              <p className="text-sm font-semibold text-gray-900 dark:text-white">{item.role_assigned_by_name || 'System'}</p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">{item.role_assigned_by_email}</p>
+                            <td className="border-r border-gray-200 px-4 py-3">
+                              <p className="text-sm font-semibold text-gray-900">{item.role_assigned_by_name || 'System'}</p>
+                              <p className="text-xs text-gray-500">{item.role_assigned_by_email}</p>
                             </td>
-                            <td className="border-r border-gray-200 px-4 py-3 dark:border-gray-800">
-                              <p className="text-sm font-medium text-gray-900 dark:text-white">{new Date(item.role_assigned_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                              <p className="text-xs font-mono text-gray-500 dark:text-gray-400">{new Date(item.role_assigned_at).toLocaleTimeString()}</p>
+                            <td className="border-r border-gray-200 px-4 py-3">
+                              <p className="text-sm font-medium text-gray-900">{new Date(item.role_assigned_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                              <p className="text-xs font-mono text-gray-500">{new Date(item.role_assigned_at).toLocaleTimeString()}</p>
                             </td>
-                            <td className="border-r border-gray-200 px-4 py-3 text-center dark:border-gray-800">
+                            <td className="border-r border-gray-200 px-4 py-3 text-center">
                               {item.can_unhash ? (
                                 <div className="relative inline-block group/unhash">
                                   <button
                                     onClick={() => handleToggleUnhash(item.id)}
                                     className={`rounded border px-2 py-1 text-xs font-semibold transition-all duration-200 ${
                                       unhashedById[item.id]
-                                        ? 'border-amber-400 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200'
-                                        : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800'
+                                        ? 'border-amber-400 bg-amber-50 text-amber-700'
+                                        : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
                                     }`}
                                   >
                                     {loadingUnhashById[item.id] ? '...' : unhashedById[item.id] ? 'Hide' : 'Reveal'}
                                   </button>
                                   {unhashedById[item.id] && (
-                                    <div className="absolute left-1/2 top-full z-50 mt-2 w-max max-w-[180px] -translate-x-1/2 rounded border border-gray-300 bg-gray-900 p-2 text-xs font-mono text-white shadow-lg dark:border-gray-700">
+                                    <div className="absolute left-1/2 top-full z-50 mt-2 w-max max-w-[180px] -translate-x-1/2 rounded border border-gray-300 bg-gray-900 p-2 text-xs font-mono text-white shadow-lg">
                                       {unhashedById[item.id]}
                                     </div>
                                   )}
@@ -370,13 +370,13 @@ export default function AdminRoleHistoryPage({ apiBase }) {
                               <div className="flex items-center gap-2">
                                 <button 
                                   onClick={() => handleEditHistory(item)} 
-                                  className="inline-flex items-center gap-1 rounded border border-[#059669] px-2 py-1 text-xs font-semibold text-[#059669] transition-colors hover:bg-green-50 dark:hover:bg-gray-900"
+                                  className="inline-flex items-center gap-1 rounded border border-[#059669] px-2 py-1 text-xs font-semibold text-[#059669] transition-colors hover:bg-green-50"
                                 >
                                   <Pencil size={12} /> Edit
                                 </button>
                                 <button 
                                   onClick={() => handleDeleteHistory(item)} 
-                                  className="inline-flex items-center gap-1 rounded border border-red-400 px-2 py-1 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-gray-900"
+                                  className="inline-flex items-center gap-1 rounded border border-red-400 px-2 py-1 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50"
                                 >
                                   <Trash2 size={12} /> Delete
                                 </button>
@@ -400,16 +400,16 @@ export default function AdminRoleHistoryPage({ apiBase }) {
 const LoadingSkeleton = () => (
   <div className="space-y-2 p-4">
     {[...Array(5)].map((_, i) => (
-      <div key={i} className="h-10 w-full rounded bg-gray-200 animate-pulse dark:bg-gray-800" />
+      <div key={i} className="h-10 w-full rounded bg-gray-200 animate-pulse" />
     ))}
   </div>
 );
 
 const EmptyState = () => (
-  <div className="flex flex-col items-center border border-gray-200 bg-white px-6 py-12 text-center dark:border-gray-800 dark:bg-gray-950">
+  <div className="flex flex-col items-center border border-gray-200 bg-white px-6 py-12 text-center">
     <div className="text-4xl mb-3 opacity-40">📋</div>
-    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">No records found</h3>
-    <p className="text-xs text-gray-600 dark:text-gray-400">Assignment history will appear here once faculty are assigned.</p>
+    <h3 className="text-sm font-semibold text-gray-900\">No records found</h3>
+    <p className="text-xs text-gray-600\">Assignment history will appear here once faculty are assigned.</p>
   </div>
 );
 
@@ -418,7 +418,7 @@ function NavItem({ label, to, active, icon }) {
     <Link to={to} className={`flex items-center gap-2 rounded px-3 py-2 text-xs font-semibold transition-all ${
       active
         ? 'bg-[#059669] text-white'
-        : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-900'
+        : 'text-gray-600 hover:bg-gray-100'
     }`}>
       <span className="text-sm">{icon}</span> {label}
     </Link>
