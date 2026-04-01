@@ -55,10 +55,6 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
                             <Link to="/dashboard" className={`${navBtnNeutral} md:w-24`}>Dashboard</Link>
                         )}
 
-                        {user?.role === 'Faculty Coordinator' && location.pathname !== '/scheduler' && (
-                            <Link to="/scheduler" className={`${navBtnNeutral} md:w-24`}>Scheduler</Link>
-                        )}
-
                         {user?.role === 'Faculty Coordinator' && location.pathname !== '/scheduler/by-year' && (
                             <Link to="/scheduler/by-year" className={`${navBtnPrimary} md:w-28`}>Schedule</Link>
                         )}

@@ -366,7 +366,7 @@ const FacultyCoordinatorDashboard = ({ user }) => {
       headerActions={
         <button
           type="button"
-          onClick={() => navigate('/scheduler')}
+          onClick={() => navigate('/scheduler/by-year')}
           className="fc-btn"
           style={{
             padding: '8px 18px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer',
@@ -375,7 +375,7 @@ const FacultyCoordinatorDashboard = ({ user }) => {
             boxShadow: '0 6px 20px rgba(14,165,233,0.4)',
           }}
         >
-          Open Timetables
+          Open Schedule
         </button>
       }
     >
@@ -480,10 +480,10 @@ const FacultyCoordinatorDashboard = ({ user }) => {
                 accent="#a78bfa"
               />
               <ActionTile
-                title="Timetable Engine"
-                description="Launch timetable generation and evaluate optimization outputs."
-                buttonText="Open Scheduler"
-                onClick={() => navigate('/scheduler')}
+                title="Timetable Generation"
+                description="Launch specialization, year, and semester timetable generation."
+                buttonText="Open Schedule"
+                onClick={() => navigate('/scheduler/by-year')}
                 iconEl={Icon.grid('#f59e0b')}
                 accent="#f59e0b"
               />
