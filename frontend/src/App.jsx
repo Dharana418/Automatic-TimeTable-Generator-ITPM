@@ -4,6 +4,7 @@ import { ToastContainer } from 'react-toastify';
 import Home from "../Home/home.jsx";
 import Login from "../LoginandRegistration/Login.jsx";
 import Navigation from "./components/Navigation.jsx";
+import Footer from "./components/Footer.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import FacultyCoordinatorDashboard from "./pages/FacultyCoordinatorDashboard.jsx";
 import FacultyBatchesPage from "./pages/FacultyBatchesPage.jsx";
@@ -25,14 +26,10 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [theme, setTheme] = useState(() => {
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'light' || savedTheme === 'dark') return savedTheme;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  });
+  const [theme] = useState('light');
 
   const toggleTheme = () => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+    // Theme locked to light mode only
   };
 
   const handleAuthSuccess = (nextUser) => {
@@ -94,24 +91,26 @@ function App() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-    localStorage.setItem('theme', theme);
-    document.documentElement.style.colorScheme = theme;
-  }, [theme]);
+    document.documentElement.classList.remove('dark');
+    localStorage.setItem('theme', 'light');
+    document.documentElement.style.colorScheme = 'light';
+  }, []);
 
-  if (loading) return <div className="flex min-h-screen items-center justify-center bg-white text-lg font-semibold text-gray-700 dark:bg-black dark:text-gray-200">Loading...</div>;
+  if (loading) return <div className="flex min-h-screen items-center justify-center bg-white text-lg font-semibold text-gray-700">Loading...</div>;
 
   return (
     <Router>
-      <Navigation
-        isAuthenticated={isAuthenticated}
-        user={user}
-        apiBase={API_BASE}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-      />
+      <div className="flex min-h-screen flex-col">
+        <Navigation
+          isAuthenticated={isAuthenticated}
+          user={user}
+          apiBase={API_BASE}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+        />
 
-      <Routes>
+        <main className="flex-1">
+          <Routes>
         <Route path="/" element={<Home />} />
 
         <Route
@@ -120,9 +119,7 @@ function App() {
             isAuthenticated ? (
               <Navigate to="/dashboard" replace />
             ) : (
-              <section className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 p-5 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
-                <Login apiBase={API_BASE} onAuthSuccess={handleAuthSuccess} />
-              </section>
+              <Login apiBase={API_BASE} onAuthSuccess={handleAuthSuccess} />
             )
           }
         />
@@ -168,8 +165,12 @@ function App() {
           </ProtectedRoute>
         } />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+
+        <Footer isAuthenticated={isAuthenticated} user={user} />
+      </div>
 
       <ToastContainer
         position="top-right"
