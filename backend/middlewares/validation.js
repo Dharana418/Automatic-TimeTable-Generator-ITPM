@@ -1,8 +1,7 @@
 import { body, param, validationResult } from 'express-validator';
 
 const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9])(?=\S+$).{8,64}$/;
-const ROLE_NAME_REGEX = /^[A-Za-z][A-Za-z0-9\s]{1,49}$/;
-const NAME_NO_SPECIAL_REGEX = /^[A-Za-z\s]+$/;
+const VALID_NAME_CHARS_REGEX = /^[A-Za-z][A-Za-z\s'.-]{2,99}$/;
 
 const VALID_USER_ROLES = [
   'Admin',
@@ -18,16 +17,6 @@ const VALID_USER_ROLES = [
   'Lecturer/Senior Lecturer',
 ];
 
-const adminAssignableRoleValidation = (fieldName = 'role') =>
-  body(fieldName)
-    .trim()
-    .notEmpty()
-    .withMessage('Role is required')
-    .isLength({ min: 2, max: 50 })
-    .withMessage('Role must be between 2 and 50 characters')
-    .matches(ROLE_NAME_REGEX)
-    .withMessage('Role must start with a letter and contain only letters, numbers, and spaces');
-
 const strongPasswordValidation = (fieldName = 'password') =>
   body(fieldName)
     .isString()
@@ -35,8 +24,55 @@ const strongPasswordValidation = (fieldName = 'password') =>
     .matches(STRONG_PASSWORD_REGEX)
     .withMessage('Password must be 8-64 characters and include uppercase, lowercase, number, and special character');
 
+const humanNameValidation = (fieldName = 'name') =>
+  body(fieldName)
+    .trim()
+    .notEmpty()
+    .withMessage('Name is required')
+    .isLength({ min: 3, max: 100 })
+    .withMessage('Name must be between 3 and 100 characters')
+    .matches(VALID_NAME_CHARS_REGEX)
+    .withMessage("Name can contain only letters, spaces, apostrophes, dots, and hyphens")
+    .custom((value) => {
+      const name = String(value || '').trim();
+      const parts = name.split(/\s+/).filter(Boolean);
+      if (parts.length < 2) {
+        throw new Error('Please provide full name (first and last name)');
+      }
+
+      if (parts.some((part) => part.replace(/[^A-Za-z]/g, '').length < 2)) {
+        throw new Error('Each name part should contain at least 2 letters');
+      }
+
+      const lettersOnly = name.toLowerCase().replace(/[^a-z]/g, '');
+      if (lettersOnly.length < 4) {
+        throw new Error('Please enter a realistic human name');
+      }
+
+      if (/(.)\1{3,}/.test(lettersOnly)) {
+        throw new Error('Name appears repetitive and not human-like');
+      }
+
+      if (/[bcdfghjklmnpqrstvwxyz]{6,}/.test(lettersOnly) || /[aeiou]{5,}/.test(lettersOnly)) {
+        throw new Error('Name appears invalid and not human-like');
+      }
+
+      const uniqueChars = new Set(lettersOnly).size;
+      if (lettersOnly.length >= 8 && uniqueChars <= 3) {
+        throw new Error('Name appears repetitive and not human-like');
+      }
+
+      const vowelCount = (lettersOnly.match(/[aeiou]/g) || []).length;
+      const vowelRatio = vowelCount / lettersOnly.length;
+      if (vowelCount < 2 || vowelRatio < 0.2 || vowelRatio > 0.8) {
+        throw new Error('Name does not appear human-like');
+      }
+
+      return true;
+    });
+
 export const registerValidation = [
-  body('name').trim().notEmpty().withMessage('Name is required').isLength({ max: 100 }).withMessage('Name cannot exceed 100 characters'),
+  humanNameValidation('name'),
   body('email').trim().isEmail().withMessage('Valid email is required').normalizeEmail(),
   strongPasswordValidation('password'),
   body('address').optional().isString(),
@@ -48,14 +84,7 @@ export const registerValidation = [
 ];
 
 export const adminCreateUserValidation = [
-  body('name')
-    .trim()
-    .notEmpty()
-    .withMessage('Name is required')
-    .isLength({ min: 3, max: 100 })
-    .withMessage('Name must be between 3 and 100 characters')
-    .matches(NAME_NO_SPECIAL_REGEX)
-    .withMessage('Name cannot contain special characters'),
+  humanNameValidation('name'),
   body('email').trim().isEmail().withMessage('Valid email is required').normalizeEmail(),
   strongPasswordValidation('password'),
   body('address').optional().isString(),
@@ -69,11 +98,14 @@ export const adminCreateUserValidation = [
     .isString()
     .isLength({ max: 500 })
     .withMessage('Role assignment note must be under 500 characters'),
-  adminAssignableRoleValidation('role'),
+  body('role')
+    .notEmpty().withMessage('Role is required')
+    .isIn(VALID_USER_ROLES)
+    .withMessage('Invalid role for admin user creation'),
 ];
 
 export const bootstrapAdminValidation = [
-  body('name').trim().notEmpty().withMessage('Name is required').isLength({ max: 100 }).withMessage('Name cannot exceed 100 characters'),
+  humanNameValidation('name'),
   body('email').trim().isEmail().withMessage('Valid email is required').normalizeEmail(),
   strongPasswordValidation('password'),
   body('address').optional().isString(),
@@ -104,7 +136,11 @@ export const adminRoleAssignmentCreateValidation = [
     .isEmail()
     .withMessage('targetUserEmail must be a valid email')
     .normalizeEmail(),
-  adminAssignableRoleValidation('role'),
+  body('role')
+    .notEmpty()
+    .withMessage('Role is required')
+    .isIn(VALID_USER_ROLES)
+    .withMessage('Invalid role supplied'),
   body('roleAssignmentNote')
     .optional({ values: 'falsy' })
     .isString()
@@ -127,11 +163,8 @@ export const adminRoleAssignmentCreateValidation = [
 export const adminRoleAssignmentUpdateValidation = [
   body('role')
     .optional({ values: 'falsy' })
-    .trim()
-    .isLength({ min: 2, max: 50 })
-    .withMessage('Role must be between 2 and 50 characters')
-    .matches(ROLE_NAME_REGEX)
-    .withMessage('Role must start with a letter and contain only letters, numbers, and spaces'),
+    .isIn(VALID_USER_ROLES)
+    .withMessage('Invalid role supplied'),
   body('roleAssignmentNote')
     .optional({ nullable: true })
     .isString()
@@ -154,68 +187,6 @@ export const historyIdValidation = [
 export const loginValidation = [
   body('email').trim().isEmail().withMessage('Valid email is required').normalizeEmail(),
   body('password').notEmpty().withMessage('Password is required'),
-];
-
-export const forgotPasswordValidation = [
-  body('email').trim().isEmail().withMessage('Valid email is required').normalizeEmail(),
-];
-
-export const resetPasswordValidation = [
-  body('token')
-    .trim()
-    .notEmpty()
-    .withMessage('Reset token is required')
-    .isLength({ min: 32, max: 256 })
-    .withMessage('Reset token format is invalid'),
-  strongPasswordValidation('password'),
-  body('confirmPassword')
-    .isString()
-    .withMessage('Confirm password must be a string')
-    .custom((value, { req }) => value === req.body.password)
-    .withMessage('Password and confirmPassword do not match'),
-];
-
-export const profileUpdateValidation = [
-  body('name')
-    .optional({ values: 'falsy' })
-    .trim()
-    .isLength({ min: 2, max: 100 })
-    .withMessage('Name must be between 2 and 100 characters'),
-  body('email')
-    .optional({ values: 'falsy' })
-    .trim()
-    .isEmail()
-    .withMessage('Valid email is required')
-    .normalizeEmail(),
-  body('address')
-    .optional({ nullable: true })
-    .isString()
-    .isLength({ max: 300 })
-    .withMessage('Address cannot exceed 300 characters'),
-  body('birthday')
-    .optional({ nullable: true, values: 'falsy' })
-    .isISO8601()
-    .withMessage('Birthday must be a valid date (YYYY-MM-DD)')
-    .toDate(),
-  body('phonenumber')
-    .optional({ nullable: true, values: 'falsy' })
-    .matches(/^\d{1,10}$/)
-    .withMessage('Phone number must contain digits only and cannot exceed 10 numbers'),
-  body('profilePhotoUrl')
-    .optional({ nullable: true })
-    .isString()
-    .withMessage('profilePhotoUrl must be a string')
-    .isLength({ max: 3000000 })
-    .withMessage('profilePhotoUrl is too large')
-    .custom((value) => {
-      if (!value) return true;
-      const isHttpUrl = /^https?:\/\/.+/i.test(value);
-      const isDataImage = /^data:image\/(png|jpe?g|webp);base64,[a-zA-Z0-9+/=\r\n]+$/i.test(value);
-      if (!isHttpUrl && !isDataImage) {
-        throw new Error('profilePhotoUrl must be an image URL or base64 data URL');
-      }
-      return true;
-    }),
 ];
 
 export const validate = (req, res, next) => {

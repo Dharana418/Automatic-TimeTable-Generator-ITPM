@@ -54,6 +54,25 @@ const HallRatingsPanel = ({ hallId, apiBase }) => {
 
   const handleAddRating = async (e) => {
     e.preventDefault();
+    const rating = Number(ratingForm.rating);
+    const cleanlinessRating = Number(ratingForm.cleanlinessRating);
+    const comment = String(ratingForm.comment || '').trim();
+
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      setToast({ message: 'Overall rating must be between 1 and 5', type: 'error' });
+      return;
+    }
+
+    if (!Number.isInteger(cleanlinessRating) || cleanlinessRating < 1 || cleanlinessRating > 5) {
+      setToast({ message: 'Cleanliness rating must be between 1 and 5', type: 'error' });
+      return;
+    }
+
+    if (comment.length > 1000) {
+      setToast({ message: 'Comment cannot exceed 1000 characters', type: 'error' });
+      return;
+    }
+
     try {
       const res = await fetch(`${apiBase}/api/halls/ratings`, {
         method: 'POST',
@@ -61,7 +80,10 @@ const HallRatingsPanel = ({ hallId, apiBase }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           hallId,
-          ...ratingForm
+          ...ratingForm,
+          rating,
+          cleanlinessRating,
+          comment
         })
       });
       const data = await res.json();

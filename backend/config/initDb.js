@@ -20,6 +20,9 @@ export async function initDb() {
                 created_at TIMESTAMP DEFAULT NOW()
             )
         `);
+        await pool.query(`ALTER TABLE halls ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'available'`);
+        await pool.query(`ALTER TABLE halls ADD COLUMN IF NOT EXISTS maintenance_start DATE`);
+        await pool.query(`ALTER TABLE halls ADD COLUMN IF NOT EXISTS maintenance_end DATE`);
         console.log('✓ halls table ready');
 
         // Create modules table
@@ -65,8 +68,12 @@ export async function initDb() {
         console.log('✓ instructors table ready');
 
         await pool.query(`ALTER TABLE modules ADD COLUMN IF NOT EXISTS lic_id TEXT REFERENCES lics(id) ON DELETE SET NULL`);
+        await pool.query(`ALTER TABLE modules ADD COLUMN IF NOT EXISTS academic_year VARCHAR(20)`);
+        await pool.query(`ALTER TABLE modules ADD COLUMN IF NOT EXISTS semester VARCHAR(20)`);
+        await pool.query(`ALTER TABLE modules ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id) ON DELETE SET NULL`);
         await pool.query(`ALTER TABLE instructors ADD COLUMN IF NOT EXISTS lic_id TEXT REFERENCES lics(id) ON DELETE SET NULL`);
         console.log('✓ LIC ownership columns ensured');
+        console.log('✓ Module academic year and semester columns ensured');
 
         // Create departments table
         await pool.query(`
@@ -141,11 +148,6 @@ export async function initDb() {
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role_assigned_by UUID REFERENCES users(id) ON DELETE SET NULL`);
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role_assigned_at TIMESTAMP DEFAULT NOW()`);
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role_assignment_note TEXT`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_token_hash TEXT`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_expires_at TIMESTAMP`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_requested_at TIMESTAMP`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_consumed_at TIMESTAMP`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_url TEXT`);
         console.log('✓ users role assignment metadata ensured');
 
         await pool.query(`
@@ -308,6 +310,9 @@ export async function initDb() {
             CREATE INDEX IF NOT EXISTS idx_module_assignments_lecturer_id ON module_assignments(lecturer_id);
             CREATE INDEX IF NOT EXISTS idx_module_assignments_lic_id ON module_assignments(lic_id);
             CREATE INDEX IF NOT EXISTS idx_modules_lic_id ON modules(lic_id);
+            CREATE INDEX IF NOT EXISTS idx_modules_academic_year ON modules(academic_year);
+            CREATE INDEX IF NOT EXISTS idx_modules_semester ON modules(semester);
+            CREATE INDEX IF NOT EXISTS idx_modules_year_semester ON modules(academic_year, semester);
             CREATE INDEX IF NOT EXISTS idx_instructors_lic_id ON instructors(lic_id);
             CREATE INDEX IF NOT EXISTS idx_faculty_soft_constraints_coordinator ON faculty_soft_constraints(coordinator_id);
             CREATE INDEX IF NOT EXISTS idx_batches_department_id ON batches(department_id);

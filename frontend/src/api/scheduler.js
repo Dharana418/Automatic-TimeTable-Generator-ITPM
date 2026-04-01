@@ -3,15 +3,27 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 async function request(path, opts = {}) {
   const res = await fetch(`${API_BASE}${path}`, { credentials: 'include', headers: { 'Content-Type': 'application/json' }, ...opts });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error || 'API error');
+  if (!res.ok) {
+    throw new Error(json.error || json.message || json.hint || `API request failed (${res.status})`);
+  }
   return json;
 }
 
 export const addItem = (type, payload) => request(`/api/scheduler/${type}`, { method: 'POST', body: JSON.stringify(payload) });
-export const listItems = (type) => request(`/api/scheduler/${type}`, { method: 'GET' });
+export const listItems = (type, filters = {}) => {
+  const params = new URLSearchParams();
+  Object.entries(filters || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+    params.append(key, String(value));
+  });
+  const query = params.toString();
+  return request(`/api/scheduler/${type}${query ? `?${query}` : ''}`, { method: 'GET' });
+};
 export const updateItem = (type, id, payload) => request(`/api/scheduler/${type}/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
 export const deleteItem = (type, id) => request(`/api/scheduler/${type}/${id}`, { method: 'DELETE' });
 export const getLicsWithInstructors = () => request(`/api/scheduler/lics-with-instructors`, { method: 'GET' });
+export const getAcademicCoordinatorTimetables = () => request(`/api/academic-coordinator/timetables`, { method: 'GET' });
+export const getCoordinatorHallAllocations = () => request(`/api/scheduler/hall-allocations/coordinator`, { method: 'GET' });
 export const listAssignments = () => request(`/api/scheduler/assignments`, { method: 'GET' });
 export const createAssignment = (payload) => request(`/api/scheduler/assignments`, { method: 'POST', body: JSON.stringify(payload) });
 export const updateAssignment = (id, payload) => request(`/api/scheduler/assignments/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
@@ -29,6 +41,8 @@ export default {
   updateItem,
   deleteItem,
   getLicsWithInstructors,
+  getAcademicCoordinatorTimetables,
+  getCoordinatorHallAllocations,
   listAssignments,
   createAssignment,
   updateAssignment,

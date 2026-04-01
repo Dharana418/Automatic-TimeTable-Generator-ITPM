@@ -1,48 +1,10 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import sliitLogo from "../src/assets/SLIIT_LOGO.png";
-import { showError, showGlassSuccess, showGlassValidationError } from "../src/utils/alerts.js";
+import { showError, showSuccess, showWarning } from "../src/utils/alerts.js";
 
-const FULL_NAME_REGEX = /^[A-Za-z\s]{3,}$/;
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
-
-const validateRegistrationFields = ({ name, email, password, confirmPassword, phonenumber }) => {
-  const errors = {};
-
-  if (!name.trim()) {
-    errors.name = "Full Name is required";
-  } else if (!FULL_NAME_REGEX.test(name.trim())) {
-    errors.name = "Full Name must be at least 3 characters and contain alphabets only";
-  }
-
-  if (!email.trim()) {
-    errors.email = "Email is required";
-  } else if (!EMAIL_REGEX.test(email.trim())) {
-    errors.email = "Please enter a valid email address";
-  }
-
-  if (!password) {
-    errors.password = "Password is required";
-  } else if (!PASSWORD_REGEX.test(password)) {
-    errors.password = "Password must be 8+ chars with 1 uppercase, 1 number, and 1 special character";
-  }
-
-  if (!confirmPassword) {
-    errors.confirmPassword = "Please confirm your password";
-  } else if (password !== confirmPassword) {
-    errors.confirmPassword = "Passwords do not match";
-  }
-
-  if (phonenumber) {
-    const digits = phonenumber.replace(/\D/g, '');
-    if (digits.length < 10) {
-      errors.phonenumber = "Please enter a valid phone number";
-    }
-  }
-
-  return errors;
-};
+const NAME_SPECIAL_CHARS = /[~!@#$%^&*()_+]/;
+const PASSWORD_SPECIAL_CHARS = /[^A-Za-z0-9]/;
 
 const Register = ({ apiBase, onAuthSuccess }) => {
   const [form, setForm] = useState({
@@ -59,6 +21,41 @@ const Register = ({ apiBase, onAuthSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
+  const validateForm = () => {
+    const errors = {};
+    if (!form.name.trim()) {
+      errors.name = "Full name is required";
+    } else if (form.name.trim().length < 3) {
+      errors.name = "Name must be at least 3 characters";
+    } else if (NAME_SPECIAL_CHARS.test(form.name.trim())) {
+      errors.name = "Name cannot contain ~!@#$%^&*()_+";
+    }
+    if (!form.email.trim()) {
+      errors.email = "Email is required";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      errors.email = "Please enter a valid email address";
+    }
+    if (!form.password) {
+      errors.password = "Password is required";
+    } else if (form.password.length < 6) {
+      errors.password = "Password must be at least 6 characters";
+    } else if (PASSWORD_SPECIAL_CHARS.test(form.password)) {
+      errors.password = "Password can contain letters and numbers only";
+    }
+    if (!form.confirmPassword) {
+      errors.confirmPassword = "Please confirm your password";
+    } else if (form.password !== form.confirmPassword) {
+      errors.confirmPassword = "Passwords do not match";
+    }
+    if (form.phonenumber) {
+      const digits = form.phonenumber.replace(/\D/g, '');
+      if (digits.length < 10) {
+        errors.phonenumber = "Please enter a valid phone number";
+      }
+    }
+    return errors;
+  };
+
   const handleChange = (event) => {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -71,13 +68,10 @@ const Register = ({ apiBase, onAuthSuccess }) => {
     event.preventDefault();
     setError("");
     setSuccess("");
-    const errors = validateRegistrationFields(form);
+    const errors = validateForm();
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      showGlassValidationError({
-        title: 'Error',
-        text: Object.values(errors)[0],
-      });
+      showWarning("Validation required", Object.values(errors)[0]);
       return;
     }
     setFieldErrors({});
@@ -94,12 +88,7 @@ const Register = ({ apiBase, onAuthSuccess }) => {
       if (response.ok) {
         const data = await response.json();
         setSuccess("Account created successfully! Redirecting to dashboard...");
-        const preferToast = localStorage.getItem('alertPreference') === 'toast';
-        showGlassSuccess({
-          title: 'Success',
-          text: 'Account created successfully.',
-          preferToast,
-        });
+        showSuccess("Registration successful", "Account created successfully.");
         setTimeout(() => {
           onAuthSuccess?.(data.user ?? null);
         }, 1500);

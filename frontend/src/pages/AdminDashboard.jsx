@@ -14,10 +14,43 @@ const PASSWORD_HAS_LETTER = /[A-Za-z]/;
 const PASSWORD_HAS_NUMBER = /\d/;
 const PASSWORD_HAS_SPECIAL = /[^A-Za-z0-9]/;
 const NON_DIGIT_CHARS = /\D/;
+const VALID_NAME_CHARS = /^[A-Za-z][A-Za-z\s'.-]{2,99}$/;
 
 const initialForm = { name: '', email: '', password: '', phonenumber: '', role: '', customRole: '' };
 
 const inputClasses = "w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none shadow-sm transition-all duration-200 placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10";
+
+const detectHumanLikeNameIssue = (rawName) => {
+  const name = String(rawName || '').trim();
+
+  if (!name || name.length < 3) return 'Valid name required (min 3 chars).';
+  if (!VALID_NAME_CHARS.test(name)) return 'Name can contain only letters, spaces, apostrophes, dots, and hyphens.';
+
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return 'Please enter full name (first and last name).';
+
+  const shortPart = parts.find((part) => part.replace(/[^A-Za-z]/g, '').length < 2);
+  if (shortPart) return 'Each name part should contain at least 2 letters.';
+
+  const lettersOnly = name.toLowerCase().replace(/[^a-z]/g, '');
+  if (lettersOnly.length < 4) return 'Please enter a realistic full name.';
+  if (/(.)\1{3,}/.test(lettersOnly)) return 'Name looks invalid. Please enter a realistic human name.';
+  if (/[bcdfghjklmnpqrstvwxyz]{6,}/.test(lettersOnly)) return 'Name looks invalid. Please enter a realistic human name.';
+  if (/[aeiou]{5,}/.test(lettersOnly)) return 'Name looks invalid. Please enter a realistic human name.';
+
+  const uniqueChars = new Set(lettersOnly).size;
+  if (lettersOnly.length >= 8 && uniqueChars <= 3) {
+    return 'Name appears repetitive. Please enter a realistic human name.';
+  }
+
+  const vowelCount = (lettersOnly.match(/[aeiou]/g) || []).length;
+  const vowelRatio = vowelCount / lettersOnly.length;
+  if (vowelCount < 2 || vowelRatio < 0.2 || vowelRatio > 0.8) {
+    return 'Name does not look human-like. Please enter a realistic full name.';
+  }
+
+  return null;
+};
 
 export default function AdminDashboard({ apiBase, user }) {
   const [form, setForm] = useState(initialForm);
@@ -49,7 +82,8 @@ export default function AdminDashboard({ apiBase, user }) {
   };
 
   const validateForm = () => {
-    if (!form.name.trim() || form.name.trim().length < 3) return 'Valid name required (min 3 chars).';
+    const nameIssue = detectHumanLikeNameIssue(form.name);
+    if (nameIssue) return nameIssue;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return 'Invalid email address.';
     if (form.password.length < 8 || !PASSWORD_HAS_LETTER.test(form.password) || !PASSWORD_HAS_NUMBER.test(form.password) || !PASSWORD_HAS_SPECIAL.test(form.password)) {
       return 'Password must be 8+ chars with a letter, number, and symbol.';

@@ -39,7 +39,21 @@ function isLabModule(module) {
 function getLabSpan(module) {
   const details = module?.details || {};
   const span = Number(details.h_l || details.lab_hours || details.labSpan || module.h_l || module.labSpan || 1);
-  return Number.isFinite(span) ? Math.max(1, Math.round(span)) : 1;
+  const normalizedSpan = Number.isFinite(span) ? Math.max(1, Math.round(span)) : 1;
+
+  const code = String(module?.code || '').toLowerCase();
+  const moduleName = String(module?.name || '').toLowerCase();
+  const isSoftwareEngineering =
+    code.startsWith('se') ||
+    moduleName.includes('software engineering') ||
+    moduleName.includes('software eng');
+
+  // Domain rule: Software Engineering lab sessions must run for at least 2 hourly slots.
+  if (isLabModule(module) && isSoftwareEngineering) {
+    return Math.max(2, normalizedSpan);
+  }
+
+  return normalizedSpan;
 }
 
 function getModuleExpectedSize(module) {
@@ -52,7 +66,102 @@ function getModuleExpectedSize(module) {
   );
 }
 
+function normalizeText(value = '') {
+  return String(value || '').trim().toLowerCase();
+}
+
+function normalizeAmenities(amenities = null) {
+  if (!amenities || typeof amenities !== 'object' || Array.isArray(amenities)) return new Set();
+  return new Set(
+    Object.entries(amenities)
+      .filter(([, enabled]) => enabled === true)
+      .map(([name]) => normalizeText(name))
+      .filter(Boolean)
+  );
+}
+
+function getModuleStructureRequirements(module = {}) {
+  const details = module?.details || {};
+
+  const requiredHallType =
+    normalizeText(details.requiredHallType || details.hallType || details.roomType || module.requiredHallType || module.roomType);
+  const preferredBuilding = normalizeText(details.preferredBuilding || details.building || module.preferredBuilding);
+  const preferredFloor = normalizeText(details.preferredFloor || details.floor || module.preferredFloor);
+
+  const requiredAmenities = new Set();
+  const amenitiesFromObject = normalizeAmenities(details.requiredAmenities || details.amenities || module.requiredAmenities || null);
+  amenitiesFromObject.forEach((item) => requiredAmenities.add(item));
+
+  const amenitiesFromList = [
+    ...(Array.isArray(details.requiredAmenityList) ? details.requiredAmenityList : []),
+    ...(Array.isArray(module.requiredAmenityList) ? module.requiredAmenityList : []),
+  ]
+    .map((item) => normalizeText(item))
+    .filter(Boolean);
+  amenitiesFromList.forEach((item) => requiredAmenities.add(item));
+
+  return {
+    requiredHallType,
+    preferredBuilding,
+    preferredFloor,
+    requiredAmenities,
+  };
+}
+
 function hallMatchesModule(hall, module) {
+  const details = module?.details || {};
+  const preferredHallIdsRaw = [
+    ...(Array.isArray(details.preferredHallIds) ? details.preferredHallIds : []),
+    ...(Array.isArray(module?.preferredHallIds) ? module.preferredHallIds : []),
+    details.preferredHallId,
+    details.allocatedHallId,
+    module?.preferred_hall_id,
+  ];
+
+  const preferredHallIds = new Set(
+    preferredHallIdsRaw
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+  );
+
+  if (preferredHallIds.size > 0 && !preferredHallIds.has(String(hall?.id || '').trim())) {
+    return false;
+  }
+
+  const expectedSize = getModuleExpectedSize(module);
+  const hallCapacity = Number(hall?.capacity || 0);
+  if (Number.isFinite(expectedSize) && expectedSize > 0 && Number.isFinite(hallCapacity) && hallCapacity > 0 && hallCapacity < expectedSize) {
+    return false;
+  }
+
+  const requirements = getModuleStructureRequirements(module);
+  const hallFeatures = hall?.features || {};
+  const hallType = normalizeText(hallFeatures.hallType || hallFeatures.roomType || hall.roomType);
+  const hallBuilding = normalizeText(hallFeatures.building || hall.building);
+  const hallFloor = normalizeText(hallFeatures.floor || hall.floor);
+  const hallAmenities = normalizeAmenities(hallFeatures.amenities);
+
+  if (requirements.requiredHallType) {
+    const typeMatch =
+      hallType &&
+      (hallType.includes(requirements.requiredHallType) || requirements.requiredHallType.includes(hallType));
+    if (!typeMatch) return false;
+  }
+
+  if (requirements.preferredBuilding && hallBuilding && hallBuilding !== requirements.preferredBuilding) {
+    return false;
+  }
+
+  if (requirements.preferredFloor && hallFloor && hallFloor !== requirements.preferredFloor) {
+    return false;
+  }
+
+  for (const requiredAmenity of requirements.requiredAmenities) {
+    if (!hallAmenities.has(requiredAmenity)) {
+      return false;
+    }
+  }
+
   const moduleRoomType = String(module?.details?.roomType || module?.details?.room_type || module?.roomType || '').toLowerCase();
   const hallRoomType = String(hall?.features?.roomType || hall?.features?.room_type || '').toLowerCase();
   if (!moduleRoomType || !hallRoomType) return true;

@@ -3,87 +3,72 @@ import autoschedule from '../assets/SLIIT_LOGO.png';
 
 const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", theme = 'light', onToggleTheme }) => {
     const location = useLocation();
-    const displayRole = user?.role === 'Admin' ? 'System Admin' : (user?.role || 'User');
-    const displayName = user?.username || user?.name || '';
-    const profilePhoto = user?.profile_photo_url || '';
-    const shouldShowName =
-        displayName && displayName.trim().toLowerCase() !== String(displayRole).trim().toLowerCase();
+
+    const navBtnBase = 'inline-flex items-center justify-center rounded-lg border px-3 py-2 text-xs font-semibold tracking-wide transition duration-200';
+    const navBtnNeutral = `${navBtnBase} border-slate-300/90 bg-white/90 text-slate-700 shadow-sm hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700`;
+    const navBtnPrimary = `${navBtnBase} border-blue-300/80 bg-gradient-to-r from-blue-600 via-indigo-600 to-slate-900 text-white shadow-[0_10px_20px_rgba(30,64,175,0.28)] hover:-translate-y-0.5 hover:brightness-110`;
+    const navBtnDanger = `${navBtnBase} border-rose-300/80 bg-gradient-to-r from-rose-600 to-red-700 text-white shadow-[0_10px_20px_rgba(190,24,93,0.28)] hover:-translate-y-0.5 hover:brightness-110`;
 
     const handleLogout = async () => {
         try {
             const response = await fetch(`${apiBase}/api/auth/logout`, {
                 method: 'POST',
                 credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
             });
+            
             if (response.ok) {
-                window.location.href = '/';
+                // Clear any local storage data
+                localStorage.clear();
+                sessionStorage.clear();
+                
+                // Redirect to home page
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 100);
+            } else {
+                const errorData = await response.json().catch(() => ({}));
+                console.error('Logout failed:', errorData);
+                alert('Logout failed. Please try again.');
             }
         } catch (error) {
             console.error('Logout error:', error);
+            alert('An error occurred during logout. Please try again.');
         }
     };
     
     return (
-        <nav className="sticky top-0 z-50 border-b border-slate-800 bg-black px-[5%] py-4 shadow-sm shadow-black/50 backdrop-blur-md">
-            <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4">
+            <nav className="sticky top-0 z-50 border-b border-indigo-300/35 bg-gradient-to-r from-slate-950 via-indigo-900 to-blue-900 px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.34)] sm:px-6 lg:px-12 xl:px-16">
+                <div className="mx-auto flex w-full max-w-none items-center justify-between gap-4">
                 <Link to="/" className="flex items-center gap-3 no-underline">
-                    <h2 className="m-0 text-lg font-bold text-white md:text-2xl">SLIIT Timetable Generator</h2>
-                    <img src={autoschedule} alt="SLIIT Logo" className="h-10 w-auto md:h-12" />
+                    <img src={autoschedule} alt="SLIIT Logo" className="h-9 w-auto rounded-md ring-1 ring-slate-300/60 md:h-10" />
+                            <h2 className="m-0 select-none bg-gradient-to-r from-indigo-100 via-blue-100 to-slate-100 bg-clip-text text-lg font-bold text-transparent md:text-xl">SLIIT Timetable</h2>
                 </Link>
 
-            <div className="ml-auto flex items-center gap-2 md:gap-3">
-                <button
-                    onClick={onToggleTheme}
-                    type="button"
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 transition duration-200 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400 dark:hover:bg-slate-700"
-                    aria-label="Toggle theme"
-                >
-                    {theme === 'dark' ? '☀ Light' : '🌙 Dark'}
-                </button>
+            <div className="flex items-center gap-1.5 md:gap-2">
 
                 {isAuthenticated ? (
                     <>
-                        {profilePhoto ? (
-                            <img
-                                src={profilePhoto}
-                                alt="Profile"
-                                className="h-9 w-9 rounded-full border-2 border-white object-cover"
-                            />
-                        ) : (
-                            <div className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-slate-800 text-xs font-black text-white">
-                                {(displayName || displayRole || 'U').trim().charAt(0).toUpperCase()}
-                            </div>
-                        )}
-
-                        <span className="hidden whitespace-nowrap rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-black text-white md:inline">{displayRole}</span>
-                        {shouldShowName && (
-                            <span className="hidden whitespace-nowrap text-sm font-semibold text-white md:inline">{displayName}</span>
-                        )}
-
                         {location.pathname !== '/dashboard' && (
-                            <Link to="/dashboard" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-center text-sm font-semibold text-slate-900 transition duration-200 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400 dark:hover:bg-slate-700 md:w-28">Dashboard</Link>
+                            <Link to="/dashboard" className={`${navBtnNeutral} md:w-24`}>Dashboard</Link>
                         )}
 
-                        {location.pathname !== '/profile' && (
-                            <Link to="/profile" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-center text-sm font-semibold text-slate-900 transition duration-200 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400 dark:hover:bg-slate-700 md:w-24">Profile</Link>
+                        {user?.role === 'Faculty Coordinator' && location.pathname !== '/scheduler/by-year' && (
+                            <Link to="/scheduler/by-year" className={`${navBtnPrimary} md:w-28`}>Schedule</Link>
                         )}
 
-                        {user?.role === 'Faculty Coordinator' && location.pathname !== '/scheduler' && (
-                            <Link to="/scheduler" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-center text-sm font-semibold text-slate-900 transition duration-200 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400 dark:hover:bg-slate-700 md:w-28">Scheduler</Link>
-                        )}
-
-                        <button onClick={handleLogout} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 transition duration-200 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400 dark:hover:bg-slate-700 md:w-28">
-                            Logout
-                        </button>
+                        <button onClick={handleLogout} className={`${navBtnDanger} md:w-20`}>Logout</button>
                     </>
                 ) : (
                     <>
                         {location.pathname !== '/' && (
-                            <Link to="/" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-center text-sm font-semibold text-slate-900 transition duration-200 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400 dark:hover:bg-slate-700 md:w-24">Home</Link>
+                            <Link to="/" className={`${navBtnPrimary} md:w-20`}>Home</Link>
                         )}
 
                         {location.pathname !== '/login' && (
-                            <Link to="/login" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-center text-sm font-semibold text-slate-900 transition duration-200 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400 dark:hover:bg-slate-700 md:w-24">Login</Link>
+                            <Link to="/login" className={`${navBtnPrimary} md:w-20`}>Login</Link>
                         )}
                     </>
                 )}
