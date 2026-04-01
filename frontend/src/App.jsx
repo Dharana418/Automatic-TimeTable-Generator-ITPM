@@ -14,6 +14,7 @@ import InstructorDashboard from "./pages/InstructorDashboard.jsx";
 import LecturerDashboard from "./pages/LecturerDashboard.jsx";
 import CommonDashboard from "./pages/CommonDashboard.jsx";
 import Scheduler from "./pages/Scheduler.jsx";
+import FacultyCoordinatorSchedulerPage from "./pages/FacultyCoordinatorSchedulerPage.jsx";
 import AdminDashboard from "./pages/AdminDashboard.jsx";
 import AdminRoleHistoryPage from "./pages/AdminRoleHistoryPage.jsx";
 
@@ -140,6 +141,12 @@ function App() {
         <Route path="/scheduler" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
             {roleKey === "facultycoordinator" ? <Scheduler /> : <Navigate to="/dashboard" replace />}
+          </ProtectedRoute>
+        } />
+
+        <Route path="/scheduler/by-year" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
+            {roleKey === "facultycoordinator" ? <FacultyCoordinatorSchedulerPage /> : <Navigate to="/dashboard" replace />}
           </ProtectedRoute>
         } />
 
