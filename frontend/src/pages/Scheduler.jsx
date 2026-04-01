@@ -284,6 +284,60 @@ export default function Scheduler() {
     }
   }
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadHalls = async () => {
+      try {
+        const response = await schedulerApi.listItems('halls');
+        if (!cancelled) {
+          setHallStructures3D(response?.items || []);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setHallStructures3D([]);
+        }
+        console.error('Failed to load 3D halls:', err);
+      }
+    };
+
+    loadHalls();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function loadCoordinatorHallAllocations() {
+    setAllocationLoading(true);
+    try {
+      const response = await schedulerApi.getCoordinatorHallAllocations();
+      setCoordinatorHallAllocations(response?.data || []);
+      setAllocationSummary(
+        response?.summary || {
+          total: 0,
+          fromApprovedTimetable: 0,
+          fromRecommendationFallback: 0,
+        }
+      );
+    } catch (err) {
+      setCoordinatorHallAllocations([]);
+      setAllocationSummary({
+        total: 0,
+        fromApprovedTimetable: 0,
+        fromRecommendationFallback: 0,
+      });
+      showError('Load failed', err.message || 'Unable to fetch hall allocations from Academic Coordinator.');
+    }
+    setAllocationLoading(false);
+  }
+
+  function handleNavChange(view) {
+    setActiveNav(view);
+    if ((view === 'overview' || view === 'resources') && coordinatorHallAllocations.length === 0) {
+      loadCoordinatorHallAllocations();
+    }
+  }
+
   async function handleAdd(e){
     e.preventDefault();
     if (!form || typeof form !== 'object' || Array.isArray(form) || Object.keys(form).length === 0) {
