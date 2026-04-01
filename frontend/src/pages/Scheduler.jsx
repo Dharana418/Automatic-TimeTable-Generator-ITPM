@@ -107,6 +107,55 @@ function toReadableLabel(value = '') {
   return toCapitalized(String(value || '').replace(/_/g, ' '));
 }
 
+function normalizeSpecialization(value = '') {
+  return String(value || '').trim().toUpperCase();
+}
+
+function inferModuleYear(module = {}) {
+  const fromField = Number(module.academic_year || module.academicYear || 0);
+  if ([1, 2, 3, 4].includes(fromField)) return fromField;
+
+  const code = String(module.code || '').toUpperCase();
+  const match = code.match(/^[A-Z]+(\d)/);
+  return match ? Number(match[1]) : null;
+}
+
+function inferModuleSemester(module = {}) {
+  const value = Number(module.semester || module.details?.semester || 0);
+  return [1, 2].includes(value) ? value : null;
+}
+
+function inferModuleSpecialization(module = {}) {
+  const details = module.details || {};
+  const explicit = normalizeSpecialization(
+    details.specialization || details.spec || details.stream || details.department || module.specialization
+  );
+  if (explicit) return explicit;
+
+  const code = String(module.code || '').toUpperCase();
+  if (code.startsWith('IT')) return 'IT';
+  if (code.startsWith('SE')) return 'SE';
+  if (code.startsWith('CS') || code.startsWith('IS') || code.startsWith('IE')) return 'ENGINEERING';
+  return 'GENERAL';
+}
+
+function parseBatchSegment(batch = {}) {
+  const target = String(batch?.name || batch?.id || '');
+  const match = target.match(/^Y(\d+)\.S(\d+)\.(WE|WD)\.([A-Z0-9]+)\./i);
+  if (!match) return null;
+  return {
+    year: Number(match[1]),
+    semester: Number(match[2]),
+    specialization: normalizeSpecialization(match[4]),
+  };
+}
+
+function toDataSourceLabel(type = '') {
+  const normalizedType = String(type || '').trim().toLowerCase();
+  if (normalizedType === 'lics') return 'LICs';
+  return toCapitalized(normalizedType);
+}
+
 export default function Scheduler() {
   const [activeType, setActiveType] = useState('modules');
   const [items, setItems] = useState([]);
@@ -125,6 +174,9 @@ export default function Scheduler() {
   const [selectedBlock, setSelectedBlock] = useState(null);
   const [activeNav, setActiveNav] = useState('overview');
   const [iterations, setIterations] = useState(80);
+  const [segmentYear, setSegmentYear] = useState('');
+  const [segmentSemester, setSegmentSemester] = useState('');
+  const [segmentSpecialization, setSegmentSpecialization] = useState('');
   const [selectedAlgorithms, setSelectedAlgorithms] = useState(['pso', 'anticolony', 'genetic', 'tabu', 'hybrid']);
   const [hallStructures3D, setHallStructures3D] = useState([]);
   const [view3d, setView3d] = useState({ rotateX: 10, rotateZ: -18, zoom: 1 });
@@ -141,7 +193,16 @@ export default function Scheduler() {
 
     const loadItems = async () => {
       try {
-        const res = await schedulerApi.listItems(activeType);
+        const moduleFilters =
+          activeType === 'modules'
+            ? {
+                year: segmentYear ? Number(segmentYear) : undefined,
+                semester: segmentSemester ? Number(segmentSemester) : undefined,
+                specialization: segmentSpecialization ? String(segmentSpecialization).trim().toUpperCase() : undefined,
+              }
+            : {};
+
+        const res = await schedulerApi.listItems(activeType, moduleFilters);
         if (!cancelled) setItems(res.items || []);
       } catch (e) {
         console.error(e);
@@ -153,7 +214,61 @@ export default function Scheduler() {
     return () => {
       cancelled = true;
     };
-  }, [activeType]);
+  }, [activeType, segmentYear, segmentSemester, segmentSpecialization]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadHalls = async () => {
+      try {
+        const response = await schedulerApi.listItems('halls');
+        if (!cancelled) {
+          setHallStructures3D(response?.items || []);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setHallStructures3D([]);
+        }
+        console.error('Failed to load 3D halls:', err);
+      }
+    };
+
+    loadHalls();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function loadCoordinatorHallAllocations() {
+    setAllocationLoading(true);
+    try {
+      const response = await schedulerApi.getCoordinatorHallAllocations();
+      setCoordinatorHallAllocations(response?.data || []);
+      setAllocationSummary(
+        response?.summary || {
+          total: 0,
+          fromApprovedTimetable: 0,
+          fromRecommendationFallback: 0,
+        }
+      );
+    } catch (err) {
+      setCoordinatorHallAllocations([]);
+      setAllocationSummary({
+        total: 0,
+        fromApprovedTimetable: 0,
+        fromRecommendationFallback: 0,
+      });
+      showError('Load failed', err.message || 'Unable to fetch hall allocations from Academic Coordinator.');
+    }
+    setAllocationLoading(false);
+  }
+
+  function handleNavChange(view) {
+    setActiveNav(view);
+    if ((view === 'overview' || view === 'resources') && coordinatorHallAllocations.length === 0) {
+      loadCoordinatorHallAllocations();
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -228,27 +343,70 @@ export default function Scheduler() {
     setLoading(true); setResult(null); setSegmentedResult(null);
     try{
       const algorithms = selectedAlgorithms.length ? selectedAlgorithms : ['hybrid'];
-      const res = await schedulerApi.runScheduler(algorithms, { iterations });
-      setResult(res.results);
+      const hasSegmentFilters = Boolean(segmentYear || segmentSemester || segmentSpecialization);
 
-      const selected = pickPreferredAlgorithm(res.results || {});
-      const schedule = Array.isArray(selected?.data?.schedule) ? selected.data.schedule : [];
-      const entries = schedule.map((entry, index) => toGeneratedEntry(entry, index));
-      const conflicts = Array.isArray(selected?.data?.conflicts) ? selected.data.conflicts.length : 0;
-      const scheduled = Number(selected?.data?.stats?.scheduled || 0);
-      const totalRequired = Number(selected?.data?.stats?.totalRequired || 0);
-      const coverage = selected?.data?.stats?.coverage;
+      if (hasSegmentFilters) {
+        const segmentedOptions = {
+          iterations,
+          year: segmentYear ? Number(segmentYear) : undefined,
+          semester: segmentSemester ? Number(segmentSemester) : undefined,
+          specialization: segmentSpecialization ? String(segmentSpecialization).trim().toUpperCase() : undefined,
+        };
 
-      setGeneratedEntries(entries);
-      setExecutionSnapshot({
-        coverage: typeof coverage === 'number' ? coverage : null,
-        scheduled,
-        totalRequired,
-        conflicts,
-        source: selected?.key ? `${toReadableLabel(selected.key)} (primary)` : '-',
-      });
+        const res = await schedulerApi.runSchedulerBySegments(algorithms, segmentedOptions);
+        setSegmentedResult(res);
 
-      showSuccess('Scheduler completed', 'Algorithm run completed successfully.');
+        const segmentRows = Array.isArray(res?.segmentedResults) ? res.segmentedResults : [];
+        let totalScheduled = 0;
+        let totalRequired = 0;
+        let totalConflicts = 0;
+        const mergedEntries = [];
+
+        segmentRows.forEach((segmentRow, segmentIndex) => {
+          const selected = pickPreferredAlgorithm(segmentRow?.results || {});
+          const schedule = Array.isArray(selected?.data?.schedule) ? selected.data.schedule : [];
+          schedule.forEach((entry, entryIndex) => {
+            mergedEntries.push(toGeneratedEntry(entry, entryIndex, segmentRow?.segment?.key || `segment-${segmentIndex + 1}`));
+          });
+
+          totalScheduled += Number(selected?.data?.stats?.scheduled || 0);
+          totalRequired += Number(selected?.data?.stats?.totalRequired || 0);
+          totalConflicts += Array.isArray(selected?.data?.conflicts) ? selected.data.conflicts.length : 0;
+        });
+
+        setGeneratedEntries(mergedEntries);
+        setExecutionSnapshot({
+          coverage: totalRequired > 0 ? totalScheduled / totalRequired : null,
+          scheduled: totalScheduled,
+          totalRequired,
+          conflicts: totalConflicts,
+          source: `Filtered Segments (${segmentRows.length})`,
+        });
+
+        showSuccess('Scheduler completed', 'Filtered timetable generated with selected year/semester/specialization.');
+      } else {
+        const res = await schedulerApi.runScheduler(algorithms, { iterations });
+        setResult(res.results);
+
+        const selected = pickPreferredAlgorithm(res.results || {});
+        const schedule = Array.isArray(selected?.data?.schedule) ? selected.data.schedule : [];
+        const entries = schedule.map((entry, index) => toGeneratedEntry(entry, index));
+        const conflicts = Array.isArray(selected?.data?.conflicts) ? selected.data.conflicts.length : 0;
+        const scheduled = Number(selected?.data?.stats?.scheduled || 0);
+        const totalRequired = Number(selected?.data?.stats?.totalRequired || 0);
+        const coverage = selected?.data?.stats?.coverage;
+
+        setGeneratedEntries(entries);
+        setExecutionSnapshot({
+          coverage: typeof coverage === 'number' ? coverage : null,
+          scheduled,
+          totalRequired,
+          conflicts,
+          source: selected?.key ? `${toReadableLabel(selected.key)} (primary)` : '-',
+        });
+
+        showSuccess('Scheduler completed', 'Algorithm run completed successfully.');
+      }
     }catch(err){ showError('Scheduler failed', err.message); }
     setLoading(false);
   }
@@ -257,7 +415,13 @@ export default function Scheduler() {
     setLoading(true); setResult(null); setSegmentedResult(null);
     try{
       const algorithms = selectedAlgorithms.length ? selectedAlgorithms : ['hybrid'];
-      const res = await schedulerApi.runSchedulerBySegments(algorithms, { iterations });
+      const segmentedOptions = {
+        iterations,
+        year: segmentYear ? Number(segmentYear) : undefined,
+        semester: segmentSemester ? Number(segmentSemester) : undefined,
+        specialization: segmentSpecialization ? String(segmentSpecialization).trim().toUpperCase() : undefined,
+      };
+      const res = await schedulerApi.runSchedulerBySegments(algorithms, segmentedOptions);
       setSegmentedResult(res);
 
       const segmentRows = Array.isArray(res?.segmentedResults) ? res.segmentedResults : [];
@@ -382,6 +546,46 @@ export default function Scheduler() {
     return map;
   }, [generatedEntries]);
 
+  const filteredItems = useMemo(() => {
+    const requestedYear = segmentYear ? Number(segmentYear) : null;
+    const requestedSemester = segmentSemester ? Number(segmentSemester) : null;
+    const requestedSpecialization = segmentSpecialization ? normalizeSpecialization(segmentSpecialization) : '';
+
+    if (!requestedYear && !requestedSemester && !requestedSpecialization) {
+      return items;
+    }
+
+    return (items || []).filter((item) => {
+      if (activeType === 'modules') {
+        const moduleYear = inferModuleYear(item);
+        const moduleSemester = inferModuleSemester(item);
+        const moduleSpecialization = inferModuleSpecialization(item);
+
+        if (requestedYear && moduleYear && moduleYear !== requestedYear) return false;
+        if (requestedSemester && moduleSemester && moduleSemester !== requestedSemester) return false;
+        if (requestedSpecialization && moduleSpecialization !== requestedSpecialization) return false;
+        return true;
+      }
+
+      if (activeType === 'batches') {
+        const segment = parseBatchSegment(item);
+        if (!segment) return true;
+        if (requestedYear && segment.year !== requestedYear) return false;
+        if (requestedSemester && segment.semester !== requestedSemester) return false;
+        if (requestedSpecialization && segment.specialization !== requestedSpecialization) return false;
+        return true;
+      }
+
+      if (activeType === 'lics' || activeType === 'instructors') {
+        if (!requestedSpecialization) return true;
+        const department = normalizeSpecialization(item.department || item.details?.department || '');
+        return department.includes(requestedSpecialization);
+      }
+
+      return true;
+    });
+  }, [items, activeType, segmentYear, segmentSemester, segmentSpecialization]);
+
   return (
     <div className="scheduler-shell">
       <aside className="scheduler-sidebar">
@@ -408,7 +612,7 @@ export default function Scheduler() {
                 onClick={() => setActiveType(type)}
                 type="button"
               >
-                {type}
+                {toDataSourceLabel(type)}
               </button>
             ))}
           </div>
@@ -430,7 +634,7 @@ export default function Scheduler() {
               {loading ? 'Running...' : 'Run Scheduler'}
             </button>
             <button className="action" onClick={handleRunBySegments} disabled={loading}>
-              {loading ? 'Running...' : 'Run by Segments'}
+              {loading ? 'Running...' : 'Run by Semester & Specialization'}
             </button>
           </div>
         </header>
@@ -458,6 +662,47 @@ export default function Scheduler() {
                   }}
                 />
               </label>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+                <label>
+                  Year Filter
+                  <select
+                    className="ac-input"
+                    value={segmentYear}
+                    onChange={(event) => setSegmentYear(event.target.value)}
+                  >
+                    <option value="">All Years</option>
+                    <option value="1">Year 1</option>
+                    <option value="2">Year 2</option>
+                    <option value="3">Year 3</option>
+                    <option value="4">Year 4</option>
+                  </select>
+                </label>
+
+                <label>
+                  Semester Filter
+                  <select
+                    className="ac-input"
+                    value={segmentSemester}
+                    onChange={(event) => setSegmentSemester(event.target.value)}
+                  >
+                    <option value="">All Semesters</option>
+                    <option value="1">Semester 1</option>
+                    <option value="2">Semester 2</option>
+                  </select>
+                </label>
+
+                <label>
+                  Specialization
+                  <input
+                    className="ac-input"
+                    placeholder="IT / SE / CS"
+                    value={segmentSpecialization}
+                    onChange={(event) => setSegmentSpecialization(event.target.value)}
+                  />
+                </label>
+              </div>
+
               <div className="course-pool">
                 {algorithmOptions.map((algorithm) => (
                   <label key={algorithm} className="pool-item generated-block" style={{ background: 'rgba(15, 23, 42, 0.45)', borderColor: 'rgba(148, 163, 184, 0.35)' }}>
@@ -719,7 +964,7 @@ export default function Scheduler() {
 
               <div className="existing-list">
                 <h4>Existing {toCapitalized(activeType)}</h4>
-                {items.slice(0, 30).map((item, index) => (
+                {filteredItems.slice(0, 30).map((item, index) => (
                   <div key={item.id || item.name || `${activeType}-${index}`}>
                     {item.name || item.code || item.id}
                   </div>

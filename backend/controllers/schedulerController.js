@@ -131,18 +131,92 @@ const parseBatchLabel = (name) => {
   };
 };
 
+const parseJsonSafe = (value, fallback = {}) => {
+  if (!value) return fallback;
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+};
+
+const normalizeSpecializationCode = (value = '') => {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (!normalized) return '';
+
+  const aliases = {
+    SOFTWAREENGINEERING: 'SE',
+    SOFTWARE_ENG: 'SE',
+    INFORMATIONTECHNOLOGY: 'IT',
+    COMPUTERSCIENCE: 'CS',
+    INFORMATIONSYSTEMSENGINEERING: 'ISE',
+    COMPUTER_SYSTEMS_NETWORK_ENGINEERING: 'CSNE',
+    INFORMATICS: 'IM',
+    ENGINEERING: 'ENGINEERING',
+  };
+
+  const compact = normalized.replace(/[^A-Z0-9]/g, '');
+  return aliases[compact] || normalized;
+};
+
 const inferModuleSpecialization = (module) => {
+  const details = parseJsonSafe(module?.details, {});
+  const explicitSpecialization =
+    details.specialization ||
+    details.spec ||
+    details.stream ||
+    details.pathway ||
+    details.department ||
+    module?.specialization;
+
+  const normalizedExplicit = normalizeSpecializationCode(explicitSpecialization);
+  if (normalizedExplicit) {
+    return ENGINEERING_SPECIALIZATIONS.has(normalizedExplicit) ? 'Engineering' : normalizedExplicit;
+  }
+
   const code = String(module?.code || '').toUpperCase();
   if (code.startsWith('IT')) return 'IT';
   if (code.startsWith('SE')) return 'SE';
+  if (code.startsWith('CS')) return 'Engineering';
+  if (code.startsWith('IS')) return 'Engineering';
   if (code.startsWith('IE')) return 'Engineering';
   return 'General';
 };
 
 const inferModuleYear = (module) => {
+  const directYear = Number(module?.academic_year || module?.academicYear || parseJsonSafe(module?.details, {}).academic_year || 0);
+  if ([1, 2, 3, 4].includes(directYear)) {
+    return directYear;
+  }
+
   const code = String(module?.code || '').toUpperCase();
   const match = code.match(/^[A-Z]+(\d)/);
   return match ? Number(match[1]) : null;
+};
+
+const inferModuleSemester = (module) => {
+  const details = parseJsonSafe(module?.details, {});
+  const directSemester = Number(module?.semester || details.semester || details.sem || 0);
+  if ([1, 2].includes(directSemester)) {
+    return directSemester;
+  }
+  return null;
+};
+
+const moduleFitsBatchCapacity = (module, segmentBatches = []) => {
+  if (!segmentBatches.length) return true;
+
+  const details = parseJsonSafe(module?.details, {});
+  const requiredSize = Number(module?.batch_size || details.expected_students || details.batch_size || 0);
+  if (!requiredSize || requiredSize <= 0) return true;
+
+  const capacities = segmentBatches
+    .map((batch) => Number(batch?.capacity || 0))
+    .filter((capacity) => Number.isFinite(capacity) && capacity > 0);
+
+  if (!capacities.length) return true;
+  return capacities.some((capacity) => capacity >= requiredSize);
 };
 
 const parseBatchSubgroupIdentity = (batchId = '') => {
@@ -269,12 +343,15 @@ const buildSemesterSpecializationSegments = ({ batches = [], modules = [], lics 
       .filter((module) => {
         const moduleSpec = inferModuleSpecialization(module);
         const moduleYear = inferModuleYear(module);
+        const moduleSemester = inferModuleSemester(module);
         const specializationMatch =
           segment.departmentGroup === 'Engineering'
             ? moduleSpec === 'Engineering'
             : moduleSpec === segment.specialization;
         const yearMatch = moduleYear ? moduleYear === segment.year : true;
-        return specializationMatch && yearMatch;
+        const semesterMatch = moduleSemester ? moduleSemester === segment.semester : true;
+        const capacityMatch = moduleFitsBatchCapacity(module, segment.batches);
+        return specializationMatch && yearMatch && semesterMatch && capacityMatch;
       })
       .map((module) => {
         const dayType = segment.dayTypeSet.size === 1 ? [...segment.dayTypeSet][0] : 'any';
@@ -381,16 +458,6 @@ const withFacultySoftConstraints = async (user, options = {}) => {
   };
 };
 
-const parseJsonSafe = (value, fallback = {}) => {
-  if (!value) return fallback;
-  if (typeof value === 'object') return value;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-};
-
 const loadCoordinatorHallAllocationMap = async () => {
   const allocationMap = new Map();
 
@@ -473,6 +540,13 @@ const applyCoordinatorHallAllocations = (modules = [], allocationMap = new Map()
       },
     };
   });
+};
+
+const inferAcademicYearFromModuleCode = (code = '') => {
+  const firstDigit = String(code).match(/\d/)?.[0];
+  const year = Number(firstDigit);
+  if (![1, 2, 3, 4].includes(year)) return null;
+  return String(year);
 };
 
 export const addItem = async (req, res) => {
@@ -568,6 +642,8 @@ export const addItem = async (req, res) => {
         details = null,
         batch_size = null,
         day_type = null,
+        academic_year = null,
+        semester = null,
       } = payload;
 
       if (!code || !name) {
@@ -587,9 +663,12 @@ export const addItem = async (req, res) => {
         });
       }
 
+      const derivedAcademicYear = inferAcademicYearFromModuleCode(code);
+      const effectiveAcademicYear = academic_year || derivedAcademicYear;
+
       const { rows } = await pool.query(
-        `INSERT INTO modules(id, code, name, batch_size, day_type, credits, lectures_per_week, details, lic_id)
-         VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `INSERT INTO modules(id, code, name, batch_size, day_type, credits, lectures_per_week, details, lic_id, academic_year, semester)
+         VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          RETURNING *`,
         [
           id,
@@ -601,6 +680,8 @@ export const addItem = async (req, res) => {
           lectures_per_week || null,
           details ? JSON.stringify(details) : null,
           licId,
+          effectiveAcademicYear,
+          semester || null,
         ]
       );
       return res.status(201).json({ success: true, item: rows[0] });
@@ -739,6 +820,42 @@ export const listItems = async (req, res) => {
          ORDER BY created_at DESC`
       );
       return res.json({ success: true, items: rows });
+    }
+
+    if (type === 'modules') {
+      const requestedYear = Number(req.query?.year || req.query?.academicYear || 0);
+      const requestedSemester = Number(req.query?.semester || 0);
+      const requestedSpecialization = normalizeSpecializationCode(req.query?.specialization || '');
+
+      const { rows } = await pool.query(`SELECT * FROM modules ORDER BY created_at DESC`);
+      const filtered = rows.filter((module) => {
+        const moduleYear = inferModuleYear(module);
+        const moduleSemester = inferModuleSemester(module);
+        const moduleSpecialization = inferModuleSpecialization(module);
+        const normalizedModuleSpecialization = normalizeSpecializationCode(moduleSpecialization);
+
+        if (requestedYear && moduleYear && moduleYear !== requestedYear) return false;
+        if (requestedSemester && moduleSemester && moduleSemester !== requestedSemester) return false;
+        if (requestedSpecialization) {
+          const specializationMatch =
+            requestedSpecialization === 'ENGINEERING'
+              ? moduleSpecialization === 'Engineering'
+              : normalizedModuleSpecialization === requestedSpecialization;
+          if (!specializationMatch) return false;
+        }
+
+        return true;
+      });
+
+      return res.json({
+        success: true,
+        items: filtered,
+        filters: {
+          year: requestedYear || null,
+          semester: requestedSemester || null,
+          specialization: requestedSpecialization || null,
+        },
+      });
     }
 
     const { rows } = await pool.query(`SELECT * FROM ${type} ORDER BY created_at DESC`);
@@ -1288,6 +1405,83 @@ export const getCoordinatorHallAllocations = async (req, res) => {
         timetableCreatedAt: row.timetable_created_at || null,
       });
     });
+    const allocations = [];
+    const seenModules = new Set();
+
+    try {
+      const approvedTimetableRes = await pool.query(
+        `WITH latest_approved AS (
+           SELECT id, name, created_at, data
+           FROM timetables
+           WHERE status = 'approved' AND data IS NOT NULL
+           ORDER BY created_at DESC
+           LIMIT 1
+         ), schedule_rows AS (
+           SELECT
+             la.id AS timetable_id,
+             la.name AS timetable_name,
+             la.created_at AS timetable_created_at,
+             elem->>'moduleId' AS module_id,
+             elem->>'hallId' AS hall_id
+           FROM latest_approved la,
+                LATERAL jsonb_array_elements(
+                  CASE
+                    WHEN jsonb_typeof((la.data::jsonb)->'schedule') = 'array' THEN (la.data::jsonb)->'schedule'
+                    ELSE '[]'::jsonb
+                  END
+                ) elem
+           WHERE elem->>'moduleId' IS NOT NULL
+             AND elem->>'hallId' IS NOT NULL
+         )
+         SELECT
+           sr.module_id,
+           sr.hall_id,
+           sr.timetable_id,
+           sr.timetable_name,
+           sr.timetable_created_at,
+           m.code AS module_code,
+           m.name AS module_name,
+           h.name AS hall_name,
+           COUNT(*)::int AS usage_count
+         FROM schedule_rows sr
+         LEFT JOIN modules m
+           ON m.id::text = sr.module_id OR m.code = sr.module_id
+         LEFT JOIN halls h
+           ON h.id::text = sr.hall_id OR h.name = sr.hall_id
+         GROUP BY
+           sr.module_id,
+           sr.hall_id,
+           sr.timetable_id,
+           sr.timetable_name,
+           sr.timetable_created_at,
+           m.code,
+           m.name,
+           h.name
+         ORDER BY sr.module_id, usage_count DESC, sr.hall_id ASC`
+      );
+
+      approvedTimetableRes.rows.forEach((row) => {
+        if (seenModules.has(row.module_id)) return;
+        seenModules.add(row.module_id);
+
+        allocations.push({
+          moduleId: row.module_id,
+          moduleCode: row.module_code || row.module_id,
+          moduleName: row.module_name || null,
+          hallId: row.hall_id,
+          hallName: row.hall_name || row.hall_id,
+          usageCount: Number(row.usage_count || 0),
+          source: 'approved_timetable',
+          timetableId: row.timetable_id || null,
+          timetableName: row.timetable_name || null,
+          timetableCreatedAt: row.timetable_created_at || null,
+        });
+      });
+    } catch (approvedErr) {
+      // Keep API available even if timetable allocation source is unavailable.
+      console.warn('Approved timetable allocations skipped:', approvedErr.message);
+    }
+
 
     try {
       const recommendationRes = await pool.query(
@@ -1396,10 +1590,12 @@ export const runScheduler = async (req, res) => {
 export const runSchedulerBySegments = async (req, res) => {
   try {
     const { algorithms = ['hybrid'], options = {} } = req.body;
+    const requestedYear = Number(options.year || options.academicYear || 0);
+    const requestedSemester = Number(options.semester || 0);
+    const requestedSpecialization = String(options.specialization || '').trim().toUpperCase();
 
-    const [hallsRes, modulesRes, licsRes, instructorsRes, batchesRes] = await Promise.all([
+    const [hallsRes, licsRes, instructorsRes, batchesRes] = await Promise.all([
       pool.query('SELECT * FROM halls'),
-      pool.query('SELECT * FROM modules'),
       pool.query('SELECT * FROM lics'),
       pool.query('SELECT * FROM instructors'),
       pool.query('SELECT * FROM batches'),
@@ -1407,7 +1603,6 @@ export const runSchedulerBySegments = async (req, res) => {
 
     const halls = hallsRes.rows;
     const hallAllocationMap = await loadCoordinatorHallAllocationMap();
-    const modules = applyCoordinatorHallAllocations(modulesRes.rows, hallAllocationMap);
     const lics = licsRes.rows;
     const instructors = instructorsRes.rows;
     const batches = batchesRes.rows;
@@ -1421,13 +1616,59 @@ export const runSchedulerBySegments = async (req, res) => {
     }
 
     const mergedOptions = await withFacultySoftConstraints(req.user, options);
-    const segments = buildSemesterSpecializationSegments({ batches, modules, lics, instructors });
-    const segmentedResults = [];
+    const segments = buildSemesterSpecializationSegments({ batches, modules: [], lics, instructors });
+    const filteredSegments = segments.filter((segment) => {
+      if (requestedYear && segment.year !== requestedYear) return false;
+      if (requestedSemester && segment.semester !== requestedSemester) return false;
+      if (requestedSpecialization && segment.specialization.toUpperCase() !== requestedSpecialization) return false;
+      return true;
+    });
 
-    for (const segment of segments) {
+    if (!filteredSegments.length) {
+      return res.status(400).json({
+        error: 'No matching segments found for the selected year/semester/specialization.',
+      });
+    }
+
+    const segmentedResults = [];
+    let skippedEmptySegments = 0;
+
+    for (const segment of filteredSegments) {
+      const modulesRes = await pool.query(
+        `SELECT *
+         FROM modules
+         WHERE ($1::TEXT IS NULL OR academic_year = $1::TEXT)
+           AND ($2::TEXT IS NULL OR semester = $2::TEXT)
+         ORDER BY created_at DESC`,
+        [String(segment.year), String(segment.semester)]
+      );
+
+      const segmentModules = applyCoordinatorHallAllocations(modulesRes.rows, hallAllocationMap)
+        .filter((module) => {
+          const moduleSpecialization = inferModuleSpecialization(module);
+          const specializationMatches =
+            segment.departmentGroup === 'Engineering'
+              ? moduleSpecialization === 'Engineering'
+              : normalizeSpecializationCode(moduleSpecialization) === normalizeSpecializationCode(segment.specialization);
+          const capacityMatches = moduleFitsBatchCapacity(module, segment.batches);
+          return specializationMatches && capacityMatches;
+        })
+        .map((module) => {
+          const dayType = segment.dayTypeSet.size === 1 ? [...segment.dayTypeSet][0] : 'any';
+          return {
+            ...module,
+            day_type: module.day_type || dayType,
+          };
+        });
+
+      if (!segmentModules.length) {
+        skippedEmptySegments += 1;
+        continue;
+      }
+
       const constraints = {
         halls,
-        modules: segment.modules,
+        modules: segmentModules,
         lics: segment.lics,
         instructors: segment.instructors,
         batches: segment.batches,
@@ -1451,7 +1692,7 @@ export const runSchedulerBySegments = async (req, res) => {
           departmentGroup: segment.departmentGroup,
           dayTypes: segment.dayTypes,
           batchCount: segment.batchCount,
-          moduleCount: segment.modules.length,
+          moduleCount: segmentModules.length,
           instructorCount: segment.instructors.length,
           licCount: segment.lics.length,
         },
@@ -1459,9 +1700,21 @@ export const runSchedulerBySegments = async (req, res) => {
       });
     }
 
+    if (!segmentedResults.length) {
+      return res.status(400).json({
+        error: 'No modules matched the selected year/semester/specialization filters for scheduling.',
+      });
+    }
+
     return res.json({
       success: true,
       totalSegments: segmentedResults.length,
+      skippedEmptySegments,
+      filters: {
+        year: requestedYear || null,
+        semester: requestedSemester || null,
+        specialization: requestedSpecialization || null,
+      },
       segmentedResults,
     });
   } catch (err) {

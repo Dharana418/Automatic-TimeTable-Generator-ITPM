@@ -78,6 +78,7 @@ export default function FacultyCoordinatorShell({
   backgroundImage,
   children,
   headerActions,
+  footerNote,
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -96,6 +97,7 @@ export default function FacultyCoordinatorShell({
   }, [displayName]);
 
   const mainPl = sidebarCollapsed ? 'lg:pl-[72px]' : 'lg:pl-[260px]';
+  const currentYear = new Date().getFullYear();
 
   return (
     <div
@@ -337,6 +339,39 @@ export default function FacultyCoordinatorShell({
         <section style={{ maxWidth: 1400, margin: '0 auto', padding: '28px 24px' }} className="fc-animate-in">
           {children}
         </section>
+
+        {/* Footer */}
+        <footer
+          style={{
+            maxWidth: 1400,
+            margin: '0 auto',
+            padding: '0 24px 24px',
+          }}
+        >
+          <div
+            style={{
+              borderRadius: 14,
+              border: '1px solid rgba(148,163,184,0.16)',
+              background: 'linear-gradient(180deg, rgba(2,8,23,0.72), rgba(2,8,23,0.6))',
+              boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
+              backdropFilter: 'blur(10px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 10,
+              padding: '12px 14px',
+            }}
+          >
+            <p style={{ margin: 0, fontSize: 12, color: '#cbd5e1' }}>
+              {footerNote || `SLIIT Timetable Coordinator Workspace • ${currentYear}`}
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12 }}>
+              <span style={{ color: '#94a3b8' }}>Data sync secured</span>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }} className="fc-pulse-dot" />
+            </div>
+          </div>
+        </footer>
       </main>
     </div>
   );
