@@ -14,7 +14,6 @@ import AcademicCoordinatorDashboard from "./pages/AC_before_merge.jsx";
 import InstructorDashboard from "./pages/InstructorDashboard.jsx";
 import LecturerDashboard from "./pages/LecturerDashboard.jsx";
 import CommonDashboard from "./pages/CommonDashboard.jsx";
-import Scheduler from "./pages/Scheduler.jsx";
 import FacultyCoordinatorSchedulerPage from "./pages/FacultyCoordinatorSchedulerPage.jsx";
 import AdminDashboard from "./pages/AdminDashboard.jsx";
 import AdminRoleHistoryPage from "./pages/AdminRoleHistoryPage.jsx";
@@ -134,12 +133,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
-        <Route path="/scheduler" element={
-          <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
-            {roleKey === "facultycoordinator" ? <Scheduler /> : <Navigate to="/dashboard" replace />}
-          </ProtectedRoute>
-        } />
 
         <Route path="/scheduler/by-year" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
