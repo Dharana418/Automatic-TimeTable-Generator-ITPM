@@ -473,6 +473,113 @@ router.get('/admin/role-assignments/:historyId/unhashed-password', protect, auth
     }
 });
 
+// ============= FACULTY COORDINATOR ENDPOINTS =============
+
+// Get all faculty coordinators
+router.get('/faculty-coordinators', protect, authorize('admin', 'Admin', 'academiccoordinator', 'Academic Coordinator', 'facultycoordinator', 'Faculty Coordinator'), async (req, res) => {
+    try {
+        const { rows } = await pool.query(
+            `SELECT 
+                id,
+                name,
+                email,
+                phone_number,
+                address,
+                birthday,
+                role,
+                role_assigned_at,
+                role_assignment_note,
+                created_at
+             FROM users 
+             WHERE role = 'Faculty Coordinator' OR lower(regexp_replace(role, '[^a-zA-Z0-9]', '', 'g')) = 'facultycoordinator'
+             ORDER BY name ASC`
+        );
+
+        return res.status(200).json({
+            success: true,
+            count: rows.length,
+            data: rows,
+        });
+    } catch (err) {
+        console.error('Error fetching faculty coordinators:', err.message);
+        return res.status(500).json({ success: false, error: 'Failed to fetch faculty coordinators' });
+    }
+});
+
+// Get specific faculty coordinator by ID
+router.get('/faculty-coordinators/:coordinatorId', protect, async (req, res) => {
+    try {
+        const { coordinatorId } = req.params;
+        const { rows } = await pool.query(
+            `SELECT 
+                id,
+                name,
+                email,
+                phonenumber,
+                address,
+                birthday,
+                role,
+                role_assigned_at,
+                role_assignment_note,
+                created_at
+             FROM users 
+             WHERE id = $1 AND (role = 'Faculty Coordinator' OR lower(regexp_replace(role, '[^a-zA-Z0-9]', '', 'g')) = 'facultycoordinator')`,
+            [coordinatorId]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Faculty coordinator not found' });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: rows[0],
+        });
+    } catch (err) {
+        console.error('Error fetching faculty coordinator:', err.message);
+        return res.status(500).json({ success: false, error: 'Failed to fetch faculty coordinator' });
+    }
+});
+
+// Get current logged-in faculty coordinator
+router.get('/faculty-coordinators/profile/me', protect, async (req, res) => {
+    try {
+        // Check if user is a faculty coordinator
+        if (!req.user.role || (!req.user.role.includes('Faculty Coordinator') && req.user.role !== 'facultycoordinator')) {
+            return res.status(403).json({ success: false, error: 'User is not a faculty coordinator' });
+        }
+
+        const { rows } = await pool.query(
+            `SELECT 
+                id,
+                name,
+                email,
+                phonenumber,
+                address,
+                birthday,
+                role,
+                role_assigned_at,
+                role_assignment_note,
+                created_at
+             FROM users 
+             WHERE id = $1`,
+            [req.user.id]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Faculty coordinator profile not found' });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: rows[0],
+        });
+    } catch (err) {
+        console.error('Error fetching faculty coordinator profile:', err.message);
+        return res.status(500).json({ success: false, error: 'Failed to fetch faculty coordinator profile' });
+    }
+});
+
 export default router;
 
 
