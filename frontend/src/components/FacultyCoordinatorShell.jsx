@@ -270,7 +270,7 @@ export default function FacultyCoordinatorShell({
       </aside>
 
       {/* Main content */}
-      <main style={{ position: 'relative', zIndex: 10, minHeight: '100vh' }} className={`transition-all duration-300 ${mainPl}`}>
+      <main style={{ position: 'relative', zIndex: 10, minHeight: '100vh', display: 'flex', flexDirection: 'column' }} className={`transition-all duration-300 ${mainPl}`}>
         {/* Top header */}
         <header style={{
           position: 'sticky', top: 0, zIndex: 30,
@@ -280,6 +280,7 @@ export default function FacultyCoordinatorShell({
           boxShadow: '0 4px 30px rgba(0,0,0,0.3)',
           padding: '0 24px',
           height: 64, display: 'flex', alignItems: 'center',
+          flexShrink: 0,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', maxWidth: 1400, margin: '0 auto', gap: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -335,17 +336,19 @@ export default function FacultyCoordinatorShell({
           </div>
         </header>
 
-        {/* Page content */}
-        <section style={{ maxWidth: 1400, margin: '0 auto', padding: '28px 24px' }} className="fc-animate-in">
+        {/* Page content - takes remaining space */}
+        <section style={{ flex: 1, maxWidth: 1400, margin: '0 auto', width: '100%', padding: '28px 24px', overflow: 'auto' }} className="fc-animate-in">
           {children}
         </section>
 
-        {/* Footer */}
+        {/* Footer - stays at bottom */}
         <footer
           style={{
             maxWidth: 1400,
             margin: '0 auto',
-            padding: '0 24px 24px',
+            width: '100%',
+            padding: '28px 24px 24px',
+            flexShrink: 0,
           }}
         >
           <div
