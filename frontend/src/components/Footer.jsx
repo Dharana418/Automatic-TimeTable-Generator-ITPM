@@ -8,7 +8,7 @@ const Footer = ({ isAuthenticated, user }) => {
       <div className="mx-auto grid w-full max-w-none grid-cols-1 gap-8 px-4 py-8 sm:px-6 lg:grid-cols-3 lg:px-12 xl:px-16">
         <section>
           <h3 className="text-base font-bold tracking-wide text-white">SLIIT Timetable Generator</h3>
-          <p className="mt-2 max-w-md text-sm text-blue-100/90">
+          <p className="mt-2 text-sm leading-relaxed text-blue-100/90">
             Intelligent timetable generation platform for faculty scheduling, allocation planning, and academic operations.
           </p>
         </section>
