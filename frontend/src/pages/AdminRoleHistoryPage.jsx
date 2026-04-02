@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { KeyRound, Activity, ShieldCheck, Pencil, Trash2 } from 'lucide-react';
+import { KeyRound, Activity, ShieldCheck, Pencil, Trash2, UserCog, ChartNoAxesCombined, RefreshCcw, Plus } from 'lucide-react';
 import { askForText, confirmDelete, showError, showSuccess } from '../utils/alerts.js';
 
 export default function AdminRoleHistoryPage({ apiBase }) {
@@ -39,21 +39,31 @@ export default function AdminRoleHistoryPage({ apiBase }) {
     }
   }, [apiBase]);
 
-  useEffect(() => { fetchAssignments(); }, [fetchAssignments]);
+  useEffect(() => {
+    fetchAssignments();
+  }, [fetchAssignments]);
 
   const handleToggleUnhash = async (historyId) => {
     if (unhashedById[historyId]) {
-      setUnhashedById(prev => { const n = { ...prev }; delete n[historyId]; return n; });
+      setUnhashedById((prev) => {
+        const next = { ...prev };
+        delete next[historyId];
+        return next;
+      });
       return;
     }
-    setLoadingUnhashById(prev => ({ ...prev, [historyId]: true }));
+
+    setLoadingUnhashById((prev) => ({ ...prev, [historyId]: true }));
     try {
       const response = await fetch(`${apiBase}/api/auth/admin/role-assignments/${historyId}/unhashed-password`, { credentials: 'include' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Reveal failed');
-      setUnhashedById(prev => ({ ...prev, [historyId]: data.unhashedPassword }));
-    } catch (err) { showError('Error', err.message); }
-    finally { setLoadingUnhashById(prev => ({ ...prev, [historyId]: false })); }
+      setUnhashedById((prev) => ({ ...prev, [historyId]: data.unhashedPassword }));
+    } catch (err) {
+      showError('Error', err.message);
+    } finally {
+      setLoadingUnhashById((prev) => ({ ...prev, [historyId]: false }));
+    }
   };
 
   const handleCreateHistory = async () => {
@@ -208,7 +218,7 @@ export default function AdminRoleHistoryPage({ apiBase }) {
   const handleDeleteHistory = async (item) => {
     const confirmed = await confirmDelete({
       title: 'Delete role history record?',
-      text: `${item.name} • ${item.role}`,
+      text: `${item.name} - ${item.role}`,
       confirmButtonText: 'Delete',
     });
 
@@ -231,61 +241,71 @@ export default function AdminRoleHistoryPage({ apiBase }) {
   };
 
   return (
-    <div className="min-h-screen bg-white text-gray-900">
-      <div className="mx-auto grid min-h-screen max-w-[1600px] lg:grid-cols-[240px_1fr]">
-        
-        {/* Sidebar */}
-        <aside className="sticky top-0 hidden h-screen border-r border-gray-200 bg-white p-4 lg:flex lg:flex-col">
-          <div className="mb-8 flex items-center gap-2 px-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded border border-gray-300 bg-gray-50 text-[#059669]">
-              <KeyRound size={16} />
+    <div className="relative min-h-full overflow-hidden bg-slate-100 text-slate-900">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -top-24 right-10 h-72 w-72 rounded-full bg-emerald-200/45 blur-3xl" />
+        <div className="absolute -bottom-28 left-12 h-96 w-96 rounded-full bg-cyan-200/45 blur-3xl" />
+      </div>
+
+      <div className="relative mx-auto grid min-h-full max-w-[1600px] lg:grid-cols-[290px_1fr]">
+        <aside className="hidden h-full flex-col border-r border-cyan-700/35 bg-slate-900 px-6 py-8 lg:flex">
+          <div className="mb-10 flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-600 bg-slate-800 text-cyan-300 shadow-sm">
+              <KeyRound size={18} />
             </div>
-            <h2 className="text-lg font-semibold text-gray-900">Admin</h2>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">University Admin</p>
+              <h2 className="text-xl font-extrabold tracking-tight text-white">Control Suite</h2>
+            </div>
           </div>
-          <nav className="space-y-0.5">
-            <NavItem to="/dashboard" label="Create Staff" icon="👤" />
-            <NavItem to="/admin/role-history" active label="Role History" icon="📜" />
+
+          <nav className="space-y-1.5">
+            <NavItem to="/dashboard" label="Create Staff" icon={UserCog} />
+            <NavItem to="/admin/role-history" active label="Role History" icon={ChartNoAxesCombined} />
           </nav>
         </aside>
 
-        <main className="p-4 md:p-6 lg:p-8">
-          <header className="mb-6 border border-gray-200 bg-white p-5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded border border-gray-300 bg-gray-50 text-[#059669]">
-                <Activity size={24} />
+        <main className="px-4 py-6 sm:px-6 md:px-10 lg:px-14 lg:py-10">
+          <header className="mb-6 rounded-3xl border border-emerald-100/90 bg-white/88 p-6 shadow-xl shadow-slate-300/40 ring-1 ring-white/80 backdrop-blur md:p-8">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-600 to-cyan-600 text-white shadow-lg shadow-emerald-500/35">
+                  <Activity size={24} />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Role Management</p>
+                  <h1 className="text-3xl font-black tracking-tight text-slate-900">Assignment Logs</h1>
+                  <p className="mt-3 max-w-2xl text-sm text-slate-600">Audit-ready history of faculty role assignments with secure credential controls.</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Role Management</p>
-                <h1 className="text-2xl font-semibold text-gray-900">Assignment Logs</h1>
+
+              <div className="flex flex-wrap gap-2">
+                <button onClick={fetchAssignments} className="inline-flex items-center gap-2 rounded-xl border border-cyan-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-cyan-50/60">
+                  <RefreshCcw size={13} /> Refresh
+                </button>
+                <button onClick={handleCreateHistory} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 px-3.5 py-2 text-xs font-semibold text-white shadow-lg shadow-emerald-400/35 transition hover:-translate-y-0.5 hover:from-emerald-700 hover:to-cyan-700">
+                  <Plus size={13} /> New Entry
+                </button>
               </div>
-            </div>
-            <p className="mt-3 text-sm text-gray-600">Audit trail of faculty role assignments and security records.</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button onClick={fetchAssignments} className="rounded border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50">
-                Refresh
-              </button>
-              <button onClick={handleCreateHistory} className="rounded border border-[#059669] bg-[#059669] px-3 py-2 text-xs font-semibold text-white transition hover:bg-green-700">
-                + New Entry
-              </button>
             </div>
           </header>
 
-          <section className="mb-6 border border-gray-200 bg-white p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <ShieldCheck size={16} className="text-[#059669]" />
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Distribution</p>
+          <section className="mb-6 rounded-3xl border border-cyan-100/90 bg-white/88 p-5 shadow-lg shadow-slate-300/30 ring-1 ring-white/80 backdrop-blur md:p-6">
+            <div className="mb-4 flex items-center gap-2">
+              <ShieldCheck size={16} className="text-emerald-600" />
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Role Distribution</p>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {groupedAssignments.map(([roleName, roleAssignments]) => {
                 const percentage = Math.max(2, Math.round((roleAssignments.length / totalAssignments) * 100));
                 return (
                   <div key={`distribution-${roleName}`}>
-                    <div className="mb-1 flex items-center justify-between text-xs font-semibold text-gray-700">
+                    <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-slate-700">
                       <span>{roleName}</span>
                       <span>{percentage}%</span>
                     </div>
-                    <div className="h-1.5 rounded bg-gray-200">
-                      <div className="h-1.5 rounded bg-[#059669]" style={{ width: `${percentage}%` }} />
+                    <div className="h-2 rounded-full border border-cyan-100 bg-slate-100">
+                      <div className="h-2 rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500" style={{ width: `${percentage}%` }} />
                     </div>
                   </div>
                 );
@@ -293,90 +313,91 @@ export default function AdminRoleHistoryPage({ apiBase }) {
             </div>
           </section>
 
-          <section className="space-y-4">
+          <section className="space-y-5">
             {loading ? (
               <LoadingSkeleton />
             ) : assignments.length === 0 ? (
               <EmptyState />
             ) : (
               groupedAssignments.map(([roleName, roleAssignments]) => (
-                <div key={roleName} className="overflow-hidden border border-gray-200 bg-white">
-                  <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-3">
-                    <h2 className="text-sm font-semibold text-gray-900">{roleName}</h2>
-                    <span className="inline-flex items-center rounded bg-gray-200 px-2 py-1 text-xs font-semibold text-gray-700">
+                <div key={roleName} className="overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-200/80 via-cyan-200/75 to-indigo-200/80 p-[1px] shadow-lg shadow-slate-300/25">
+                  <div className="rounded-2xl bg-white/95 backdrop-blur">
+                  <div className="flex items-center justify-between border-b border-cyan-100 bg-gradient-to-r from-emerald-50/70 via-cyan-50/60 to-indigo-50/60 px-4 py-3">
+                    <h2 className="text-sm font-bold text-slate-900">{roleName}</h2>
+                    <span className="inline-flex items-center rounded-full border border-cyan-200 bg-white px-2.5 py-1 text-xs font-semibold text-cyan-800">
                       {roleAssignments.length}
                     </span>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full border-collapse text-left">
                       <thead>
-                        <tr className="border-b border-gray-200 bg-gray-50">
-                          <th className="border-r border-gray-200 px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-600">Staff</th>
-                          <th className="border-r border-gray-200 px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-600">Email</th>
-                          <th className="border-r border-gray-200 px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-600">Role</th>
-                          <th className="border-r border-gray-200 px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-600">Assigned By</th>
-                          <th className="border-r border-gray-200 px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-600">Timestamp</th>
-                          <th className="border-r border-gray-200 px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-gray-600">Security</th>
-                          <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-600">Actions</th>
+                        <tr className="border-b border-cyan-100 bg-slate-50/90">
+                          <th className="border-r border-cyan-100 px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-600">Staff</th>
+                          <th className="border-r border-cyan-100 px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-600">Email</th>
+                          <th className="border-r border-cyan-100 px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-600">Role</th>
+                          <th className="border-r border-cyan-100 px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-600">Assigned By</th>
+                          <th className="border-r border-cyan-100 px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-600">Timestamp</th>
+                          <th className="border-r border-cyan-100 px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-600">Security</th>
+                          <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-600">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-200">
+                      <tbody className="divide-y divide-cyan-50">
                         {roleAssignments.map((item) => (
-                          <tr key={item.id} className="bg-white transition-colors hover:bg-gray-50">
-                            <td className="border-r border-gray-200 px-4 py-3">
+                          <tr key={item.id} className="bg-white transition-colors hover:bg-slate-50/80">
+                            <td className="border-r border-cyan-100 px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <div className="flex h-8 w-8 items-center justify-center rounded border border-gray-300 bg-gray-100 font-semibold text-gray-700">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-cyan-200 bg-cyan-50 font-semibold text-cyan-800">
                                   {item.name?.[0]?.toUpperCase()}
                                 </div>
-                                <p className="font-semibold text-gray-900">{item.name}</p>
+                                <p className="font-semibold text-slate-900">{item.name}</p>
                               </div>
                             </td>
-                            <td className="border-r border-gray-200 px-4 py-3 text-sm text-gray-600">{item.email}</td>
-                            <td className="border-r border-gray-200 px-4 py-3">
-                              <span className="inline-flex items-center rounded bg-gray-200 px-2 py-1 text-xs font-semibold text-gray-800">
+                            <td className="border-r border-cyan-100 px-4 py-3 text-sm text-slate-600">{item.email}</td>
+                            <td className="border-r border-cyan-100 px-4 py-3">
+                              <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">
                                 {item.role}
                               </span>
                             </td>
-                            <td className="border-r border-gray-200 px-4 py-3">
-                              <p className="text-sm font-semibold text-gray-900">{item.role_assigned_by_name || 'System'}</p>
-                              <p className="text-xs text-gray-500">{item.role_assigned_by_email}</p>
+                            <td className="border-r border-cyan-100 px-4 py-3">
+                              <p className="text-sm font-semibold text-slate-900">{item.role_assigned_by_name || 'System'}</p>
+                              <p className="text-xs text-slate-500">{item.role_assigned_by_email}</p>
                             </td>
-                            <td className="border-r border-gray-200 px-4 py-3">
-                              <p className="text-sm font-medium text-gray-900">{new Date(item.role_assigned_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                              <p className="text-xs font-mono text-gray-500">{new Date(item.role_assigned_at).toLocaleTimeString()}</p>
+                            <td className="border-r border-cyan-100 px-4 py-3">
+                              <p className="text-sm font-medium text-slate-900">{new Date(item.role_assigned_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                              <p className="text-xs font-mono text-slate-500">{new Date(item.role_assigned_at).toLocaleTimeString()}</p>
                             </td>
-                            <td className="border-r border-gray-200 px-4 py-3 text-center">
+                            <td className="border-r border-cyan-100 px-4 py-3 text-center">
                               {item.can_unhash ? (
-                                <div className="relative inline-block group/unhash">
+                                <div className="relative inline-block">
                                   <button
                                     onClick={() => handleToggleUnhash(item.id)}
-                                    className={`rounded border px-2 py-1 text-xs font-semibold transition-all duration-200 ${
+                                    className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition-all duration-200 ${
                                       unhashedById[item.id]
                                         ? 'border-amber-400 bg-amber-50 text-amber-700'
-                                        : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                                        : 'border-cyan-200 bg-white text-slate-600 hover:bg-cyan-50/60'
                                     }`}
                                   >
                                     {loadingUnhashById[item.id] ? '...' : unhashedById[item.id] ? 'Hide' : 'Reveal'}
                                   </button>
                                   {unhashedById[item.id] && (
-                                    <div className="absolute left-1/2 top-full z-50 mt-2 w-max max-w-[180px] -translate-x-1/2 rounded border border-gray-300 bg-gray-900 p-2 text-xs font-mono text-white shadow-lg">
+                                    <div className="absolute left-1/2 top-full z-50 mt-2 w-max max-w-[180px] -translate-x-1/2 rounded-lg border border-cyan-200/70 bg-slate-900 p-2 text-xs font-mono text-white shadow-xl">
                                       {unhashedById[item.id]}
                                     </div>
                                   )}
                                 </div>
-                              ) : <span className="text-xs text-gray-400">—</span>}
+                              ) : <span className="text-xs text-slate-400">-</span>}
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <button 
-                                  onClick={() => handleEditHistory(item)} 
-                                  className="inline-flex items-center gap-1 rounded border border-[#059669] px-2 py-1 text-xs font-semibold text-[#059669] transition-colors hover:bg-green-50"
+                                <button
+                                  onClick={() => handleEditHistory(item)}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 px-2.5 py-1 text-xs font-semibold text-emerald-700 transition-colors hover:border-emerald-400 hover:bg-emerald-50"
                                 >
                                   <Pencil size={12} /> Edit
                                 </button>
-                                <button 
-                                  onClick={() => handleDeleteHistory(item)} 
-                                  className="inline-flex items-center gap-1 rounded border border-red-400 px-2 py-1 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50"
+                                <button
+                                  onClick={() => handleDeleteHistory(item)}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-red-300 px-2.5 py-1 text-xs font-semibold text-red-600 transition-colors hover:border-red-400 hover:bg-red-50"
                                 >
                                   <Trash2 size={12} /> Delete
                                 </button>
@@ -386,6 +407,7 @@ export default function AdminRoleHistoryPage({ apiBase }) {
                         ))}
                       </tbody>
                     </table>
+                  </div>
                   </div>
                 </div>
               ))
@@ -398,29 +420,31 @@ export default function AdminRoleHistoryPage({ apiBase }) {
 }
 
 const LoadingSkeleton = () => (
-  <div className="space-y-2 p-4">
+  <div className="space-y-3 rounded-2xl border border-cyan-100 bg-white/90 p-5 shadow-lg shadow-slate-300/20 ring-1 ring-white/80">
     {[...Array(5)].map((_, i) => (
-      <div key={i} className="h-10 w-full rounded bg-gray-200 animate-pulse" />
+      <div key={i} className="h-10 w-full animate-pulse rounded-lg bg-slate-200" />
     ))}
   </div>
 );
 
 const EmptyState = () => (
-  <div className="flex flex-col items-center border border-gray-200 bg-white px-6 py-12 text-center">
-    <div className="text-4xl mb-3 opacity-40">📋</div>
-    <h3 className="text-sm font-semibold text-gray-900\">No records found</h3>
-    <p className="text-xs text-gray-600\">Assignment history will appear here once faculty are assigned.</p>
+  <div className="flex flex-col items-center rounded-2xl border border-cyan-100 bg-white/90 px-6 py-12 text-center shadow-lg shadow-slate-300/20 ring-1 ring-white/80">
+    <div className="mb-3 text-4xl opacity-40">📋</div>
+    <h3 className="text-sm font-semibold text-slate-900">No records found</h3>
+    <p className="text-xs text-slate-600">Assignment history will appear here once faculty are assigned.</p>
   </div>
 );
 
 function NavItem({ label, to, active, icon }) {
+  const Icon = icon;
   return (
-    <Link to={to} className={`flex items-center gap-2 rounded px-3 py-2 text-xs font-semibold transition-all ${
+    <Link to={to} className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all ${
       active
-        ? 'bg-[#059669] text-white'
-        : 'text-gray-600 hover:bg-gray-100'
+        ? 'bg-gradient-to-r from-indigo-600 to-cyan-600 text-white shadow-lg shadow-indigo-700/35'
+        : 'text-slate-300 hover:bg-slate-800 hover:text-white'
     }`}>
-      <span className="text-sm">{icon}</span> {label}
+      <span>{Icon ? <Icon size={16} /> : null}</span>
+      {label}
     </Link>
   );
 }
