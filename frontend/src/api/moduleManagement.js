@@ -40,11 +40,21 @@ export const getAcademicYears = async () => {
  * @param {string} semester - Optional semester filter (e.g., "1", "2")
  * @returns {Promise} Array of modules for the year
  */
-export const getModulesByYear = async (academicYear, semester = null) => {
+export const getModulesByYear = async (academicYear, semester = null, specialization = null) => {
   try {
     let endpoint = `/api/academic-coordinator/modules/year/${encodeURIComponent(academicYear)}`;
+    const queryParams = [];
+
     if (semester) {
-      endpoint += `?semester=${encodeURIComponent(semester)}`;
+      queryParams.push(`semester=${encodeURIComponent(semester)}`);
+    }
+
+    if (specialization && String(specialization).trim().toUpperCase() !== 'ALL') {
+      queryParams.push(`specialization=${encodeURIComponent(String(specialization).trim())}`);
+    }
+
+    if (queryParams.length > 0) {
+      endpoint += `?${queryParams.join('&')}`;
     }
     
     const response = await fetchFromAPI(endpoint);

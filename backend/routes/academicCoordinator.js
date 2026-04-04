@@ -5,6 +5,57 @@ import authorize from '../middlewares/authorize.js';
 
 const router = express.Router();
 
+const normalizeSpecializationCode = (value = '') => {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (!normalized) return '';
+
+  const aliases = {
+    SOFTWAREENGINEERING: 'SE',
+    SOFTWARE_ENG: 'SE',
+    INFORMATIONTECHNOLOGY: 'IT',
+    COMPUTERSCIENCE: 'CS',
+    INFORMATIONSYSTEMSENGINEERING: 'ISE',
+    COMPUTER_SYSTEMS_NETWORK_ENGINEERING: 'CSNE',
+    INFORMATICS: 'IM',
+  };
+
+  const compact = normalized.replace(/[^A-Z0-9]/g, '');
+  return aliases[compact] || normalized;
+};
+
+const parseJsonSafe = (value, fallback = {}) => {
+  if (!value) return fallback;
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+};
+
+const inferModuleSpecialization = (module = {}) => {
+  const details = parseJsonSafe(module.details, {});
+  const explicit =
+    details.specialization ||
+    details.spec ||
+    details.stream ||
+    details.department ||
+    module.specialization;
+
+  if (explicit) {
+    return normalizeSpecializationCode(explicit);
+  }
+
+  const code = String(module.code || '').toUpperCase();
+  if (code.startsWith('IT')) return 'IT';
+  if (code.startsWith('SE')) return 'SE';
+  if (code.startsWith('CS')) return 'CS';
+  if (code.startsWith('IS')) return 'ISE';
+  if (code.startsWith('IM')) return 'IM';
+  if (code.startsWith('CN')) return 'CSNE';
+  return 'GENERAL';
+};
+
 router.use(protect);
 router.use(
   authorize(
@@ -214,7 +265,8 @@ router.get('/modules/years', async (req, res) => {
 router.get('/modules/year/:academicYear', async (req, res) => {
   try {
     const { academicYear } = req.params;
-    const { semester } = req.query;
+    const { semester, specialization } = req.query;
+    const requestedSpecialization = normalizeSpecializationCode(specialization || '');
 
     let query = `
       SELECT 
@@ -244,13 +296,17 @@ router.get('/modules/year/:academicYear', async (req, res) => {
     query += ` ORDER BY code ASC`;
 
     const { rows } = await pool.query(query, params);
+    const filteredRows = requestedSpecialization
+      ? rows.filter((module) => inferModuleSpecialization(module) === requestedSpecialization)
+      : rows;
 
     return res.json({
       success: true,
       academic_year: academicYear,
       semester: semester || 'all',
-      data: rows,
-      total_modules: rows.length,
+      specialization: requestedSpecialization || 'all',
+      data: filteredRows,
+      total_modules: filteredRows.length,
     });
   } catch (err) {
     console.error('Error fetching modules for year:', err.message);
