@@ -6,6 +6,7 @@ import {
     deleteItem,
     getLicDailyTimetable,
     getLicsWithInstructors,
+    getCoordinatorHallAllocations,
     getSoftConstraints,
     listItems,
     listModuleAssignments,
@@ -13,6 +14,7 @@ import {
     runScheduler,
     updateItem,
     runSchedulerBySegments,
+    runSchedulerForYearSemester,
     upsertSoftConstraints,
     updateModuleAssignment,
 } from '../controllers/schedulerController.js';
@@ -50,6 +52,7 @@ router.use(
 
 // Specific helpers
 router.get('/lics-with-instructors', getLicsWithInstructors);
+router.get('/hall-allocations/coordinator', getCoordinatorHallAllocations);
 router.get('/lic/daily-timetable', getLicDailyTimetable);
 router.get('/soft-constraints', getSoftConstraints);
 router.post('/soft-constraints', upsertSoftConstraints);
@@ -60,6 +63,7 @@ router.delete('/assignments/:id', authorize('admin', 'academiccoordinator', 'fac
 
 router.post('/run', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), runScheduler);
 router.post('/run-by-segments', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), runSchedulerBySegments);
+router.post('/run-for-year-semester', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), runSchedulerForYearSemester);
 router.post('/reset', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), resetData);
 
 // CRUD operations

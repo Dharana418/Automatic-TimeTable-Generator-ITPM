@@ -2,110 +2,177 @@ import { useEffect, useMemo, useState } from 'react';
 import api from '../api/scheduler.js';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 
-const normalizeDepartment = (value = '') => String(value || '').trim().toUpperCase();
+/* ── Department helpers ─────────────────────────────────────────── */
+const normalizeDep = (v = '') => String(v || '').trim().toUpperCase();
 
-const inferDepartmentFromCode = (code = '') => {
+const inferDep = (code = '') => {
   const match = String(code || '').trim().match(/^([A-Za-z]+)/);
   if (!match) return 'GENERAL';
-
-  const prefix = match[1].toUpperCase();
-  if (prefix === 'IT') return 'IT';
-  if (prefix === 'SE') return 'SE';
-  if (prefix === 'IE') return 'ISE';
-  if (prefix === 'CS') return 'CS';
-  if (prefix === 'CN') return 'CN';
-  if (prefix === 'IM') return 'IM';
-  if (prefix === 'DS') return 'DS';
-  return prefix;
+  const p = match[1].toUpperCase();
+  const MAP = { IT: 'IT', SE: 'SE', IE: 'ISE', CS: 'CS', CN: 'CN', IM: 'IM', DS: 'DS' };
+  return MAP[p] || p;
 };
 
-const getModuleDepartment = (moduleItem = {}) => {
-  const directDepartment =
-    moduleItem.department ||
-    moduleItem.department_id ||
-    moduleItem.departmentId ||
-    moduleItem.specialization ||
-    moduleItem.specialization_id ||
-    moduleItem.stream;
-
-  if (directDepartment) return normalizeDepartment(directDepartment);
-  return inferDepartmentFromCode(moduleItem.code);
+const getDep = (m = {}) => {
+  const d = m.department || m.department_id || m.departmentId || m.specialization || m.specialization_id || m.stream;
+  return d ? normalizeDep(d) : inferDep(m.code);
 };
 
-const toModuleView = (moduleItem = {}) => {
-  const code = String(moduleItem.code || moduleItem.id || '').trim();
-  const name = String(moduleItem.name || moduleItem.title || moduleItem.code || 'Untitled Module').trim();
-  const department = getModuleDepartment(moduleItem);
+const toView = (m = {}) => ({
+  id: String(m.id || `${m.code}-${m.name}`),
+  code: String(m.code || m.id || '').trim(),
+  name: String(m.name || m.title || m.code || 'Untitled Module').trim(),
+  department: getDep(m),
+  credits: m.credits,
+  lectures_per_week: m.lectures_per_week,
+});
 
-  return {
-    id: String(moduleItem.id || `${code}-${name}`),
-    code,
-    name,
-    department,
-    credits: moduleItem.credits,
-    lectures_per_week: moduleItem.lectures_per_week,
-  };
+/* ── Department palette ─────────────────────────────────────────── */
+const DEP_STYLE = {
+  IT:      { color: '#38bdf8', bg: 'rgba(56,189,248,0.12)',  border: 'rgba(56,189,248,0.3)'  },
+  SE:      { color: '#a78bfa', bg: 'rgba(167,139,250,0.12)', border: 'rgba(167,139,250,0.3)' },
+  DS:      { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)',  border: 'rgba(245,158,11,0.3)'  },
+  ISE:     { color: '#f472b6', bg: 'rgba(244,114,182,0.12)', border: 'rgba(244,114,182,0.3)' },
+  CS:      { color: '#60a5fa', bg: 'rgba(96,165,250,0.12)',  border: 'rgba(96,165,250,0.3)'  },
+  IM:      { color: '#34d399', bg: 'rgba(52,211,153,0.12)',  border: 'rgba(52,211,153,0.3)'  },
+  CN:      { color: '#818cf8', bg: 'rgba(129,140,248,0.12)', border: 'rgba(129,140,248,0.3)' },
+  GENERAL: { color: '#94a3b8', bg: 'rgba(148,163,184,0.1)',  border: 'rgba(148,163,184,0.2)' },
 };
 
-const departmentPill = {
-  IT: 'bg-cyan-100 text-cyan-800 border-cyan-200',
-  SE: 'bg-violet-100 text-violet-800 border-violet-200',
-  DS: 'bg-amber-100 text-amber-800 border-amber-200',
-  ISE: 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200',
-  CS: 'bg-blue-100 text-blue-800 border-blue-200',
-  IM: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-  CN: 'bg-slate-200 text-slate-800 border-slate-300',
-  GENERAL: 'bg-slate-100 text-slate-700 border-slate-200',
+const getStyle = (dep) => DEP_STYLE[dep] || DEP_STYLE.GENERAL;
+
+/* ── Search icon ─────────────────────────────────────────────────── */
+const SearchIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+  </svg>
+);
+
+const BookIcon = ({ color = 'currentColor' }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18 }}>
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+  </svg>
+);
+
+/* ── Module Card ─────────────────────────────────────────────────── */
+const ModuleCard = ({ m }) => {
+  const s = getStyle(m.department);
+  return (
+    <article
+      className="fc-card-hover"
+      style={{
+        borderRadius: 18, padding: '20px',
+        background: 'linear-gradient(135deg, rgba(15,23,42,0.9), rgba(7,20,43,0.95))',
+        border: `1px solid ${s.border}`,
+        boxShadow: `0 6px 30px rgba(0,0,0,0.3)`,
+        backdropFilter: 'blur(20px)',
+        display: 'flex', flexDirection: 'column', gap: 14,
+        position: 'relative', overflow: 'hidden',
+      }}
+    >
+      {/* Background glow */}
+      <div style={{ position: 'absolute', top: -30, right: -30, width: 100, height: 100, borderRadius: '50%', background: `radial-gradient(circle, ${s.color}18 0%, transparent 70%)`, pointerEvents: 'none' }} />
+
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 38, height: 38, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: s.bg, border: `1px solid ${s.border}`,
+          }}>
+            <BookIcon color={s.color} />
+          </div>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#f1f5f9' }}>
+              {m.code || m.name}
+            </h3>
+            {m.code && m.name !== m.code && (
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: 'rgba(148,163,184,0.7)', lineHeight: 1.4 }}>{m.name}</p>
+            )}
+          </div>
+        </div>
+
+        <span style={{
+          padding: '4px 10px', borderRadius: 20, fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap',
+          background: s.bg, border: `1px solid ${s.border}`, color: s.color,
+        }}>
+          {m.department || 'GENERAL'}
+        </span>
+      </div>
+
+      {/* Meta chips */}
+      {(m.credits || m.lectures_per_week) && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {m.credits && (
+            <span style={{
+              padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+              background: 'rgba(148,163,184,0.08)', border: '1px solid rgba(148,163,184,0.15)', color: 'rgba(148,163,184,0.8)',
+            }}>
+              📚 {m.credits} credits
+            </span>
+          )}
+          {m.lectures_per_week && (
+            <span style={{
+              padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+              background: 'rgba(148,163,184,0.08)', border: '1px solid rgba(148,163,184,0.15)', color: 'rgba(148,163,184,0.8)',
+            }}>
+              🗓 {m.lectures_per_week}/week
+            </span>
+          )}
+        </div>
+      )}
+    </article>
+  );
 };
 
+/* ── Main Component ─────────────────────────────────────────────── */
 const FacultyModulesPage = ({ user }) => {
   const displayName = user?.name || user?.username || 'Faculty Coordinator';
   const [modules, setModules] = useState([]);
-  const [selectedDepartment, setSelectedDepartment] = useState('ALL');
-  const [searchText, setSearchText] = useState('');
+  const [selectedDep, setSelectedDep] = useState('ALL');
+  const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [err, setErr] = useState('');
 
   useEffect(() => {
     let mounted = true;
-
-    const loadModules = async () => {
+    const load = async () => {
       try {
-        setIsLoading(true);
-        setErrorMessage('');
-        const response = await api.listItems('modules');
+        setIsLoading(true); setErr('');
+        const res = await api.listItems('modules');
         if (!mounted) return;
-
-        const items = Array.isArray(response?.items) ? response.items : [];
-        setModules(items.map(toModuleView));
-      } catch (error) {
+        const items = Array.isArray(res?.items) ? res.items : [];
+        setModules(items.map(toView));
+      } catch (e) {
         if (!mounted) return;
-        setErrorMessage(error.message || 'Failed to load modules.');
+        setErr(e.message || 'Failed to load modules.');
       } finally {
         if (mounted) setIsLoading(false);
       }
     };
-
-    loadModules();
-    return () => {
-      mounted = false;
-    };
+    load();
+    return () => { mounted = false; };
   }, []);
 
   const departments = useMemo(() => {
-    const all = new Set(modules.map((moduleItem) => moduleItem.department).filter(Boolean));
+    const all = new Set(modules.map((m) => m.department).filter(Boolean));
     return ['ALL', ...Array.from(all).sort()];
   }, [modules]);
 
-  const filteredModules = useMemo(() => {
-    const q = searchText.trim().toLowerCase();
-    return modules.filter((moduleItem) => {
-      const matchesDepartment = selectedDepartment === 'ALL' || moduleItem.department === selectedDepartment;
-      const searchable = `${moduleItem.code} ${moduleItem.name} ${moduleItem.department}`.toLowerCase();
-      const matchesSearch = !q || searchable.includes(q);
-      return matchesDepartment && matchesSearch;
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return modules.filter((m) => {
+      const matchDep = selectedDep === 'ALL' || m.department === selectedDep;
+      const searchable = `${m.code} ${m.name} ${m.department}`.toLowerCase();
+      return matchDep && (!q || searchable.includes(q));
     });
-  }, [modules, selectedDepartment, searchText]);
+  }, [modules, selectedDep, search]);
+
+  /* department stats */
+  const depStats = useMemo(() => {
+    const counts = {};
+    modules.forEach((m) => { counts[m.department] = (counts[m.department] || 0) + 1; });
+    return counts;
+  }, [modules]);
 
   return (
     <FacultyCoordinatorShell
@@ -114,93 +181,163 @@ const FacultyModulesPage = ({ user }) => {
       subtitle="Filter, inspect, and monitor modules by department and instructional load"
       badge="Module Management"
     >
-      <div className="space-y-5">
-        <section className="rounded-3xl border border-slate-200 bg-white/88 p-6 shadow-[0_14px_40px_rgba(15,23,42,0.08)]">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Module Ledger</p>
-          <h2 className="mt-2 text-2xl font-semibold text-slate-900">Department Modules</h2>
-          <p className="mt-2 text-sm text-slate-600">{displayName} can review and filter module inventory by department and code.</p>
+      <style>{`
+        .fc-card-hover { transition: all 0.25s cubic-bezier(0.4,0,0.2,1); }
+        .fc-card-hover:hover { transform: translateY(-3px); box-shadow: 0 16px 48px rgba(0,0,0,0.5) !important; }
+        .fc-dep-btn { transition: all 0.18s cubic-bezier(0.4,0,0.2,1); cursor: pointer; }
+        .fc-dep-btn:hover { transform: translateY(-1px) scale(1.03); }
+        .fc-section-card { background: linear-gradient(135deg, rgba(15,23,42,0.92), rgba(7,20,43,0.96)); border: 1px solid rgba(148,163,184,0.1); border-radius: 22px; backdrop-filter: blur(20px); box-shadow: 0 8px 40px rgba(0,0,0,0.35); }
+      `}</style>
 
-          <div className="mt-4 grid gap-3 md:grid-cols-[1.2fr_0.8fr_auto]">
-            <label className="block">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">Search</span>
-              <input
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
-                placeholder="Search by module code or name"
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
-              />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+
+        {/* ── Search & filter card ── */}
+        <section className="fc-section-card" style={{ padding: '28px', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: -60, right: -60, width: 220, height: 220, borderRadius: '50%', background: 'radial-gradient(circle, rgba(56,189,248,0.1) 0%, transparent 70%)', pointerEvents: 'none' }} />
+
+          <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#38bdf8' }}>Module Ledger</p>
+          <h2 style={{ margin: '8px 0 0', fontSize: 22, fontWeight: 900, color: '#f1f5f9' }}>Department Modules</h2>
+          <p style={{ margin: '6px 0 0', fontSize: 13, color: 'rgba(148,163,184,0.75)' }}>
+            <strong style={{ color: '#f1f5f9' }}>{displayName}</strong> — review and filter module inventory by department and code.
+          </p>
+
+          {/* Search + select row */}
+          <div style={{ marginTop: 22, display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 14, alignItems: 'end' }}>
+
+            {/* Search */}
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>Search</span>
+              <div style={{ position: 'relative' }}>
+                <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'rgba(148,163,184,0.5)', pointerEvents: 'none' }}>
+                  <SearchIcon />
+                </span>
+                <input
+                  style={{
+                    width: '100%', padding: '10px 14px 10px 36px', borderRadius: 12,
+                    background: 'rgba(15,23,42,0.7)', border: '1px solid rgba(148,163,184,0.15)',
+                    color: '#f1f5f9', fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                    transition: 'border-color 0.2s, box-shadow 0.2s',
+                  }}
+                  placeholder="Search by code or name..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onFocus={e => { e.target.style.borderColor = 'rgba(56,189,248,0.5)'; e.target.style.boxShadow = '0 0 0 3px rgba(56,189,248,0.12)'; }}
+                  onBlur={e => { e.target.style.borderColor = 'rgba(148,163,184,0.15)'; e.target.style.boxShadow = 'none'; }}
+                />
+              </div>
             </label>
 
-            <label className="block">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">Department</span>
+            {/* Department select */}
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 170 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>Department</span>
               <select
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
-                value={selectedDepartment}
-                onChange={(e) => setSelectedDepartment(e.target.value)}
+                style={{
+                  padding: '10px 14px', borderRadius: 12,
+                  background: 'rgba(15,23,42,0.7)', border: '1px solid rgba(148,163,184,0.15)',
+                  color: '#f1f5f9', fontSize: 13, outline: 'none', cursor: 'pointer',
+                }}
+                value={selectedDep}
+                onChange={(e) => setSelectedDep(e.target.value)}
               >
-                {departments.map((department) => (
-                  <option key={department} value={department}>
-                    {department === 'ALL' ? 'All Departments' : department}
+                {departments.map((d) => (
+                  <option key={d} value={d} style={{ background: '#0f172a' }}>
+                    {d === 'ALL' ? 'All Departments' : `${d} (${depStats[d] || 0})`}
                   </option>
                 ))}
               </select>
             </label>
 
-            <div>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">Count</span>
-              <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-center text-xl font-semibold text-slate-900">
-                {filteredModules.length}
+            {/* Count badge */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>Found</span>
+              <div style={{
+                padding: '10px 20px', borderRadius: 12, textAlign: 'center',
+                background: 'linear-gradient(90deg, rgba(56,189,248,0.2), rgba(99,102,241,0.2))',
+                border: '1px solid rgba(56,189,248,0.3)',
+                fontSize: 18, fontWeight: 900, color: '#38bdf8',
+              }}>
+                {filtered.length}
               </div>
             </div>
           </div>
+
+          {/* Department quick-filter pills */}
+          {departments.length > 1 && (
+            <div style={{ marginTop: 18, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {departments.map((d) => {
+                const isActive = selectedDep === d;
+                const s = d === 'ALL' ? { color: '#38bdf8', bg: 'rgba(56,189,248,0.12)', border: 'rgba(56,189,248,0.3)' } : getStyle(d);
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    className="fc-dep-btn"
+                    onClick={() => setSelectedDep(d)}
+                    style={{
+                      padding: '6px 14px', borderRadius: 40, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                      background: isActive ? s.bg : 'rgba(15,23,42,0.5)',
+                      border: `1px solid ${isActive ? s.border : 'rgba(148,163,184,0.12)'}`,
+                      color: isActive ? s.color : 'rgba(148,163,184,0.6)',
+                      boxShadow: isActive ? `0 0 12px ${s.bg}` : 'none',
+                    }}
+                  >
+                    {d === 'ALL' ? 'All' : d}
+                    {d !== 'ALL' && depStats[d] && (
+                      <span style={{ marginLeft: 5, opacity: 0.7 }}>({depStats[d]})</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </section>
 
-        {errorMessage && (
-          <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{errorMessage}</p>
+        {/* ── Error / Loading states ── */}
+        {err && (
+          <div style={{ padding: '14px 20px', borderRadius: 14, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', fontSize: 13, fontWeight: 600 }}>
+            ⚠ {err}
+          </div>
         )}
 
-        {isLoading && <p className="text-center text-sm font-semibold text-slate-500">Loading modules...</p>}
-
-        {!isLoading && filteredModules.length === 0 && (
-          <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-sm font-semibold text-slate-600">
-            No modules found for the selected filters.
-          </p>
+        {isLoading && (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: '50%',
+                border: '3px solid rgba(56,189,248,0.15)',
+                borderTop: '3px solid #38bdf8',
+                animation: 'spin 0.8s linear infinite',
+              }} />
+              <p style={{ margin: 0, fontSize: 13, color: 'rgba(148,163,184,0.7)', fontWeight: 600 }}>Loading modules...</p>
+            </div>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          </div>
         )}
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {filteredModules.map((moduleItem) => {
-            const badgeStyle = departmentPill[moduleItem.department] || departmentPill.GENERAL;
-            return (
-              <article
-                key={moduleItem.id}
-                className="rounded-3xl border border-slate-200 bg-white/92 p-5 shadow-[0_12px_35px_rgba(15,23,42,0.07)] transition hover:-translate-y-0.5"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-base font-semibold text-slate-900">{moduleItem.code || moduleItem.name}</h3>
-                    <p className="mt-1 text-sm text-slate-600">{moduleItem.name}</p>
-                  </div>
-                  <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${badgeStyle}`}>
-                    {moduleItem.department || 'GENERAL'}
-                  </span>
-                </div>
+        {!isLoading && !err && filtered.length === 0 && (
+          <div style={{
+            textAlign: 'center', padding: '48px 24px', borderRadius: 22,
+            background: 'rgba(15,23,42,0.7)', border: '1px solid rgba(148,163,184,0.1)',
+          }}>
+            <p style={{ margin: 0, fontSize: 32 }}>📭</p>
+            <p style={{ margin: '12px 0 0', fontSize: 15, fontWeight: 700, color: '#f1f5f9' }}>No modules found</p>
+            <p style={{ margin: '6px 0 0', fontSize: 13, color: 'rgba(148,163,184,0.6)' }}>Try adjusting the search or department filter.</p>
+          </div>
+        )}
 
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {moduleItem.credits ? (
-                    <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-700">
-                      {moduleItem.credits} credits
-                    </span>
-                  ) : null}
-                  {moduleItem.lectures_per_week ? (
-                    <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-700">
-                      {moduleItem.lectures_per_week}/week
-                    </span>
-                  ) : null}
-                </div>
-              </article>
-            );
-          })}
-        </section>
+        {/* ── Module grid ── */}
+        {!isLoading && filtered.length > 0 && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 4 }}>
+              <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.5)' }}>
+                {filtered.length} module{filtered.length !== 1 ? 's' : ''} {selectedDep !== 'ALL' ? `— ${selectedDep}` : 'across all departments'}
+              </p>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 16 }}>
+              {filtered.map((m) => <ModuleCard key={m.id} m={m} />)}
+            </div>
+          </>
+        )}
       </div>
     </FacultyCoordinatorShell>
   );

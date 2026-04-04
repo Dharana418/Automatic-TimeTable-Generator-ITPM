@@ -1,10 +1,34 @@
 import BatchList from '../components/BatchList.jsx';
+import BatchStatisticsPieCharts from '../components/BatchStatisticsPieCharts.jsx';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
+import { useState } from 'react';
 
-const specializationTags = ['IT', 'SE', 'DS', 'ISE', 'CS', 'Computer Science', 'IM', 'CN'];
+const specializationTags = [
+  { label: 'IT',             color: '#38bdf8', bg: 'rgba(56,189,248,0.12)',  border: 'rgba(56,189,248,0.3)'  },
+  { label: 'SE',             color: '#a78bfa', bg: 'rgba(167,139,250,0.12)', border: 'rgba(167,139,250,0.3)' },
+  { label: 'DS',             color: '#f59e0b', bg: 'rgba(245,158,11,0.12)',  border: 'rgba(245,158,11,0.3)'  },
+  { label: 'ISE',            color: '#f472b6', bg: 'rgba(244,114,182,0.12)', border: 'rgba(244,114,182,0.3)' },
+  { label: 'CS',             color: '#60a5fa', bg: 'rgba(96,165,250,0.12)',  border: 'rgba(96,165,250,0.3)'  },
+  { label: 'Computer Science', color: '#34d399', bg: 'rgba(52,211,153,0.12)',  border: 'rgba(52,211,153,0.3)'  },
+  { label: 'IM',             color: '#fb923c', bg: 'rgba(251,146,60,0.12)',  border: 'rgba(251,146,60,0.3)'  },
+  { label: 'CN',             color: '#818cf8', bg: 'rgba(129,140,248,0.12)', border: 'rgba(129,140,248,0.3)' },
+];
+
+const InfoChip = ({ label, value, accent = '#38bdf8' }) => (
+  <div style={{
+    padding: '12px 18px', borderRadius: 14,
+    background: `rgba(${accent === '#38bdf8' ? '56,189,248' : '148,163,184'},0.06)`,
+    border: `1px solid ${accent}25`,
+    display: 'flex', flexDirection: 'column', gap: 4,
+  }}>
+    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.6)' }}>{label}</span>
+    <span style={{ fontSize: 18, fontWeight: 800, color: accent }}>{value}</span>
+  </div>
+);
 
 const FacultyBatchesPage = ({ user }) => {
   const displayName = user?.name || user?.username || 'Faculty Coordinator';
+  const [activeSpec, setActiveSpec] = useState(null);
 
   return (
     <FacultyCoordinatorShell
@@ -13,40 +37,131 @@ const FacultyBatchesPage = ({ user }) => {
       subtitle="Institutional workspace for managing batch records and specialization structure"
       badge="Batch Management"
     >
-      <div className="space-y-5">
-        <section className="rounded-3xl border border-slate-200 bg-white/88 p-6 shadow-[0_14px_40px_rgba(15,23,42,0.08)]">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Coordinator Console</p>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Faculty Batch Registry</h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                Maintain standardized batch definitions, monitor specialization balance, and review group and subgroup composition within a single institutional control panel.
+      <style>{`
+        .fc-spec-tag { transition: all 0.2s cubic-bezier(0.4,0,0.2,1); cursor: pointer; }
+        .fc-spec-tag:hover { transform: translateY(-2px) scale(1.04); }
+        .fc-section-card { background: linear-gradient(135deg, rgba(15,23,42,0.92), rgba(7,20,43,0.96)); border: 1px solid rgba(148,163,184,0.1); border-radius: 22px; backdrop-filter: blur(20px); box-shadow: 0 8px 40px rgba(0,0,0,0.35); }
+      `}</style>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+
+        {/* ── Hero header card ── */}
+        <section className="fc-section-card" style={{ padding: '32px', position: 'relative', overflow: 'hidden' }}>
+          {/* decorative glow */}
+          <div style={{ position: 'absolute', top: -80, right: -80, width: 280, height: 280, borderRadius: '50%', background: 'radial-gradient(circle, rgba(56,189,248,0.12) 0%, transparent 70%)', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', bottom: -60, left: -60, width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(99,102,241,0.1) 0%, transparent 70%)', pointerEvents: 'none' }} />
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20 }}>
+            <div style={{ flex: 1, minWidth: 260 }}>
+              <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#38bdf8' }}>
+                Coordinator Console
+              </p>
+              <h2 style={{ margin: '8px 0 0', fontSize: 26, fontWeight: 900, color: '#f1f5f9', lineHeight: 1.2 }}>
+                Faculty Batch Registry
+              </h2>
+              <p style={{ margin: '10px 0 0', fontSize: 14, color: 'rgba(148,163,184,0.8)', maxWidth: 560, lineHeight: 1.7 }}>
+                Maintain standardized batch definitions, monitor specialization balance, and review
+                group and subgroup composition within a single institutional control panel.
               </p>
             </div>
-            <div className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">Managed By</p>
-              <p className="mt-1 text-sm font-semibold text-slate-800">{displayName}</p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
+              <div style={{
+                padding: '10px 18px', borderRadius: 14, textAlign: 'right',
+                background: 'rgba(15,23,42,0.7)', border: '1px solid rgba(148,163,184,0.12)',
+              }}>
+                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.6)' }}>Managed By</p>
+                <p style={{ margin: '4px 0 0', fontSize: 15, fontWeight: 800, color: '#f1f5f9' }}>{displayName}</p>
+              </div>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20,
+                background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.3)',
+                fontSize: 11, fontWeight: 700, color: '#34d399',
+              }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#34d399', display: 'inline-block' }} className="fc-pulse-dot" />
+                Registry Active
+              </span>
             </div>
           </div>
 
-          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">Specialization Cloud</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {specializationTags.map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
+          {/* Quick stats */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 14, marginTop: 26 }}>
+            <InfoChip label="Total Specs" value={specializationTags.length} accent="#38bdf8" />
+            <InfoChip label="Active Now" value={activeSpec || 'All'} accent="#a78bfa" />
+            <InfoChip label="Coordinator" value="You" accent="#34d399" />
+            <InfoChip label="Status" value="Ready" accent="#f59e0b" />
           </div>
         </section>
 
-        <section className="rounded-3xl border border-slate-200 bg-white/92 p-4 shadow-[0_16px_45px_rgba(15,23,42,0.09)] sm:p-5">
+        {/* ── Batch Statistics Pie Charts ── */}
+        <section className="fc-section-card" style={{ padding: '26px' }}>
+          <div style={{ marginBottom: 18 }}>
+            <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#38bdf8' }}>Analytics & Insights</p>
+            <h3 style={{ margin: '6px 0 0', fontSize: 16, fontWeight: 800, color: '#f1f5f9' }}>Student Distribution by Batch Composition</h3>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'rgba(148,163,184,0.6)' }}>Visualize total student enrollment across different grouping dimensions</p>
+          </div>
+          <BatchStatisticsPieCharts />
+        </section>
+
+        {/* ── Specialization cloud ── */}
+        <section className="fc-section-card" style={{ padding: '26px' }}>
+          <div style={{ marginBottom: 18 }}>
+            <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#a78bfa' }}>Specialization Cloud</p>
+            <h3 style={{ margin: '6px 0 0', fontSize: 16, fontWeight: 800, color: '#f1f5f9' }}>Available Specializations</h3>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'rgba(148,163,184,0.6)' }}>Click a tag to filter batches by specialization</p>
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+            {/* All filter */}
+            <button
+              type="button"
+              className="fc-spec-tag"
+              onClick={() => setActiveSpec(null)}
+              style={{
+                padding: '8px 18px', borderRadius: 40, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                background: !activeSpec ? 'linear-gradient(90deg, rgba(56,189,248,0.3), rgba(99,102,241,0.25))' : 'rgba(15,23,42,0.5)',
+                border: !activeSpec ? '1px solid rgba(56,189,248,0.5)' : '1px solid rgba(148,163,184,0.15)',
+                color: !activeSpec ? '#38bdf8' : 'rgba(148,163,184,0.6)',
+                boxShadow: !activeSpec ? '0 0 16px rgba(56,189,248,0.2)' : 'none',
+              }}
+            >
+              All
+            </button>
+
+            {specializationTags.map((tag) => {
+              const isActive = activeSpec === tag.label;
+              return (
+                <button
+                  key={tag.label}
+                  type="button"
+                  className="fc-spec-tag"
+                  onClick={() => setActiveSpec(isActive ? null : tag.label)}
+                  style={{
+                    padding: '8px 18px', borderRadius: 40, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                    background: isActive ? tag.bg : 'rgba(15,23,42,0.5)',
+                    border: `1px solid ${isActive ? tag.border : 'rgba(148,163,184,0.15)'}`,
+                    color: isActive ? tag.color : 'rgba(148,163,184,0.65)',
+                    boxShadow: isActive ? `0 0 16px ${tag.bg}` : 'none',
+                  }}
+                >
+                  {tag.label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* ── Batch list ── */}
+        <section className="fc-section-card" style={{ padding: '26px' }}>
+          <div style={{ marginBottom: 18 }}>
+            <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#f59e0b' }}>Batch Registry</p>
+            <h3 style={{ margin: '6px 0 0', fontSize: 16, fontWeight: 800, color: '#f1f5f9' }}>
+              {activeSpec ? `Batches — ${activeSpec}` : 'All Batches'}
+            </h3>
+          </div>
           <BatchList />
         </section>
+
       </div>
     </FacultyCoordinatorShell>
   );

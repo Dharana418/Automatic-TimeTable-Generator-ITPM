@@ -26,6 +26,13 @@ import { askForText, confirmDelete, showError, showSuccess, showWarning } from '
 
 const FORBIDDEN_SPECIAL_CHARS = /[~!@#$%^&*()_+]/;
 
+const inferAcademicYearFromModuleCode = (code = '') => {
+  const firstDigit = String(code).match(/\d/)?.[0];
+  const year = Number(firstDigit);
+  if (![1, 2, 3, 4].includes(year)) return null;
+  return String(year);
+};
+
 
 
 const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
@@ -440,13 +447,19 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
     
 
-    console.log('Submitting module:', moduleForm);
+    const inferredAcademicYear = inferAcademicYearFromModuleCode(moduleForm.code);
+    const modulePayload = {
+      ...moduleForm,
+      academic_year: inferredAcademicYear,
+    };
+
+    console.log('Submitting module:', modulePayload);
 
     
 
     try {
 
-      const response = await schedulerApi.addItem('modules', moduleForm);
+      const response = await schedulerApi.addItem('modules', modulePayload);
 
       console.log('Module added response:', response);
 
@@ -1628,6 +1641,12 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
               <input className="ac-input" placeholder="Module code (required)" value={moduleForm.code}
 
                 onChange={(e) => setModuleForm({ ...moduleForm, code: e.target.value })} required />
+
+              {moduleForm.code && (
+                <p className="text-xs text-gray-600 -mt-1">
+                  Auto Academic Year: {inferAcademicYearFromModuleCode(moduleForm.code) || 'Not detected'}
+                </p>
+              )}
 
               <input className="ac-input" placeholder="Module name (required)" value={moduleForm.name}
 
