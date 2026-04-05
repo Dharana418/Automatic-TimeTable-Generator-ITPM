@@ -9,6 +9,7 @@ import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import FacultyCoordinatorDashboard from "./pages/FacultyCoordinatorDashboard.jsx";
 import FacultyBatchesPage from "./pages/FacultyBatchesPage.jsx";
 import FacultyModulesPage from "./pages/FacultyModulesPage.jsx";
+import FacultyHallAllocationPage from "./pages/FacultyHallAllocationPage.jsx";
 import LICDashboard from "./pages/LICDashboard.jsx";
 import AcademicCoordinatorDashboard from "./pages/AC_before_merge.jsx";
 import InstructorDashboard from "./pages/InstructorDashboard.jsx";
@@ -149,6 +150,12 @@ function App() {
         <Route path="/faculty/modules" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
             {roleKey === "facultycoordinator" ? <FacultyModulesPage user={user} /> : <Navigate to="/dashboard" replace />}
+          </ProtectedRoute>
+        } />
+
+        <Route path="/faculty/hall-allocations" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
+            {roleKey === "facultycoordinator" ? <FacultyHallAllocationPage user={user} /> : <Navigate to="/dashboard" replace />}
           </ProtectedRoute>
         } />
 

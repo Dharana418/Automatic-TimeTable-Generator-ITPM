@@ -8,6 +8,7 @@ import {
   downloadTimetableAsCSV,
 } from '../api/timetableGeneration.js';
 import { getAcademicYears, getModulesByYear } from '../api/moduleManagement.js';
+import { toast } from 'react-toastify';
 
 const parseJsonSafe = (value, fallback = {}) => {
   if (!value) return fallback;
@@ -99,20 +100,23 @@ const TimetableGenerationByYearSemester = () => {
     }
   }, []);
 
-  const fetchAcademicModules = useCallback(async (year, semester) => {
-    if (!year || !semester) {
+  const fetchAcademicModules = useCallback(async (year, semester, specialization) => {
+    if (!year) {
       setModulesFromAcademic([]);
       return;
     }
 
     try {
       setLoadingModules(true);
-      const response = await getModulesByYear(year, semester);
+      const response = await getModulesByYear(year, semester || null, specialization || 'ALL');
       const mapped = (response.data || []).map((module) => ({
         ...module,
         specialization: inferSpecializationFromModule(module),
       }));
       setModulesFromAcademic(mapped);
+      toast.success(`Fetched ${mapped.length} module(s) successfully`, {
+        autoClose: 2200,
+      });
     } catch {
       setError('Failed to fetch modules from Academic Coordinator records');
       setModulesFromAcademic([]);
@@ -130,15 +134,24 @@ const TimetableGenerationByYearSemester = () => {
   useEffect(() => {
     if (selectedYear && selectedSemester) {
       fetchExistingTimetables(selectedYear, selectedSemester);
-      fetchAcademicModules(selectedYear, selectedSemester);
+    }
+
+    if (selectedYear) {
+      fetchAcademicModules(selectedYear, selectedSemester, selectedSpecialization);
     } else {
       setModulesFromAcademic([]);
     }
-  }, [selectedYear, selectedSemester, fetchExistingTimetables, fetchAcademicModules]);
+  }, [
+    selectedYear,
+    selectedSemester,
+    selectedSpecialization,
+    fetchExistingTimetables,
+    fetchAcademicModules,
+  ]);
 
   useEffect(() => {
     setSelectedSpecialization('ALL');
-  }, [selectedYear, selectedSemester]);
+  }, [selectedYear]);
 
   const specializationOptions = React.useMemo(() => {
     const values = [...new Set(modulesFromAcademic.map((m) => m.specialization).filter(Boolean))];
@@ -316,7 +329,7 @@ const TimetableGenerationByYearSemester = () => {
                   value={selectedSpecialization}
                   onChange={(e) => setSelectedSpecialization(e.target.value)}
                   className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={!selectedYear || !selectedSemester || loadingModules}
+                  disabled={!selectedYear || loadingModules}
                 >
                   {specializationOptions.map((spec) => (
                     <option key={spec} value={spec}>
@@ -325,7 +338,7 @@ const TimetableGenerationByYearSemester = () => {
                   ))}
                 </select>
                 <p className="mt-1 text-xs text-gray-500">
-                  Modules are fetched from Academic Coordinator records for the selected year and semester.
+                  Modules are fetched from Academic Coordinator records for the selected year, semester, and specialization filters.
                 </p>
               </div>
 
@@ -438,8 +451,8 @@ const TimetableGenerationByYearSemester = () => {
               </span>
             </div>
 
-            {!selectedYear || !selectedSemester ? (
-              <p className="text-gray-500 text-sm">Select year and semester to load modules.</p>
+            {!selectedYear ? (
+              <p className="text-gray-500 text-sm">Select year to load modules.</p>
             ) : loadingModules ? (
               <p className="text-gray-500 text-sm">Fetching modules from Academic Coordinator...</p>
             ) : filteredAcademicModules.length === 0 ? (
