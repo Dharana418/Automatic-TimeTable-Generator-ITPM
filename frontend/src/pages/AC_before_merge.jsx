@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { motion as Motion } from 'framer-motion';
 import {
   BookOpen,
   Building2,
@@ -32,6 +33,63 @@ const inferAcademicYearFromModuleCode = (code = '') => {
   if (![1, 2, 3, 4].includes(year)) return null;
   return String(year);
 };
+
+// Animated Counter Component
+const AnimatedCounter = ({ from = 0, to, duration = 1.2 }) => {
+  const [displayValue, setDisplayValue] = useState(from);
+
+  useEffect(() => {
+    const startTime = Date.now();
+    const interval = setInterval(() => {
+      const elapsed = (Date.now() - startTime) / 1000;
+      const progress = Math.min(elapsed / duration, 1);
+      const current = Math.floor(from + (to - from) * progress);
+      setDisplayValue(current);
+
+      if (progress >= 1) clearInterval(interval);
+    }, 16); // ~60fps
+
+    return () => clearInterval(interval);
+  }, [to, from, duration]);
+
+  return <Motion.span className="inline-block">{displayValue}</Motion.span>;
+};
+
+// Skeleton Components
+const SkeletonStats = () => (
+  <div className="stat-row">
+    {[0, 1, 2, 3].map((i) => (
+      <div key={i} className="stat">
+        <div className="skeleton-stat"></div>
+        <div className="skeleton h-4 mt-3 w-2/3 rounded"></div>
+      </div>
+    ))}
+  </div>
+);
+
+const SkeletonTable = ({ rows = 3 }) => (
+  <div className="ac-table-wrapper">
+    {[...Array(rows)].map((_, i) => (
+      <div key={i} className="skeleton-row">
+        <div className="skeleton-cell" style={{ width: '20%' }}></div>
+        <div className="skeleton-cell" style={{ width: '20%' }}></div>
+        <div className="skeleton-cell" style={{ width: '20%' }}></div>
+        <div className="skeleton-cell" style={{ width: '20%' }}></div>
+        <div className="skeleton-cell" style={{ width: '20%' }}></div>
+      </div>
+    ))}
+  </div>
+);
+
+const SkeletonCard = () => (
+  <div className="action-card">
+    <div>
+      <div className="skeleton h-6 w-1/2 mb-2"></div>
+      <div className="skeleton h-4 w-3/4"></div>
+    </div>
+    <div className="skeleton h-10 w-24"></div>
+  </div>
+);
 
 
 
@@ -128,6 +186,96 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   const [view3d, setView3d] = useState({ rotateX: 10, rotateZ: -18, zoom: 1 });
 
   const [showCalendarForm, setShowCalendarForm] = useState(false);
+  const [activeFormId, setActiveFormId] = useState(null);
+
+  const fadeInUpVariant = {
+    hidden: { opacity: 0, y: 16 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: { duration: 0.35, ease: 'easeOut' },
+    },
+  };
+
+  const staggerContainerVariant = {
+    hidden: {},
+    visible: {
+      transition: { staggerChildren: 0.08, delayChildren: 0.04 },
+    },
+  };
+
+  const buttonMotionProps = {
+    whileHover: { scale: 1.05, boxShadow: '0 6px 16px rgba(0, 0, 0, 0.12)' },
+    whileTap: { scale: 0.96 },
+    transition: { duration: 0.2 },
+  };
+
+  const tableRowVariant = {
+    hidden: { opacity: 0, x: -20 },
+    visible: (index) => ({
+      opacity: 1,
+      x: 0,
+      transition: { delay: index * 0.06, duration: 0.3, ease: 'easeOut' },
+    }),
+  };
+
+  const formPanelVariant = {
+    hidden: { opacity: 0, x: 30 },
+    visible: { opacity: 1, x: 0, transition: { duration: 0.4, ease: 'easeOut' } },
+  };
+
+  const iconHoverVariant = {
+    rest: { rotate: 0, scale: 1 },
+    hover: { rotate: 10, scale: 1.15, transition: { duration: 0.3, ease: 'easeOut' } },
+  };
+
+  const floatingAvatarVariant = {
+    animate: { y: [0, -8, 0], transition: { duration: 3, repeat: Infinity, ease: 'easeInOut' } },
+  };
+
+  const floatingIdleVariant = (delay = 0) => ({
+    animate: { 
+      y: [0, -6, 0], 
+      transition: { duration: 3.5, repeat: Infinity, ease: 'easeInOut', delay } 
+    },
+  });
+
+  const mainViews = ['lectures', 'hallAllocation'];
+  const isFormOverlayActive = showCalendarForm || Boolean(activeFormId);
+  const isCalendarRangeInvalid =
+    Boolean(calendarEventForm.start_date)
+    && Boolean(calendarEventForm.end_date)
+    && calendarEventForm.end_date < calendarEventForm.start_date;
+
+  const activateForm = (formId) => setActiveFormId(formId);
+  const deactivateForm = (event, formId) => {
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+      setActiveFormId((current) => (current === formId ? null : current));
+    }
+  };
+
+  const focusMainViewButton = (view) => {
+    const tabButton = document.querySelector(`[data-main-view="${view}"]`);
+    tabButton?.focus();
+  };
+
+  const handleMainViewKeyDown = (event) => {
+    const currentIndex = mainViews.indexOf(mainView);
+    if (currentIndex < 0) return;
+
+    let targetIndex = null;
+    if (event.key === 'ArrowRight') targetIndex = (currentIndex + 1) % mainViews.length;
+    if (event.key === 'ArrowLeft') targetIndex = (currentIndex - 1 + mainViews.length) % mainViews.length;
+    if (event.key === 'Home') targetIndex = 0;
+    if (event.key === 'End') targetIndex = mainViews.length - 1;
+
+    if (targetIndex === null) return;
+
+    event.preventDefault();
+    const nextView = mainViews[targetIndex];
+    setMainView(nextView);
+    requestAnimationFrame(() => focusMainViewButton(nextView));
+  };
 
 
 
@@ -813,6 +961,16 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
     e.preventDefault();
 
+    if (isCalendarRangeInvalid) {
+
+      showWarning('Validation required', 'End date cannot be earlier than start date.');
+
+      showMessage('End date cannot be earlier than start date', 'error');
+
+      return;
+
+    }
+
     try {
 
       const response = await fetch(`${apiBase}/api/academic-coordinator/calendar`, {
@@ -972,17 +1130,72 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (showCalendarForm) {
+      setActiveFormId('calendarForm');
+      return;
+    }
+    setActiveFormId((current) => (current === 'calendarForm' ? null : current));
+  }, [showCalendarForm]);
+
 
 
   if (loading) {
 
     return (
 
-      <div className="flex items-center justify-center min-h-screen">
+      <Motion.div
+        className="dashboard-container ac-dashboard"
+        initial="hidden"
+        animate="visible"
+        variants={staggerContainerVariant}
+      >
 
-        <div className="text-lg text-gray-600">Loading dashboard...</div>
+        <Motion.div className="dashboard-hero" variants={fadeInUpVariant}>
 
-      </div>
+          <div className="hero-left">
+
+            <div className="skeleton h-10 w-1/3 mb-4 rounded"></div>
+
+            <div className="skeleton h-6 w-2/3 mb-6 rounded"></div>
+
+            <SkeletonStats />
+
+          </div>
+
+          <div className="hero-right">
+
+            <div className="skeleton h-16 w-16 rounded-full"></div>
+
+            <div className="skeleton h-10 w-40 mt-4 rounded-lg"></div>
+
+          </div>
+
+        </Motion.div>
+
+        <Motion.div className="ac-main-menu-wrap" variants={fadeInUpVariant}>
+
+          <div className="skeleton h-12 w-full rounded-xl"></div>
+
+        </Motion.div>
+
+        <Motion.div variants={fadeInUpVariant}>
+
+          <div className="left-col">
+
+            <div className="panel">
+
+              <div className="skeleton h-6 w-1/4 mb-4"></div>
+
+              <SkeletonTable rows={3} />
+
+            </div>
+
+          </div>
+
+        </Motion.div>
+
+      </Motion.div>
 
     );
 
@@ -992,9 +1205,16 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
   return (
 
-    <div className="dashboard-container ac-dashboard">
+    <Motion.div
+      className={`dashboard-container ac-dashboard ${isFormOverlayActive ? 'ac-form-overlay-active' : ''}`}
+      initial="hidden"
+      animate="visible"
+      variants={staggerContainerVariant}
+    >
 
-      <div className="dashboard-hero">
+      <div className="ac-form-overlay-backdrop" aria-hidden="true" />
+
+      <Motion.div className="dashboard-hero" variants={fadeInUpVariant}>
 
         <div className="hero-left">
 
@@ -1004,39 +1224,39 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
           <div className="stat-row">
 
-            <div className="stat">
+            <Motion.div className="stat" animate="animate" variants={floatingIdleVariant(0)}>
 
-              <div className="stat-value">{timetables.length}</div>
+              <div className="stat-value"><AnimatedCounter to={timetables.length} duration={1.2} /></div>
 
               <div className="stat-label">Total Timetables</div>
 
-            </div>
+            </Motion.div>
 
-            <div className="stat">
+            <Motion.div className="stat" animate="animate" variants={floatingIdleVariant(0.2)}>
 
-              <div className="stat-value" style={{ color: pendingApprovals > 0 ? '#f59e0b' : '#10b981' }}>{pendingApprovals}</div>
+              <div className="stat-value" style={{ color: pendingApprovals > 0 ? '#f59e0b' : '#10b981' }}><AnimatedCounter to={pendingApprovals} duration={1.2} /></div>
 
               <div className="stat-label">Pending Approval</div>
 
-            </div>
+            </Motion.div>
 
-            <div className="stat">
+            <Motion.div className="stat" animate="animate" variants={floatingIdleVariant(0.4)}>
 
-              <div className="stat-value" style={{ color: activeConflicts > 0 ? '#ef4444' : '#10b981' }}>{activeConflicts}</div>
+              <div className="stat-value" style={{ color: activeConflicts > 0 ? '#ef4444' : '#10b981' }}><AnimatedCounter to={activeConflicts} duration={1.2} /></div>
 
               <div className="stat-label">Active Conflicts</div>
 
               {highSeverityConflicts > 0 && <div className="stat-hint">Alert: {highSeverityConflicts} high severity</div>}
 
-            </div>
+            </Motion.div>
 
-            <div className="stat">
+            <Motion.div className="stat" animate="animate" variants={floatingIdleVariant(0.6)}>
 
-              <div className="stat-value">{campusStructures.length}</div>
+              <div className="stat-value"><AnimatedCounter to={campusStructures.length} duration={1.2} /></div>
 
               <div className="stat-label">Resources</div>
 
-            </div>
+            </Motion.div>
 
           </div>
 
@@ -1044,17 +1264,17 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
         <div className="hero-right">
 
-          <div className="avatar">{user?.name?.charAt(0) || 'A'}</div>
+          <Motion.div className="avatar" animate="animate" variants={floatingAvatarVariant}>{user?.name?.charAt(0) || 'A'}</Motion.div>
 
           <div className="quick-actions">
 
-            <button className="primary" onClick={() => setActiveTab('timetables')}>Review Timetables</button>
+            <Motion.button className="primary" onClick={() => setActiveTab('timetables')} {...buttonMotionProps}>Review Timetables</Motion.button>
 
           </div>
 
         </div>
 
-      </div>
+      </Motion.div>
 
 
 
@@ -1070,13 +1290,29 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
       {/* Top Menu */}
 
-      <div className="ac-main-menu-wrap">
+      <Motion.div className="ac-main-menu-wrap" variants={fadeInUpVariant}>
 
         <div className="ac-main-menu" role="tablist" aria-label="Main dashboard views">
 
           <button
 
+            id="main-view-tab-lectures"
+
+            type="button"
+
+            role="tab"
+
+            aria-selected={mainView === 'lectures'}
+
+            aria-controls="main-view-panel-lectures"
+
+            tabIndex={mainView === 'lectures' ? 0 : -1}
+
+            data-main-view="lectures"
+
             onClick={() => setMainView('lectures')}
+
+            onKeyDown={handleMainViewKeyDown}
 
             className={`ac-main-menu-btn ${mainView === 'lectures' ? 'is-active' : ''}`}
 
@@ -1093,7 +1329,23 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
           <button
 
+            id="main-view-tab-hallAllocation"
+
+            type="button"
+
+            role="tab"
+
+            aria-selected={mainView === 'hallAllocation'}
+
+            aria-controls="main-view-panel-hallAllocation"
+
+            tabIndex={mainView === 'hallAllocation' ? 0 : -1}
+
+            data-main-view="hallAllocation"
+
             onClick={() => setMainView('hallAllocation')}
+
+            onKeyDown={handleMainViewKeyDown}
 
             className={`ac-main-menu-btn ${mainView === 'hallAllocation' ? 'is-active' : ''}`}
 
@@ -1108,11 +1360,20 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
         </div>
 
-      </div>
+      </Motion.div>
 
 {mainView === 'lectures' && (
 
-      <div className="dashboard-main">
+  <Motion.div
+    key="lectures-view"
+    className="dashboard-main"
+    id="main-view-panel-lectures"
+    role="tabpanel"
+    aria-labelledby="main-view-tab-lectures"
+    initial={{ opacity: 0, y: 12 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.28, ease: 'easeOut' }}
+  >
 
         <div className="left-col">
 
@@ -1122,67 +1383,67 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
             <>
 
-              <div className="action-card">
+              <Motion.div className="action-card" animate="animate" variants={floatingIdleVariant(0)}>
 
                 <div>
 
-                  <h3 className="ac-ui-title"><span className="ac-ui-icon"><UserPlus size={16} /></span>Add Lecturer</h3>
+                  <h3 className="ac-ui-title"><Motion.span className="ac-ui-icon" initial="rest" whileHover="hover" variants={iconHoverVariant}><UserPlus size={16} /></Motion.span>Add Lecturer</h3>
 
                   <p>Add professors and lecturers with department details</p>
 
                 </div>
 
-                <button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('lecturerForm').scrollIntoView({ behavior: 'smooth' })}>Add Now</button>
+                <Motion.button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('lecturerForm').scrollIntoView({ behavior: 'smooth' })} {...buttonMotionProps}>Add Now</Motion.button>
 
-              </div>
+              </Motion.div>
 
               
 
-              <div className="action-card">
+              <Motion.div className="action-card" animate="animate" variants={floatingIdleVariant(0.15)}>
 
                 <div>
 
-                  <h3 className="ac-ui-title"><span className="ac-ui-icon"><Users size={16} /></span>Add LIC</h3>
+                  <h3 className="ac-ui-title"><Motion.span className="ac-ui-icon" initial="rest" whileHover="hover" variants={iconHoverVariant}><Users size={16} /></Motion.span>Add LIC</h3>
 
                   <p>Create module leadership records for allocation</p>
 
                 </div>
 
-                <button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('licForm').scrollIntoView({ behavior: 'smooth' })}>Add Now</button>
+                <Motion.button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('licForm').scrollIntoView({ behavior: 'smooth' })} {...buttonMotionProps}>Add Now</Motion.button>
 
-              </div>
+              </Motion.div>
 
               
 
-              <div className="action-card">
+              <Motion.div className="action-card" animate="animate" variants={floatingIdleVariant(0.3)}>
 
                 <div>
 
-                  <h3 className="ac-ui-title"><span className="ac-ui-icon"><BookPlus size={16} /></span>Add Module</h3>
+                  <h3 className="ac-ui-title"><Motion.span className="ac-ui-icon" initial="rest" whileHover="hover" variants={iconHoverVariant}><BookPlus size={16} /></Motion.span>Add Module</h3>
 
                   <p>Add new modules from catalog or custom</p>
 
                 </div>
 
-                <button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('moduleForm').scrollIntoView({ behavior: 'smooth' })}>Add Now</button>
+                <Motion.button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('moduleForm').scrollIntoView({ behavior: 'smooth' })} {...buttonMotionProps}>Add Now</Motion.button>
 
-              </div>
+              </Motion.div>
 
               
 
-              <div className="action-card">
+              <Motion.div className="action-card" animate="animate" variants={floatingIdleVariant(0.45)}>
 
                 <div>
 
-                  <h3 className="ac-ui-title"><span className="ac-ui-icon"><Link2 size={16} /></span>Assign Module</h3>
+                  <h3 className="ac-ui-title"><Motion.span className="ac-ui-icon" initial="rest" whileHover="hover" variants={iconHoverVariant}><Link2 size={16} /></Motion.span>Assign Module</h3>
 
                   <p>Map modules to lecturers and LICs</p>
 
                 </div>
 
-                <button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('assignmentForm').scrollIntoView({ behavior: 'smooth' })}>Assign Now</button>
+                <Motion.button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('assignmentForm').scrollIntoView({ behavior: 'smooth' })} {...buttonMotionProps}>Assign Now</Motion.button>
 
-              </div>
+              </Motion.div>
 
             </>
 
@@ -1194,9 +1455,9 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
           {activeTab === 'timetables' && (
 
-            <div className="panel">
+            <div className={`panel ac-focus-form ${showCalendarForm || activeFormId === 'calendarForm' ? 'is-active' : ''}`}>
 
-              <h3 className="ac-ui-title"><span className="ac-ui-icon"><ClipboardList size={16} /></span>Timetables for Review</h3>
+              <h3 className="ac-ui-title"><Motion.span className="ac-ui-icon" initial="rest" whileHover="hover" variants={iconHoverVariant}><ClipboardList size={16} /></Motion.span>Timetables for Review</h3>
 
               <div className="ac-table-wrapper">
 
@@ -1232,9 +1493,9 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                     )}
 
-                    {timetables.map((timetable) => (
+                    {timetables.map((timetable, index) => (
 
-                      <tr key={timetable.id}>
+                      <Motion.tr key={timetable.id} initial="hidden" animate="visible" variants={tableRowVariant} custom={index}>
 
                         <td>{timetable.name}</td>
 
@@ -1258,9 +1519,9 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                             <>
 
-                              <button className="ac-approve-btn" onClick={() => approveTimetable(timetable.id)}><CheckCircle2 size={14} />Approve</button>
+                              <Motion.button className="ac-approve-btn" onClick={() => approveTimetable(timetable.id)} {...buttonMotionProps}><CheckCircle2 size={14} />Approve</Motion.button>
 
-                              <button className="ac-reject-btn" onClick={() => rejectTimetable(timetable.id)}><XCircle size={14} />Reject</button>
+                              <Motion.button className="ac-reject-btn" onClick={() => rejectTimetable(timetable.id)} {...buttonMotionProps}><XCircle size={14} />Reject</Motion.button>
 
                             </>
 
@@ -1268,7 +1529,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                         </td>
 
-                      </tr>
+                      </Motion.tr>
 
                     ))}
 
@@ -1290,7 +1551,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
             <div className="panel">
 
-              <h3 className="ac-ui-title"><span className="ac-ui-icon"><AlertTriangle size={16} /></span>Scheduling Conflicts</h3>
+              <h3 className="ac-ui-title"><Motion.span className="ac-ui-icon" initial="rest" whileHover="hover" variants={iconHoverVariant}><AlertTriangle size={16} /></Motion.span>Scheduling Conflicts</h3>
 
               {highSeverityConflicts > 0 && (
 
@@ -1336,9 +1597,9 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                     )}
 
-                    {conflicts.map((conflict) => (
+                    {conflicts.map((conflict, index) => (
 
-                      <tr key={conflict.id}>
+                      <Motion.tr key={conflict.id} initial="hidden" animate="visible" variants={tableRowVariant} custom={index}>
 
                         <td>{conflict.conflict_type}</td>
 
@@ -1352,13 +1613,13 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                           {!conflict.resolved && (
 
-                            <button className="ac-resolve-btn" onClick={() => resolveConflict(conflict.id)}>Resolve</button>
+                            <Motion.button className="ac-resolve-btn" onClick={() => resolveConflict(conflict.id)} {...buttonMotionProps}>Resolve</Motion.button>
 
                           )}
 
                         </td>
 
-                      </tr>
+                      </Motion.tr>
 
                     ))}
 
@@ -1380,7 +1641,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
             <div className="panel">
 
-              <h3 className="ac-ui-title"><span className="ac-ui-icon"><Building2 size={16} /></span>Campus Resources</h3>
+              <h3 className="ac-ui-title"><Motion.span className="ac-ui-icon" initial="rest" whileHover="hover" variants={iconHoverVariant}><Building2 size={16} /></Motion.span>Campus Resources</h3>
 
               <p>Halls: {hallCount} | Labs: {labCount} | Floors: {uniqueFloorCount}</p>
 
@@ -1408,9 +1669,9 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                   <tbody>
 
-                    {campusStructures.map((structure) => (
+                    {campusStructures.map((structure, index) => (
 
-                      <tr key={structure.id}>
+                      <Motion.tr key={structure.id} initial="hidden" animate="visible" variants={tableRowVariant} custom={index}>
 
                         <td>{structure.name}</td>
 
@@ -1422,7 +1683,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                         <td>{structure.capacity || '-'}</td>
 
-                      </tr>
+                      </Motion.tr>
 
                     ))}
 
@@ -1446,13 +1707,13 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
               <div className="flex justify-between items-center mb-4">
 
-                <h3 className="ac-ui-title"><span className="ac-ui-icon"><CalendarDays size={16} /></span>Academic Calendar</h3>
+                <h3 className="ac-ui-title"><Motion.span className="ac-ui-icon" initial="rest" whileHover="hover" variants={iconHoverVariant}><CalendarDays size={16} /></Motion.span>Academic Calendar</h3>
 
-                <button className="primary" onClick={() => setShowCalendarForm(!showCalendarForm)}>
+                <Motion.button className="primary" onClick={() => setShowCalendarForm(!showCalendarForm)} {...buttonMotionProps}>
 
                   {showCalendarForm ? 'Cancel' : '+ Add Event'}
 
-                </button>
+                </Motion.button>
 
               </div>
 
@@ -1460,7 +1721,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
               {showCalendarForm && (
 
-                <form onSubmit={addCalendarEvent} className="mb-5 p-4 bg-gray-50 rounded-lg">
+                <Motion.form onSubmit={addCalendarEvent} className="mb-5 p-4 bg-gray-50 rounded-lg" onFocusCapture={() => activateForm('calendarForm')} onBlurCapture={(event) => deactivateForm(event, 'calendarForm')} initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3, ease: 'easeOut' }}>
 
                   <input className="ac-input mb-2" placeholder="Event Name" value={calendarEventForm.event_name}
 
@@ -1484,15 +1745,30 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                   <input className="ac-input mb-2" type="date" placeholder="Start Date" value={calendarEventForm.start_date}
 
-                    onChange={(e) => setCalendarEventForm({ ...calendarEventForm, start_date: e.target.value })} required />
+                    onChange={(e) => {
+                      const nextStartDate = e.target.value;
+                      setCalendarEventForm((prev) => ({
+                        ...prev,
+                        start_date: nextStartDate,
+                        end_date: prev.end_date && nextStartDate && prev.end_date < nextStartDate ? nextStartDate : prev.end_date,
+                      }));
+                    }} required />
 
                   <input className="ac-input mb-2" type="date" placeholder="End Date" value={calendarEventForm.end_date}
 
+                    min={calendarEventForm.start_date || undefined}
+
+                    aria-invalid={isCalendarRangeInvalid}
+
                     onChange={(e) => setCalendarEventForm({ ...calendarEventForm, end_date: e.target.value })} required />
 
-                  <button className="dashboard-btn w-full" type="submit">Add Event</button>
+                  {isCalendarRangeInvalid && (
+                    <p className="text-xs text-red-600 mb-2">End date cannot be earlier than start date.</p>
+                  )}
 
-                </form>
+                  <Motion.button className="dashboard-btn w-full" type="submit" {...buttonMotionProps}>Add Event</Motion.button>
+
+                </Motion.form>
 
               )}
 
@@ -1536,17 +1812,25 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
           <div className="panel">
 
-            <h3 className="ac-ui-title"><span className="ac-ui-icon"><ClipboardList size={16} /></span>Quick Actions</h3>
+            <h3 className="ac-ui-title"><Motion.span className="ac-ui-icon" initial="rest" whileHover="hover" variants={iconHoverVariant}><ClipboardList size={16} /></Motion.span>Quick Actions</h3>
 
             <div className="shortcuts">
 
-              <div className="chip ac-ui-chip" onClick={() => setActiveTab('timetables')}><ClipboardList size={14} />Review Timetables</div>
+              <Motion.div animate="animate" variants={floatingIdleVariant(0)}>
+                <Motion.button type="button" className="chip ac-ui-chip" onClick={() => setActiveTab('timetables')} {...buttonMotionProps}><Motion.span initial="rest" whileHover="hover" variants={iconHoverVariant}><ClipboardList size={14} /></Motion.span>Review Timetables</Motion.button>
+              </Motion.div>
 
-              <div className="chip ac-ui-chip" onClick={() => setActiveTab('conflicts')}><AlertTriangle size={14} />View Conflicts</div>
+              <Motion.div animate="animate" variants={floatingIdleVariant(0.1)}>
+                <Motion.button type="button" className="chip ac-ui-chip" onClick={() => setActiveTab('conflicts')} {...buttonMotionProps}><Motion.span initial="rest" whileHover="hover" variants={iconHoverVariant}><AlertTriangle size={14} /></Motion.span>View Conflicts</Motion.button>
+              </Motion.div>
 
-              <div className="chip ac-ui-chip" onClick={() => setActiveTab('resources')}><Building2 size={14} />Manage Resources</div>
+              <Motion.div animate="animate" variants={floatingIdleVariant(0.2)}>
+                <Motion.button type="button" className="chip ac-ui-chip" onClick={() => setActiveTab('resources')} {...buttonMotionProps}><Motion.span initial="rest" whileHover="hover" variants={iconHoverVariant}><Building2 size={14} /></Motion.span>Manage Resources</Motion.button>
+              </Motion.div>
 
-              <div className="chip ac-ui-chip" onClick={() => setActiveTab('calendar')}><CalendarDays size={14} />Calendar</div>
+              <Motion.div animate="animate" variants={floatingIdleVariant(0.3)}>
+                <Motion.button type="button" className="chip ac-ui-chip" onClick={() => setActiveTab('calendar')} {...buttonMotionProps}><Motion.span initial="rest" whileHover="hover" variants={iconHoverVariant}><CalendarDays size={14} /></Motion.span>Calendar</Motion.button>
+              </Motion.div>
 
             </div>
 
@@ -1556,11 +1840,11 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
           {/* Add Lecturer Form */}
 
-          <div className="panel" id="lecturerForm">
+          <Motion.div className={`panel ac-focus-form ${activeFormId === 'lecturerForm' ? 'is-active' : ''}`} id="lecturerForm" initial="hidden" animate="visible" variants={formPanelVariant}>
 
-            <h3 className="ac-ui-title"><span className="ac-ui-icon"><UserPlus size={16} /></span>Add Lecturer</h3>
+            <h3 className="ac-ui-title"><Motion.span className="ac-ui-icon" initial="rest" whileHover="hover" variants={iconHoverVariant}><UserPlus size={16} /></Motion.span>Add Lecturer</h3>
 
-            <form onSubmit={addLecturer} className="ac-form">
+            <form onSubmit={addLecturer} className="ac-form" onFocusCapture={() => activateForm('lecturerForm')} onBlurCapture={(event) => deactivateForm(event, 'lecturerForm')}>
 
               <input className="ac-input" placeholder="Lecturer name" value={lecturerForm.name}
 
@@ -1574,21 +1858,21 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                 onChange={(e) => setLecturerForm({ ...lecturerForm, email: e.target.value })} />
 
-              <button className="dashboard-btn ac-ui-action" type="submit"><UserPlus size={15} />Add Lecturer</button>
+              <Motion.button className="dashboard-btn ac-ui-action" type="submit" {...buttonMotionProps}><UserPlus size={15} />Add Lecturer</Motion.button>
 
             </form>
 
-          </div>
+          </Motion.div>
 
 
 
           {/* Add LIC Form */}
 
-          <div className="panel" id="licForm">
+          <Motion.div className={`panel ac-focus-form ${activeFormId === 'licForm' ? 'is-active' : ''}`} id="licForm" initial="hidden" animate="visible" variants={formPanelVariant}>
 
-            <h3 className="ac-ui-title"><span className="ac-ui-icon"><Users size={16} /></span>Add LIC</h3>
+            <h3 className="ac-ui-title"><Motion.span className="ac-ui-icon" initial="rest" whileHover="hover" variants={iconHoverVariant}><Users size={16} /></Motion.span>Add LIC</h3>
 
-            <form onSubmit={addLic} className="ac-form">
+            <form onSubmit={addLic} className="ac-form" onFocusCapture={() => activateForm('licForm')} onBlurCapture={(event) => deactivateForm(event, 'licForm')}>
 
               <input className="ac-input" placeholder="LIC name" value={licForm.name}
 
@@ -1598,21 +1882,21 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                 onChange={(e) => setLicForm({ ...licForm, department: e.target.value })} />
 
-              <button className="dashboard-btn ac-ui-action" type="submit"><Users size={15} />Add LIC</button>
+              <Motion.button className="dashboard-btn ac-ui-action" type="submit" {...buttonMotionProps}><Users size={15} />Add LIC</Motion.button>
 
             </form>
 
-          </div>
+          </Motion.div>
 
 
 
           {/* Add Module Form */}
 
-          <div className="panel" id="moduleForm">
+          <Motion.div className={`panel ac-focus-form ${activeFormId === 'moduleForm' ? 'is-active' : ''}`} id="moduleForm" initial="hidden" animate="visible" variants={formPanelVariant}>
 
-            <h3 className="ac-ui-title"><span className="ac-ui-icon"><BookPlus size={16} /></span>Add Module</h3>
+            <h3 className="ac-ui-title"><Motion.span className="ac-ui-icon" initial="rest" whileHover="hover" variants={iconHoverVariant}><BookPlus size={16} /></Motion.span>Add Module</h3>
 
-            <form onSubmit={addModule} className="ac-form">
+            <form onSubmit={addModule} className="ac-form" onFocusCapture={() => activateForm('moduleForm')} onBlurCapture={(event) => deactivateForm(event, 'moduleForm')}>
 
               <select className="ac-input" value={selectedCatalogModule}
 
@@ -1632,11 +1916,11 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
               </select>
 
-              <button type="button" className="dashboard-btn ac-inline-btn" onClick={applyCatalogModule}>
+              <Motion.button type="button" className="dashboard-btn ac-inline-btn" onClick={applyCatalogModule} {...buttonMotionProps}>
 
                 Use Selected
 
-              </button>
+              </Motion.button>
 
               <input className="ac-input" placeholder="Module code (required)" value={moduleForm.code}
 
@@ -1660,21 +1944,21 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                 onChange={(e) => setModuleForm({ ...moduleForm, lectures_per_week: e.target.value })} />
 
-              <button className="dashboard-btn ac-ui-action" type="submit"><BookPlus size={15} />Add Module</button>
+              <Motion.button className="dashboard-btn ac-ui-action" type="submit" {...buttonMotionProps}><BookPlus size={15} />Add Module</Motion.button>
 
             </form>
 
-          </div>
+          </Motion.div>
 
 
 
           {/* Add Assignment Form */}
 
-          <div className="panel" id="assignmentForm">
+          <Motion.div className={`panel ac-focus-form ${activeFormId === 'assignmentForm' ? 'is-active' : ''}`} id="assignmentForm" initial="hidden" animate="visible" variants={formPanelVariant}>
 
-            <h3 className="ac-ui-title"><span className="ac-ui-icon"><Link2 size={16} /></span>Assign Module</h3>
+            <h3 className="ac-ui-title"><Motion.span className="ac-ui-icon" initial="rest" whileHover="hover" variants={iconHoverVariant}><Link2 size={16} /></Motion.span>Assign Module</h3>
 
-            <form onSubmit={addAssignment} className="ac-form">
+            <form onSubmit={addAssignment} className="ac-form" onFocusCapture={() => activateForm('assignmentForm')} onBlurCapture={(event) => deactivateForm(event, 'assignmentForm')}>
 
               <select className="ac-input" value={assignmentForm.moduleId}
 
@@ -1732,11 +2016,11 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
               </select>
 
-              <button className="dashboard-btn ac-ui-action" type="submit"><Link2 size={15} />Create Assignment</button>
+              <Motion.button className="dashboard-btn ac-ui-action" type="submit" {...buttonMotionProps}><Link2 size={15} />Create Assignment</Motion.button>
 
             </form>
 
-          </div>
+          </Motion.div>
 
 
 
@@ -1744,7 +2028,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
           <div className="panel">
 
-            <h3 className="ac-ui-title"><span className="ac-ui-icon"><ClipboardList size={16} /></span>Current Assignments</h3>
+            <h3 className="ac-ui-title"><Motion.span className="ac-ui-icon" initial="rest" whileHover="hover" variants={iconHoverVariant}><ClipboardList size={16} /></Motion.span>Current Assignments</h3>
 
             <div className="ac-table-wrapper">
 
@@ -1768,9 +2052,9 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                 <tbody>
 
-                  {assignments.slice(0, 5).map((assignment) => (
+                  {assignments.slice(0, 5).map((assignment, index) => (
 
-                    <tr key={assignment.id}>
+                    <Motion.tr key={assignment.id} initial="hidden" animate="visible" variants={tableRowVariant} custom={index}>
 
                       <td>{assignment.module_code}</td>
 
@@ -1778,9 +2062,9 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                       <td>Y{assignment.academic_year}/S{assignment.semester}</td>
 
-                      <td><button className="ac-remove-btn" onClick={() => removeAssignment(assignment.id)}><Trash2 size={14} />Remove</button></td>
+                      <td><Motion.button className="ac-remove-btn" onClick={() => removeAssignment(assignment.id)} {...buttonMotionProps}><Trash2 size={14} />Remove</Motion.button></td>
 
-                    </tr>
+                    </Motion.tr>
 
                   ))}
 
@@ -1794,19 +2078,29 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
         </div>
 
-      </div>
+      </Motion.div>
 
 )}
 
 {mainView === 'hallAllocation' && (
 
-  <HallAllocation apiBase={apiBase} />
+  <Motion.div
+    key="hall-allocation-view"
+    id="main-view-panel-hallAllocation"
+    role="tabpanel"
+    aria-labelledby="main-view-tab-hallAllocation"
+    initial={{ opacity: 0, y: 12 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.28, ease: 'easeOut' }}
+  >
+    <HallAllocation apiBase={apiBase} />
+  </Motion.div>
 
 )}
 
       {/* 3D Visualization Section */}
 
-      <div className="ac-3d-card">
+      <Motion.div className="ac-3d-card" variants={fadeInUpVariant}>
 
         <h2>3D Campus Visualization</h2>
 
@@ -1824,7 +2118,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
             onChange={(e) => setView3d({ ...view3d, zoom: Number(e.target.value) })} /></label>
 
-          <button className="dashboard-btn" onClick={() => setView3d({ rotateX: 10, rotateZ: -18, zoom: 1 })}>Reset View</button>
+          <Motion.button className="dashboard-btn" onClick={() => setView3d({ rotateX: 10, rotateZ: -18, zoom: 1 })} {...buttonMotionProps}>Reset View</Motion.button>
 
         </div>
 
@@ -1892,9 +2186,9 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
         </div>
 
-      </div>
+      </Motion.div>
 
-    </div>
+    </Motion.div>
 
   );
 
@@ -1903,4 +2197,5 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
 
 export default AcademicCoordinatorDashboard;
+
 

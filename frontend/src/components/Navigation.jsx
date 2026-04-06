@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import autoschedule from '../assets/SLIIT_LOGO.png';
 
-const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", theme = 'light', onToggleTheme }) => {
+const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000" }) => {
     const location = useLocation();
     const [logoHighlighted, setLogoHighlighted] = useState(false);
     const [showTagline, setShowTagline] = useState(false);
