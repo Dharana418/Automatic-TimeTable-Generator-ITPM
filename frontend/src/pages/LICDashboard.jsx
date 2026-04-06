@@ -24,6 +24,11 @@ const LICDashboard = ({ user }) => {
   const [moduleForm, setModuleForm] = useState(initialModuleForm);
   const [assignmentForm, setAssignmentForm] = useState(initialAssignmentForm);
 
+  // Drag and drop state
+  const [draggedAssignmentId, setDraggedAssignmentId] = useState(null);
+  const [dragOverId, setDragOverId] = useState(null);
+  const [draggedAssignmentData, setDraggedAssignmentData] = useState(null);
+
   const showMessage = (text, type = 'success') => {
     setMessage({ text, type });
     setTimeout(() => setMessage({ text: '', type: '' }), 4500);
@@ -137,6 +142,60 @@ const LICDashboard = ({ user }) => {
       showError('Remove assignment failed', error.message || 'Failed to remove assignment');
       showMessage(error.message || 'Failed to remove assignment', 'error');
     }
+  };
+
+  // Drag and drop handlers
+  const handleDragStart = (e, assignment) => {
+    setDraggedAssignmentId(assignment.id);
+    setDraggedAssignmentData(assignment);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('assignmentId', assignment.id);
+  };
+
+  const handleDragOver = (e, targetAssignmentId) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverId(targetAssignmentId);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverId(null);
+  };
+
+  const handleDrop = (e, targetAssignment) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!draggedAssignmentData || draggedAssignmentData.id === targetAssignment.id) {
+      setDraggedAssignmentId(null);
+      setDraggedAssignmentData(null);
+      setDragOverId(null);
+      return;
+    }
+
+    // Reorder assignments by swapping
+    const draggedIndex = assignments.findIndex((a) => a.id === draggedAssignmentData.id);
+    const targetIndex = assignments.findIndex((a) => a.id === targetAssignment.id);
+
+    if (draggedIndex !== -1 && targetIndex !== -1) {
+      const newAssignments = [...assignments];
+      [newAssignments[draggedIndex], newAssignments[targetIndex]] = [
+        newAssignments[targetIndex],
+        newAssignments[draggedIndex],
+      ];
+      setAssignments(newAssignments);
+      showSuccess('Assignments reordered');
+    }
+
+    setDraggedAssignmentId(null);
+    setDraggedAssignmentData(null);
+    setDragOverId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedAssignmentId(null);
+    setDraggedAssignmentData(null);
+    setDragOverId(null);
   };
 
   if (loading) {
@@ -303,7 +362,22 @@ const LICDashboard = ({ user }) => {
                     <tr><td colSpan="4" className="ac-empty-row">No assignments yet</td></tr>
                   )}
                   {assignments.map((assignment) => (
-                    <tr key={assignment.id}>
+                    <tr 
+                      key={assignment.id}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, assignment)}
+                      onDragOver={(e) => handleDragOver(e, assignment.id)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={(e) => handleDrop(e, assignment)}
+                      onDragEnd={handleDragEnd}
+                      className={`assignment-row ${draggedAssignmentId === assignment.id ? 'dragging' : ''} ${dragOverId === assignment.id ? 'drag-over' : ''}`}
+                      style={{
+                        opacity: draggedAssignmentId === assignment.id ? 0.5 : 1,
+                        backgroundColor: dragOverId === assignment.id ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                        cursor: 'move',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
                       <td>{assignment.module_code} - {assignment.module_name}</td>
                       <td>{assignment.lecturer_name || '-'}</td>
                       <td>Y{assignment.academic_year}/S{assignment.semester || '-'}</td>
@@ -320,6 +394,9 @@ const LICDashboard = ({ user }) => {
                   ))}
                 </tbody>
               </table>
+            </div>
+            <div style={{ fontSize: '12px', color: '#999', marginTop: '8px', fontStyle: 'italic' }}>
+              💡 Tip: Drag assignments to reorder them
             </div>
           </div>
         </div>
