@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import autoschedule from '../assets/SLIIT_LOGO.png';
 
-const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", theme = 'light', onToggleTheme }) => {
+const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000" }) => {
     const location = useLocation();
 
     const navBtnBase = 'inline-flex items-center justify-center rounded-lg border px-3 py-2 text-xs font-semibold tracking-wide transition duration-200';
