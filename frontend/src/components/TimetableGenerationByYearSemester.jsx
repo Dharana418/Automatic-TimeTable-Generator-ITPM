@@ -67,6 +67,18 @@ const inferSpecializationFromModule = (module = {}) => {
 
 const DEFAULT_SPECIALIZATIONS = ['SE', 'IT', 'CS', 'IME', 'ISE', 'CSNE', 'CYBER SECURITY', 'General'];
 const WEEKDAY_FREE_DAY_OPTIONS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+const MODULE_LIMIT_PER_SPECIALIZATION = 5;
+
+const formatGenerationStamp = () => {
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, '0');
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
+};
+
+const buildGeneratedTimetableName = ({ year, semester, specialization = 'ALL' }) => {
+  const safeSpecialization = String(specialization || 'ALL').trim().replace(/\s+/g, '_').toUpperCase();
+  return `Generated_Y${year}_S${semester}_${safeSpecialization}_${formatGenerationStamp()}`;
+};
 
 const TimetableGenerationByYearSemester = () => {
   const [academicYears, setAcademicYears] = useState([]);
@@ -123,8 +135,29 @@ const TimetableGenerationByYearSemester = () => {
         ...module,
         specialization: inferSpecializationFromModule(module),
       }));
-      setModulesFromAcademic(mapped);
-      toast.success(`Fetched ${mapped.length} module(s) successfully`, {
+
+      const ordered = [...mapped].sort((left, right) => {
+        const leftTime = new Date(left?.created_at || 0).getTime();
+        const rightTime = new Date(right?.created_at || 0).getTime();
+        return rightTime - leftTime;
+      });
+
+      const buckets = new Map();
+      ordered.forEach((module) => {
+        const spec = module.specialization || 'General';
+        if (!buckets.has(spec)) {
+          buckets.set(spec, []);
+        }
+        buckets.get(spec).push(module);
+      });
+
+      const limited = [];
+      buckets.forEach((bucket) => {
+        limited.push(...bucket.slice(0, MODULE_LIMIT_PER_SPECIALIZATION));
+      });
+
+      setModulesFromAcademic(limited);
+      toast.success(`Fetched ${limited.length} module(s) (${MODULE_LIMIT_PER_SPECIALIZATION} per specialization)`, {
         autoClose: 2200,
       });
     } catch {
@@ -215,14 +248,21 @@ const TimetableGenerationByYearSemester = () => {
 
     try {
       setLoading(true);
+      const resolvedTimetableName = timetableName || buildGeneratedTimetableName({
+        year: selectedYear,
+        semester: selectedSemester,
+        specialization: selectedSpecialization !== 'ALL' ? selectedSpecialization : 'ALL',
+      });
+
       const response = await generateTimetableForYearSemester(
         selectedYear,
         selectedSemester,
         {
           algorithms,
-          timetableName: timetableName || `Timetable_${selectedYear}_Sem${selectedSemester}`,
+          timetableName: resolvedTimetableName,
           specialization: selectedSpecialization !== 'ALL' ? selectedSpecialization : undefined,
           weekdayFreeDay,
+          moduleLimitPerSpecialization: MODULE_LIMIT_PER_SPECIALIZATION,
         }
       );
 
@@ -294,11 +334,14 @@ const TimetableGenerationByYearSemester = () => {
 
       const response = await generateTimetableForYearSemester(selectedYear, selectedSemester, {
         algorithms,
-        timetableName:
-          timetableName ||
-          `Timetable_Y${selectedYear}_S${selectedSemester}_${specialization.replace(/\s+/g, '_')}`,
+        timetableName: timetableName || buildGeneratedTimetableName({
+          year: selectedYear,
+          semester: selectedSemester,
+          specialization,
+        }),
         specialization,
         weekdayFreeDay,
+        moduleLimitPerSpecialization: MODULE_LIMIT_PER_SPECIALIZATION,
       });
 
       setGeneratedTimetable(response);
@@ -331,11 +374,14 @@ const TimetableGenerationByYearSemester = () => {
       for (const row of specializationCategoryRows) {
         await generateTimetableForYearSemester(selectedYear, selectedSemester, {
           algorithms,
-          timetableName:
-            timetableName ||
-            `Timetable_Y${selectedYear}_S${selectedSemester}_${row.specialization.replace(/\s+/g, '_')}`,
+          timetableName: timetableName || buildGeneratedTimetableName({
+            year: selectedYear,
+            semester: selectedSemester,
+            specialization: row.specialization,
+          }),
           specialization: row.specialization,
           weekdayFreeDay,
+          moduleLimitPerSpecialization: MODULE_LIMIT_PER_SPECIALIZATION,
         });
       }
 
@@ -429,7 +475,7 @@ const TimetableGenerationByYearSemester = () => {
                   ))}
                 </select>
                 <p className="mt-1 text-xs text-gray-500">
-                  Modules are fetched from Academic Coordinator records for the selected year, semester, and specialization filters.
+                  Modules are fetched from Academic Coordinator records with a cap of {MODULE_LIMIT_PER_SPECIALIZATION} modules per specialization for the selected year and semester.
                 </p>
               </div>
 
