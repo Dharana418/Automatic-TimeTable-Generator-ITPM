@@ -92,6 +92,7 @@ const FACULTY_NAV_GROUPS = [
     items: [
       { id: 'overview', label: 'Overview', to: '/dashboard', icon: Icon.grid },
       { id: 'timetable', label: 'Timetables', to: '/scheduler/by-year', icon: Icon.calendar },
+      { id: 'timetableReport', label: 'Timetable Sidebar View', to: '/faculty/timetable-report', icon: Icon.calendar },
     ],
   },
   {

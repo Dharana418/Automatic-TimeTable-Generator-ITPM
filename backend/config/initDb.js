@@ -247,64 +247,62 @@ const buildDemoModules = () => {
     return rows;
 };
 
-const createBatchRows = ({ year, semester, specialization, weekday = [], weekend = [] }) => {
-    const rows = [];
-
-    weekday.forEach((capacity, index) => {
-        const subgroup = String(index + 1).padStart(2, '0');
-        rows.push({
-            id: `Y${year}.S${semester}.WD.${specialization}.01.${subgroup}`,
-            name: `Y${year}.S${semester}.WD.${specialization}.01.${subgroup}`,
-            department_id: `dept_${toSpecializationKey(specialization)}`,
-            capacity,
-        });
-    });
-
-    weekend.forEach((capacity, index) => {
-        const subgroup = String(index + 1).padStart(2, '0');
-        rows.push({
-            id: `Y${year}.S${semester}.WE.${specialization}.02.${subgroup}`,
-            name: `Y${year}.S${semester}.WE.${specialization}.02.${subgroup}`,
-            department_id: `dept_${toSpecializationKey(specialization)}`,
-            capacity,
-        });
-    });
-
-    return rows;
-};
+const createBatchRow = ({ year, semester, mode, specialization, capacity }) => ({
+    id: `Y${year}.S${semester}.${String(mode || 'WD').trim().toUpperCase()}.${specialization}.01.01`,
+    name: `Y${year}.S${semester}.${String(mode || 'WD').trim().toUpperCase()}.${specialization}.01.01`,
+    department_id: `dept_${toSpecializationKey(specialization)}`,
+    capacity,
+});
 
 const buildDemoBatches = () => {
     const rows = [];
 
-    // Requested: Year 1 Semester 1 total = 2000 students.
-    rows.push(...createBatchRows({ year: 1, semester: 1, specialization: 'IT', weekday: [500, 500], weekend: [500, 500] }));
+    const yearlyPlan = {
+        1: [
+            { specialization: 'IT', capacity: 1000 },
+            { specialization: 'SE', capacity: 300 },
+            { specialization: 'DS', capacity: 300 },
+            { specialization: 'ISE', capacity: 200 },
+            { specialization: 'IM', capacity: 50 },
+            { specialization: 'CYBER SECURITY', capacity: 150 },
+        ],
+        2: [
+            { specialization: 'IT', capacity: 1000 },
+            { specialization: 'SE', capacity: 300 },
+            { specialization: 'DS', capacity: 300 },
+            { specialization: 'ISE', capacity: 200 },
+            { specialization: 'IM', capacity: 50 },
+            { specialization: 'CYBER SECURITY', capacity: 150 },
+        ],
+        3: [
+            { specialization: 'IT', capacity: 1000 },
+            { specialization: 'SE', capacity: 300 },
+            { specialization: 'DS', capacity: 300 },
+            { specialization: 'ISE', capacity: 200 },
+            { specialization: 'IM', capacity: 50 },
+            { specialization: 'CYBER SECURITY', capacity: 200 },
+        ],
+        4: [
+            { specialization: 'IT', capacity: 1000 },
+            { specialization: 'SE', capacity: 300 },
+            { specialization: 'DS', capacity: 300 },
+            { specialization: 'ISE', capacity: 200 },
+            { specialization: 'IM', capacity: 50 },
+            { specialization: 'CYBER SECURITY', capacity: 200 },
+        ],
+    };
 
-    // Requested: Year 1 Semester 2 total = 1900 students.
-    rows.push(...createBatchRows({ year: 1, semester: 2, specialization: 'SE', weekday: [500, 500], weekend: [450, 450] }));
-
-    // Requested: Year 2 Semester 1 Cyber Security has 100 students.
-    rows.push(...createBatchRows({ year: 2, semester: 1, specialization: 'CYBERSECURITY', weekday: [50], weekend: [50] }));
-
-    // Keep existing Year 2 Semester 1 stream with realistic volume.
-    rows.push(...createBatchRows({ year: 2, semester: 1, specialization: 'CS', weekday: [240, 240], weekend: [120, 120] }));
-
-    // Year 2 Semester 2 transitional intake.
-    rows.push(...createBatchRows({ year: 2, semester: 2, specialization: 'ISE', weekday: [220, 220], weekend: [120, 120] }));
-
-    // Requested: From Year 3 onward, all specializations are represented and yearly total exceeds 2000.
-    const year3AndAboveSpecializations = ['IT', 'SE', 'CS', 'ISE', 'CSNE', 'IME', 'DS', 'AI'];
-    for (const year of [3, 4]) {
+    for (const year of [1, 2, 3, 4]) {
         for (const semester of [1, 2]) {
-            for (const specialization of year3AndAboveSpecializations) {
-                rows.push(
-                    ...createBatchRows({
-                        year,
-                        semester,
-                        specialization,
-                        weekday: [50, 50],
-                        weekend: [25, 25],
-                    }),
-                );
+            const mode = semester === 1 ? 'WD' : 'WE';
+            for (const plan of yearlyPlan[year]) {
+                rows.push(createBatchRow({
+                    year,
+                    semester,
+                    mode,
+                    specialization: plan.specialization,
+                    capacity: plan.capacity,
+                }));
             }
         }
     }
