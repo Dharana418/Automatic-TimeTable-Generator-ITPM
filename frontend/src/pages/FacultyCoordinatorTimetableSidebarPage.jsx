@@ -4,6 +4,16 @@ import schedulerApi from '../api/scheduler.js';
 import facultyDashboardBg from '../assets/Gemini_Generated_Image_hqfdrqhqfdrqhqfd.png';
 
 const DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const CAMPUS_TIMELINE = [
+  { type: 'class', slot: '09:00-10:00', label: '09:00 - 10:00' },
+  { type: 'class', slot: '10:00-11:00', label: '10:00 - 11:00' },
+  { type: 'class', slot: '11:00-12:00', label: '11:00 - 12:00' },
+  { type: 'break', slot: '12:30-13:30', label: 'Interval 12:30 - 13:30' },
+  { type: 'class', slot: '13:30-14:30', label: '13:30 - 14:30' },
+  { type: 'class', slot: '14:30-15:30', label: '14:30 - 15:30' },
+];
+
+const CAMPUS_CLASS_SLOTS = CAMPUS_TIMELINE.filter((row) => row.type === 'class').map((row) => row.slot);
 
 const normalizeDay = (value) => {
   const raw = String(value || '').trim().toLowerCase();
@@ -28,9 +38,20 @@ const normalizeDay = (value) => {
 };
 
 const normalizeSlot = (row) => {
-  if (row?.slot) return String(row.slot);
-  if (row?.timeSlot) return String(row.timeSlot);
-  if (Array.isArray(row?.slots)) return row.slots.join(' | ');
+  const rawSlot = row?.slot || row?.timeSlot || (Array.isArray(row?.slots) ? row.slots.join(' | ') : '');
+  const slotText = String(rawSlot || '').trim();
+  if (!slotText) return 'TBA';
+
+  // Align stored scheduler slot labels to campus-facing timeline labels.
+  if (slotText === '13:00-14:00') return '13:30-14:30';
+  if (slotText === '14:00-15:00') return '14:30-15:30';
+  if (slotText === '12:00-13:00') return '12:30-13:30';
+  if (slotText === '12:30-13:30') return '12:30-13:30';
+
+  if (/^\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}$/.test(slotText)) {
+    return slotText.replace(/\s+/g, '');
+  }
+
   return 'TBA';
 };
 
@@ -106,11 +127,7 @@ const buildBatchTable = (scheduleRows = []) => {
       return left - right;
     });
 
-    const slots = Array.from(new Set(batch.entries.map((entry) => entry.slot))).sort((a, b) => {
-      const diff = parseSlotStartMinutes(a) - parseSlotStartMinutes(b);
-      if (!Number.isFinite(diff) || diff === 0) return String(a).localeCompare(String(b));
-      return diff;
-    });
+    const slots = [...CAMPUS_CLASS_SLOTS];
 
     const cellMap = new Map();
     batch.entries.forEach((entry) => {
@@ -287,7 +304,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                 <table className="min-w-full border-collapse text-sm">
                   <thead>
                     <tr>
-                      <th className="border border-slate-300 bg-slate-100 px-3 py-2 text-left font-semibold text-slate-700">Time</th>
+                      <th className="sticky left-0 z-10 border border-slate-300 bg-slate-100 px-3 py-2 text-left font-semibold text-slate-700">Time</th>
                       {batch.days.map((day) => (
                         <th key={day} className="border border-slate-300 bg-slate-100 px-3 py-2 text-left font-semibold text-slate-700">
                           {day}
@@ -296,32 +313,52 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {batch.slots.map((slot) => (
-                      <tr key={slot}>
-                        <td className="border border-slate-300 bg-white px-3 py-2 font-medium text-slate-700">{slot}</td>
-                        {batch.days.map((day) => {
-                          const key = `${slot}::${day}`;
-                          const entries = batch.cellMap.get(key) || [];
-                          return (
-                            <td key={key} className="border border-slate-300 bg-white px-3 py-2 align-top">
-                              {!entries.length ? (
-                                <span className="text-xs text-slate-400">-</span>
-                              ) : (
-                                <div className="space-y-2">
-                                  {entries.map((entry, idx) => (
-                                    <div key={`${entry.module}-${entry.hall}-${idx}`} className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
-                                      <p className="text-xs font-semibold text-slate-900">{entry.module}</p>
-                                      <p className="text-[11px] text-slate-600">{entry.hall}</p>
-                                      <p className="text-[11px] text-slate-500">{entry.instructor}</p>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
+                    {CAMPUS_TIMELINE.map((timelineRow) => {
+                      if (timelineRow.type === 'break') {
+                        return (
+                          <tr key={timelineRow.slot}>
+                            <td className="sticky left-0 z-10 border border-slate-300 bg-amber-100 px-3 py-2 font-semibold text-amber-900">
+                              {timelineRow.label}
                             </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
+                            <td
+                              className="border border-slate-300 bg-amber-50 px-3 py-2 text-center text-xs font-semibold uppercase tracking-[0.08em] text-amber-800"
+                              colSpan={Math.max(batch.days.length, 1)}
+                            >
+                              Campus Interval (No Lectures)
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return (
+                        <tr key={timelineRow.slot}>
+                          <td className="sticky left-0 z-10 border border-slate-300 bg-white px-3 py-2 font-mono text-xs font-semibold text-slate-700">
+                            {timelineRow.label}
+                          </td>
+                          {batch.days.map((day) => {
+                            const key = `${timelineRow.slot}::${day}`;
+                            const entries = batch.cellMap.get(key) || [];
+                            return (
+                              <td key={key} className="border border-slate-300 bg-white px-2 py-2 align-top">
+                                {!entries.length ? (
+                                  <span className="text-[11px] text-slate-400">-</span>
+                                ) : (
+                                  <div className="space-y-2">
+                                    {entries.map((entry, idx) => (
+                                      <div key={`${entry.module}-${entry.hall}-${idx}`} className="rounded border border-slate-200 bg-slate-50 px-2 py-1">
+                                        <p className="text-xs font-semibold text-slate-900">{entry.module}</p>
+                                        <p className="text-[11px] text-slate-600">{entry.hall}</p>
+                                        <p className="text-[11px] text-slate-500">{entry.instructor}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
