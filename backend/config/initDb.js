@@ -354,6 +354,39 @@ const upsertSeedRows = async (table, columns, rows) => {
     );
 };
 
+const upsertModulesByCode = async (rows = []) => {
+    if (!rows.length) return;
+
+    const columns = ['id', 'code', 'name', 'batch_size', 'day_type', 'credits', 'lectures_per_week', 'details', 'lic_id', 'academic_year', 'semester', 'created_by'];
+    const values = [];
+
+    const placeholders = rows
+        .map((row, rowIndex) => {
+            columns.forEach((column) => values.push(row[column] ?? null));
+            const offset = rowIndex * columns.length;
+            return `(${columns.map((_, columnIndex) => `$${offset + columnIndex + 1}`).join(', ')})`;
+        })
+        .join(', ');
+
+    await pool.query(
+        `INSERT INTO modules (${columns.join(', ')})
+         VALUES ${placeholders}
+         ON CONFLICT (code)
+         DO UPDATE SET
+            name = EXCLUDED.name,
+            batch_size = EXCLUDED.batch_size,
+            day_type = EXCLUDED.day_type,
+            credits = EXCLUDED.credits,
+            lectures_per_week = EXCLUDED.lectures_per_week,
+            details = EXCLUDED.details,
+            lic_id = EXCLUDED.lic_id,
+            academic_year = EXCLUDED.academic_year,
+            semester = EXCLUDED.semester,
+            created_by = EXCLUDED.created_by`,
+        values,
+    );
+};
+
 const seedDemoData = async () => {
     await insertSeedRows('departments', ['id', 'code', 'name'], buildDemoDepartments());
     await insertSeedRows('lics', ['id', 'name', 'department', 'details'], buildDemoLics());
@@ -362,7 +395,7 @@ const seedDemoData = async () => {
         ...hall,
         features: JSON.stringify(hall.features),
     })));
-    await insertSeedRows('modules', ['id', 'code', 'name', 'batch_size', 'day_type', 'credits', 'lectures_per_week', 'details', 'lic_id', 'academic_year', 'semester', 'created_by'], buildDemoModules());
+    await upsertModulesByCode(buildDemoModules());
     await upsertSeedRows('batches', ['id', 'name', 'department_id', 'capacity'], buildDemoBatches());
 };
 
