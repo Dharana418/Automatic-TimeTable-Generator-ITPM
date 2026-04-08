@@ -5,16 +5,32 @@ import facultyDashboardBg from '../assets/Gemini_Generated_Image_hqfdrqhqfdrqhqf
 
 const DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const INSTITUTION_NAME = 'Sri Lanka Institute of Information Technology';
-const CAMPUS_TIMELINE = [
-  { type: 'class', slot: '09:00-10:00', label: '09:00 - 10:00' },
-  { type: 'class', slot: '10:00-11:00', label: '10:00 - 11:00' },
-  { type: 'class', slot: '11:00-12:00', label: '11:00 - 12:00' },
-  { type: 'break', slot: '12:30-13:30', label: 'Interval 12:30 - 13:30' },
-  { type: 'class', slot: '13:30-14:30', label: '13:30 - 14:30' },
-  { type: 'class', slot: '14:30-15:30', label: '14:30 - 15:30' },
+const WEEKDAY_CLASS_SLOTS = [
+  '09:00-10:00',
+  '10:00-11:00',
+  '11:00-12:00',
+  '13:30-14:30',
+  '14:30-15:30',
+  '15:30-16:30',
+  '16:30-17:30',
+];
+const WEEKEND_CLASS_SLOTS = [
+  ...WEEKDAY_CLASS_SLOTS,
+  '17:30-18:30',
+  '18:30-19:30',
+  '19:30-20:30',
 ];
 
-const CAMPUS_CLASS_SLOTS = CAMPUS_TIMELINE.filter((row) => row.type === 'class').map((row) => row.slot);
+const toTimelineLabel = (slot = '') => String(slot || '').replace('-', ' - ');
+
+const buildCampusTimeline = (mode = 'ALL') => {
+  const slots = mode === 'WE' ? WEEKEND_CLASS_SLOTS : mode === 'WD' ? WEEKDAY_CLASS_SLOTS : WEEKEND_CLASS_SLOTS;
+  return [
+    ...slots.slice(0, 3).map((slot) => ({ type: 'class', slot, label: toTimelineLabel(slot) })),
+    { type: 'break', slot: '12:30-13:30', label: 'Interval 12:30 - 13:30' },
+    ...slots.slice(3).map((slot) => ({ type: 'class', slot, label: toTimelineLabel(slot) })),
+  ];
+};
 
 const normalizeDay = (value) => {
   const raw = String(value || '').trim().toLowerCase();
@@ -54,13 +70,6 @@ const normalizeSlot = (row) => {
   }
 
   return 'TBA';
-};
-
-const parseSlotStartMinutes = (slot) => {
-  const text = String(slot || '');
-  const match = text.match(/(\d{1,2}):(\d{2})/);
-  if (!match) return Number.POSITIVE_INFINITY;
-  return Number(match[1]) * 60 + Number(match[2]);
 };
 
 const extractBatchKeys = (row) => {
@@ -111,17 +120,41 @@ const parseSchedule = (timetable) => {
   const rawData = timetable?.data;
   if (!rawData) return [];
 
+  const pickScheduleFromObject = (obj) => {
+    if (!obj || typeof obj !== 'object') return [];
+
+    if (Array.isArray(obj.schedule)) return obj.schedule;
+
+    const allResults = obj.allResults || obj.results || null;
+    if (allResults && typeof allResults === 'object') {
+      const prioritizedKeys = ['hybrid', 'pso', 'genetic', 'ant', 'tabu'];
+      for (const key of prioritizedKeys) {
+        if (Array.isArray(allResults?.[key]?.schedule)) {
+          return allResults[key].schedule;
+        }
+      }
+
+      for (const value of Object.values(allResults)) {
+        if (Array.isArray(value?.schedule)) {
+          return value.schedule;
+        }
+      }
+    }
+
+    return [];
+  };
+
   if (typeof rawData === 'string') {
     try {
       const parsed = JSON.parse(rawData);
-      return Array.isArray(parsed?.schedule) ? parsed.schedule : [];
+      return pickScheduleFromObject(parsed);
     } catch {
       return [];
     }
   }
 
   if (typeof rawData === 'object' && rawData !== null) {
-    return Array.isArray(rawData.schedule) ? rawData.schedule : [];
+    return pickScheduleFromObject(rawData);
   }
 
   return [];
@@ -156,7 +189,7 @@ const buildBatchTable = (scheduleRows = []) => {
   const batches = Array.from(batchMap.values()).map((batch) => {
     const days = [...DAY_ORDER];
 
-    const slots = [...CAMPUS_CLASS_SLOTS];
+    const slots = [...WEEKEND_CLASS_SLOTS];
 
     const cellMap = new Map();
     batch.entries.forEach((entry) => {
@@ -222,7 +255,8 @@ const buildUnifiedTable = (scheduleRows = [], dayModeFilter = 'WD') => {
 
   return {
     days: [...DAY_ORDER],
-    slots: [...CAMPUS_CLASS_SLOTS],
+    // Use the complete campus timeline slot set for unified rendering.
+    slots: [...WEEKEND_CLASS_SLOTS],
     cellMap,
   };
 };
@@ -232,7 +266,11 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
   const [error, setError] = useState('');
   const [timetables, setTimetables] = useState([]);
   const [selectedId, setSelectedId] = useState('');
-  const [dayModeFilter, setDayModeFilter] = useState('WD');
+  const [generateYear, setGenerateYear] = useState('1');
+  const [generateSemester, setGenerateSemester] = useState('1');
+  const [generateName, setGenerateName] = useState('');
+  const [generatePending, setGeneratePending] = useState(false);
+  const [dayModeFilter, setDayModeFilter] = useState('ALL');
   const [layoutMode, setLayoutMode] = useState('unified');
 
   useEffect(() => {
@@ -251,7 +289,9 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
           .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 
         setTimetables(withDate);
-        setSelectedId(withDate[0]?.id ? String(withDate[0].id) : '');
+        const firstWithSchedule = withDate.find((tt) => parseSchedule(tt).length > 0);
+        const defaultTimetable = firstWithSchedule || withDate[0] || null;
+        setSelectedId(defaultTimetable?.id ? String(defaultTimetable.id) : '');
       } catch (err) {
         if (!mounted) return;
         setError(err?.message || 'Failed to load timetables');
@@ -265,6 +305,41 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
       mounted = false;
     };
   }, []);
+
+  const generateTimetableNow = async () => {
+    try {
+      setGeneratePending(true);
+      setError('');
+
+      const name = String(generateName || '').trim() || `Generated_Y${generateYear}_S${generateSemester}_${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}`;
+      const response = await schedulerApi.runSchedulerForYearSemester({
+        academicYear: Number(generateYear),
+        semester: Number(generateSemester),
+        algorithms: ['hybrid'],
+        options: {
+          moduleLimitPerSpecialization: 5,
+        },
+        timetableName: name,
+      });
+
+      const listResponse = await schedulerApi.getAcademicCoordinatorTimetables();
+      const list = Array.isArray(listResponse?.data) ? listResponse.data : [];
+      const withDate = list
+        .map((item) => ({ ...item, created_at: item.created_at || item.updated_at || null }))
+        .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+
+      setTimetables(withDate);
+      if (response?.timetableId) {
+        setSelectedId(String(response.timetableId));
+      } else if (withDate[0]?.id) {
+        setSelectedId(String(withDate[0].id));
+      }
+    } catch (err) {
+      setError(err?.message || 'Failed to generate timetable on this page');
+    } finally {
+      setGeneratePending(false);
+    }
+  };
 
   const selectedTimetable = useMemo(() => {
     if (!selectedId) return null;
@@ -292,6 +367,15 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
 
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [filteredBatchTables]);
+
+  const activeTimeline = useMemo(() => buildCampusTimeline(dayModeFilter), [dayModeFilter]);
+
+  useEffect(() => {
+    if (!schedule.length) return;
+    if (!filteredBatchTables.length && dayModeFilter !== 'ALL') {
+      setDayModeFilter('ALL');
+    }
+  }, [dayModeFilter, filteredBatchTables.length, schedule.length]);
 
   return (
     <FacultyCoordinatorShell
@@ -339,6 +423,44 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
             >
               Refresh
             </button>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Generate On This Page</p>
+            <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-4">
+              <select
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                value={generateYear}
+                onChange={(e) => setGenerateYear(e.target.value)}
+              >
+                <option value="1">Year 1</option>
+                <option value="2">Year 2</option>
+                <option value="3">Year 3</option>
+                <option value="4">Year 4</option>
+              </select>
+              <select
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                value={generateSemester}
+                onChange={(e) => setGenerateSemester(e.target.value)}
+              >
+                <option value="1">Semester 1</option>
+                <option value="2">Semester 2</option>
+              </select>
+              <input
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                placeholder="Timetable name (optional)"
+                value={generateName}
+                onChange={(e) => setGenerateName(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={generateTimetableNow}
+                disabled={generatePending}
+                className="rounded-lg border border-blue-600 bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+              >
+                {generatePending ? 'Generating...' : 'Generate Timetable'}
+              </button>
+            </div>
           </div>
 
           <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -411,6 +533,11 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
             </div>
 
             <div className="overflow-x-auto">
+              {!schedule.length ? (
+                <div className="rounded-lg border border-slate-300 bg-white px-4 py-6 text-sm text-slate-600">
+                  No timetable rows found for this generated timetable.
+                </div>
+              ) : (
               <table className="min-w-full border-collapse text-sm" border="1">
                 <caption className="caption-top border border-slate-300 border-b-0 bg-slate-100 px-3 py-2 text-left text-sm font-semibold text-slate-800">
                   {INSTITUTION_NAME}
@@ -431,7 +558,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {CAMPUS_TIMELINE.map((timelineRow) => {
+                  {activeTimeline.map((timelineRow) => {
                     if (timelineRow.type === 'break') {
                       return (
                         <tr key={timelineRow.slot}>
@@ -477,6 +604,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                   })}
                 </tbody>
               </table>
+              )}
             </div>
           </section>
         )}
@@ -485,7 +613,9 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h3 className="text-lg font-bold text-slate-900">Table of Contents</h3>
             {!groupedByYearSemester.length ? (
-              <p className="mt-3 text-sm text-slate-600">No schedule rows in this timetable.</p>
+              <p className="mt-3 text-sm text-slate-600">
+                No timetable rows for the selected batch type. Try selecting All Batches.
+              </p>
             ) : (
               <ul className="mt-3 space-y-3 text-sm text-slate-700">
                 {groupedByYearSemester.map(([yearSemester, batches]) => (
@@ -551,7 +681,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {CAMPUS_TIMELINE.map((timelineRow) => {
+                    {activeTimeline.map((timelineRow) => {
                       if (timelineRow.type === 'break') {
                         return (
                           <tr key={timelineRow.slot}>

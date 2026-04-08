@@ -33,6 +33,11 @@ export const saveSoftConstraints = (payload) => request(`/api/scheduler/soft-con
 export const getLicDailyTimetable = (day = '') => request(`/api/scheduler/lic/daily-timetable${day ? `?day=${encodeURIComponent(day)}` : ''}`, { method: 'GET' });
 export const runScheduler = (algorithms = ['hybrid'], options = {}) => request('/api/scheduler/run', { method: 'POST', body: JSON.stringify({ algorithms, options }) });
 export const runSchedulerBySegments = (algorithms = ['hybrid'], options = {}) => request('/api/scheduler/run-by-segments', { method: 'POST', body: JSON.stringify({ algorithms, options }) });
+export const runSchedulerForYearSemester = ({ academicYear, semester, algorithms = ['hybrid'], options = {}, timetableName = null }) =>
+  request('/api/scheduler/run-for-year-semester', {
+    method: 'POST',
+    body: JSON.stringify({ academicYear, semester, algorithms, options, timetableName }),
+  });
 export const resetSchedulerData = () => request('/api/scheduler/reset', { method: 'POST' });
 
 export default {
@@ -52,5 +57,6 @@ export default {
   getLicDailyTimetable,
   runScheduler,
   runSchedulerBySegments,
+  runSchedulerForYearSemester,
   resetSchedulerData,
 };
