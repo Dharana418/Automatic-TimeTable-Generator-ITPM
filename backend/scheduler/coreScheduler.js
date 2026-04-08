@@ -31,6 +31,18 @@ function normalizeText(value = '') {
   return String(value || '').trim().toLowerCase();
 }
 
+function normalizeDayToken(value = '') {
+  const token = String(value || '').trim().toLowerCase().slice(0, 3);
+  const dayMap = {
+    mon: 'Mon',
+    tue: 'Tue',
+    wed: 'Wed',
+    thu: 'Thu',
+    fri: 'Fri',
+  };
+  return dayMap[token] || 'Fri';
+}
+
 function getEffectiveHallCapacity(hall = {}) {
   const rawCapacity = Number(hall?.capacity || 0);
   const normalizedCapacity = Number.isFinite(rawCapacity) && rawCapacity > 0 ? rawCapacity : 0;
@@ -50,6 +62,7 @@ export function scheduleGreedy(constraints = {}, options = {}) {
   const modules = (constraints.modules || []).map(m => ({...m, details: parseJSONField(m.details)}));
   const lics = (constraints.lics || []).map(l => ({...l, details: parseJSONField(l.details)}));
   const instructors = (constraints.instructors || []).map(i => ({...i, availabilities: parseJSONField(i.availabilities)}));
+  const weekdayFreeDay = normalizeDayToken(options.weekdayFreeDay || options?.softConstraints?.weekdayFreeDay || 'Fri');
 
   // occupancy map: day -> slot -> {hallId, moduleId, instructorId}
   const occupancy = {};
@@ -99,6 +112,11 @@ export function scheduleGreedy(constraints = {}, options = {}) {
       let allowedDays = WEEKDAYS;
       if (mod.day_type === 'weekend') allowedDays = WEEKEND;
       else if (mod.day_type === 'any' || mod.day_type === 'both') allowedDays = WEEKDAYS.concat(WEEKEND);
+      else allowedDays = WEEKDAYS.filter((day) => day !== weekdayFreeDay);
+
+      if (!allowedDays.length) {
+        allowedDays = WEEKDAYS;
+      }
 
       for (const day of allowedDays) {
         for (const slot of SLOTS) {

@@ -3,8 +3,9 @@ import api from '../api/scheduler.js';
 import seedBatches from '../data/batches.js';
 import { confirmDelete, showError, showSuccess, showWarning } from '../utils/alerts.js';
 
-const DEFAULT_CAPACITY = 120;
-const MAX_BATCH_CAPACITY = 120;
+const GROUP_CAPACITY = 120;
+const SUBGROUP_CAPACITY = 60;
+const DEFAULT_CAPACITY = SUBGROUP_CAPACITY;
 
 const SPECIALIZATIONS = [
   { key: 'IT', label: 'IT' },
@@ -111,7 +112,7 @@ const parseBatchIdentity = (batchId = '') => {
   };
 };
 
-const splitStudentsIntoGroupCapacities = (studentCount, maxCapacity = MAX_BATCH_CAPACITY) => {
+const splitStudentsIntoSubgroupCapacities = (studentCount, maxCapacity = SUBGROUP_CAPACITY) => {
   const capacities = [];
   let remaining = Number(studentCount || 0);
 
@@ -133,31 +134,43 @@ const generateBatchRowsFromStudents = ({
   studentCount,
   existingIds,
 }) => {
-  const capacities = splitStudentsIntoGroupCapacities(studentCount);
+  const capacities = splitStudentsIntoSubgroupCapacities(studentCount);
   const generatedRows = [];
   const occupiedIds = new Set(existingIds || []);
   let nextGroup = Number(startGroup || 1);
+  let subgroupIndexWithinGroup = 0;
+
+  const subgroupTokens = ['01', '02'];
 
   for (const capacity of capacities) {
     while (nextGroup <= 9999) {
       const groupToken = String(nextGroup).padStart(2, '0');
+      const subgroupToken = subgroupTokens[subgroupIndexWithinGroup % subgroupTokens.length];
       const id = buildBatchId({
         year,
         semester,
         mode,
         specialization,
         group: groupToken,
-        subgroup: '01',
+        subgroup: subgroupToken,
       });
 
-      nextGroup += 1;
-
       if (occupiedIds.has(id)) {
+        subgroupIndexWithinGroup += 1;
+        if (subgroupIndexWithinGroup % subgroupTokens.length === 0) {
+          nextGroup += 1;
+        }
         continue;
       }
 
       occupiedIds.add(id);
       generatedRows.push({ id, capacity });
+
+      subgroupIndexWithinGroup += 1;
+      if (subgroupIndexWithinGroup % subgroupTokens.length === 0) {
+        nextGroup += 1;
+      }
+
       break;
     }
   }
@@ -377,7 +390,13 @@ export default function BatchList({ initialQuery = '' }) {
           });
         }
 
-        showSuccess('Batches created', `${rowsToCreate.length} groups created from ${studentCount} students.`);
+        const generatedGroupCount = new Set(
+          rowsToCreate.map((row) => row.id.split('.').slice(0, 5).join('.')),
+        ).size;
+        showSuccess(
+          'Batches created',
+          `${generatedGroupCount} groups (${rowsToCreate.length} subgroups) created from ${studentCount} students.`,
+        );
       } else {
         await api.addItem('batches', { id: nextId, ...payload });
         showSuccess('Batch created', 'New batch was added successfully.');
@@ -553,7 +572,7 @@ export default function BatchList({ initialQuery = '' }) {
             onChange={(e) => setForm((prev) => ({ ...prev, studentCount: e.target.value }))}
           />
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-700">
-            Enter student count to auto-generate group IDs from the selected start group. Subgroup is fixed to 01.
+            Enter student count to auto-generate groups: each group has 2 subgroups (01, 02) and each subgroup has 60 students.
           </div>
         </div>
 
@@ -563,7 +582,7 @@ export default function BatchList({ initialQuery = '' }) {
 
         {!editingId && generatedBatchPreview.length > 0 && (
           <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 p-3">
-            <p className="text-xs font-semibold text-sky-700">Generated Group IDs ({generatedBatchPreview.length})</p>
+            <p className="text-xs font-semibold text-sky-700">Generated Subgroup IDs ({generatedBatchPreview.length})</p>
             <div className="mt-2 max-h-32 overflow-y-auto space-y-1">
               {generatedBatchPreview.slice(0, 20).map((row) => (
                 <p key={row.id} className="font-mono text-xs text-slate-700">{row.id} • {row.capacity} students</p>
