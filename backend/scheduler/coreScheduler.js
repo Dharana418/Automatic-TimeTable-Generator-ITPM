@@ -27,6 +27,24 @@ function instructorAvailable(instructor, day, slot) {
   return false;
 }
 
+function normalizeText(value = '') {
+  return String(value || '').trim().toLowerCase();
+}
+
+function getEffectiveHallCapacity(hall = {}) {
+  const rawCapacity = Number(hall?.capacity || 0);
+  const normalizedCapacity = Number.isFinite(rawCapacity) && rawCapacity > 0 ? rawCapacity : 0;
+  const hallType = normalizeText(hall?.features?.hallType || hall?.features?.roomType || hall?.hallType || hall?.roomType);
+  const isLectureOrLab = hallType.includes('lecture') || hallType.includes('hall') || hallType.includes('lab');
+
+  if (isLectureOrLab) {
+    // Domain rule: one lecture hall or one lab can host at most 120 students.
+    return normalizedCapacity ? Math.min(normalizedCapacity, 120) : 120;
+  }
+
+  return normalizedCapacity;
+}
+
 export function scheduleGreedy(constraints = {}, options = {}) {
   const halls = (constraints.halls || []).map(h => ({...h, features: parseJSONField(h.features)}));
   const modules = (constraints.modules || []).map(m => ({...m, details: parseJSONField(m.details)}));
@@ -45,7 +63,8 @@ export function scheduleGreedy(constraints = {}, options = {}) {
   function findHallFor(module, day, slot) {
     const expected = Number(module.batch_size || module.expected_students || (module.details && module.details.expected_students) || module.expected_size || null);
     for (const h of halls) {
-      if (h.capacity && expected && Number(h.capacity) < Number(expected)) continue;
+      const effectiveCapacity = getEffectiveHallCapacity(h);
+      if (effectiveCapacity && expected && Number(effectiveCapacity) < Number(expected)) continue;
       const key = `${day}:${slot}`;
       if (!occupancy[day][slot]) return h; // simple: first free hall
       // else check if hall free

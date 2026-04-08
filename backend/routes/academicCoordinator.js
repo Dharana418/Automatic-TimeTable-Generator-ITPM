@@ -13,10 +13,13 @@ const normalizeSpecializationCode = (value = '') => {
     SOFTWAREENGINEERING: 'SE',
     SOFTWARE_ENG: 'SE',
     INFORMATIONTECHNOLOGY: 'IT',
+    INTERACTIVEMEDIA: 'IME',
     COMPUTERSCIENCE: 'CS',
     INFORMATIONSYSTEMSENGINEERING: 'ISE',
     COMPUTER_SYSTEMS_NETWORK_ENGINEERING: 'CSNE',
     INFORMATICS: 'IM',
+    CYBERSECURITY: 'CYBER SECURITY',
+    CYBER: 'CYBER SECURITY',
   };
 
   const compact = normalized.replace(/[^A-Z0-9]/g, '');
@@ -49,9 +52,9 @@ const inferModuleSpecialization = (module = {}) => {
   const code = String(module.code || '').toUpperCase();
   if (code.startsWith('IT')) return 'IT';
   if (code.startsWith('SE')) return 'SE';
+  if (code.startsWith('IE') || code.startsWith('IM')) return 'IME';
   if (code.startsWith('CS')) return 'CS';
   if (code.startsWith('IS')) return 'ISE';
-  if (code.startsWith('IM')) return 'IM';
   if (code.startsWith('CN')) return 'CSNE';
   return 'GENERAL';
 };

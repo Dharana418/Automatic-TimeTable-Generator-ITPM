@@ -1,9 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../api/scheduler.js';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 
 /* ── Department helpers ─────────────────────────────────────────── */
 const normalizeDep = (v = '') => String(v || '').trim().toUpperCase();
+
+const parseDetails = (details) => {
+  if (!details) return {};
+  if (typeof details === 'object') return details;
+  try {
+    return JSON.parse(details);
+  } catch {
+    return {};
+  }
+};
 
 const inferDep = (code = '') => {
   const match = String(code || '').trim().match(/^([A-Za-z]+)/);
@@ -18,14 +29,19 @@ const getDep = (m = {}) => {
   return d ? normalizeDep(d) : inferDep(m.code);
 };
 
-const toView = (m = {}) => ({
+const toView = (m = {}) => {
+  const details = parseDetails(m.details);
+  return {
   id: String(m.id || `${m.code}-${m.name}`),
   code: String(m.code || m.id || '').trim(),
   name: String(m.name || m.title || m.code || 'Untitled Module').trim(),
   department: getDep(m),
-  credits: m.credits,
-  lectures_per_week: m.lectures_per_week,
-});
+  credits: m.credits || details.credits || '',
+  lectures_per_week: m.lectures_per_week || details.lectures_per_week || '',
+  academic_year: String(m.academic_year || details.academic_year || ''),
+  semester: String(m.semester || details.semester || ''),
+};
+};
 
 /* ── Department palette ─────────────────────────────────────────── */
 const DEP_STYLE = {
@@ -132,12 +148,37 @@ const FacultyModulesPage = ({ user }) => {
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [err, setErr] = useState('');
+  const [editingModuleId, setEditingModuleId] = useState('');
+  const [editingForm, setEditingForm] = useState({
+    code: '',
+    name: '',
+    department: 'GENERAL',
+    academic_year: '1',
+    semester: '1',
+    credits: '',
+    lectures_per_week: '',
+  });
+
+  const loadModules = async () => {
+    try {
+      setIsLoading(true);
+      setErr('');
+      const res = await api.listItems('modules');
+      const items = Array.isArray(res?.items) ? res.items : [];
+      setModules(items.map(toView));
+    } catch (e) {
+      setErr(e.message || 'Failed to load modules.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
     const load = async () => {
       try {
-        setIsLoading(true); setErr('');
+        setIsLoading(true);
+        setErr('');
         const res = await api.listItems('modules');
         if (!mounted) return;
         const items = Array.isArray(res?.items) ? res.items : [];
@@ -152,6 +193,63 @@ const FacultyModulesPage = ({ user }) => {
     load();
     return () => { mounted = false; };
   }, []);
+
+  const beginEditModule = (module) => {
+    setEditingModuleId(module.id);
+    setEditingForm({
+      code: module.code || '',
+      name: module.name || '',
+      department: module.department || 'GENERAL',
+      academic_year: module.academic_year || '1',
+      semester: module.semester || '1',
+      credits: module.credits || '',
+      lectures_per_week: module.lectures_per_week || '',
+    });
+  };
+
+  const cancelEditModule = () => {
+    setEditingModuleId('');
+  };
+
+  const saveEditModule = async (e) => {
+    e.preventDefault();
+    if (!editingModuleId) return;
+    if (!editingForm.code.trim() || !editingForm.name.trim()) {
+      setErr('Module code and name are required.');
+      return;
+    }
+
+    try {
+      await api.updateItem('modules', editingModuleId, {
+        code: editingForm.code.trim(),
+        name: editingForm.name.trim(),
+        specialization: editingForm.department,
+        academic_year: editingForm.academic_year,
+        semester: editingForm.semester,
+        credits: editingForm.credits ? Number(editingForm.credits) : null,
+        lectures_per_week: editingForm.lectures_per_week ? Number(editingForm.lectures_per_week) : null,
+      });
+      setEditingModuleId('');
+      await loadModules();
+    } catch (error) {
+      setErr(error.message || 'Failed to update module.');
+    }
+  };
+
+  const deleteModule = async (moduleId) => {
+    const confirmed = window.confirm('Delete this module? This action cannot be undone.');
+    if (!confirmed) return;
+
+    try {
+      await api.deleteItem('modules', moduleId);
+      if (editingModuleId === moduleId) {
+        setEditingModuleId('');
+      }
+      await loadModules();
+    } catch (error) {
+      setErr(error.message || 'Failed to delete module.');
+    }
+  };
 
   const departments = useMemo(() => {
     const all = new Set(modules.map((m) => m.department).filter(Boolean));
@@ -200,6 +298,29 @@ const FacultyModulesPage = ({ user }) => {
           <p style={{ margin: '6px 0 0', fontSize: 13, color: 'rgba(148,163,184,0.75)' }}>
             <strong style={{ color: '#f1f5f9' }}>{displayName}</strong> — review and filter module inventory by department and code.
           </p>
+
+            <div style={{ marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+              <Link
+                to="/faculty/modules/added"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '10px 14px',
+                  borderRadius: 10,
+                  textDecoration: 'none',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  color: '#bae6fd',
+                  border: '1px solid rgba(125,211,252,0.45)',
+                  background: 'linear-gradient(90deg, rgba(56,189,248,0.2), rgba(14,116,144,0.22))',
+                }}
+              >
+                Open Added Modules Page
+              </Link>
+            </div>
 
           {/* Search + select row */}
           <div style={{ marginTop: 22, display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 14, alignItems: 'end' }}>
@@ -325,7 +446,7 @@ const FacultyModulesPage = ({ user }) => {
           </div>
         )}
 
-        {/* ── Module grid ── */}
+        {/* ── Modules table ── */}
         {!isLoading && filtered.length > 0 && (
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 4 }}>
@@ -333,8 +454,96 @@ const FacultyModulesPage = ({ user }) => {
                 {filtered.length} module{filtered.length !== 1 ? 's' : ''} {selectedDep !== 'ALL' ? `— ${selectedDep}` : 'across all departments'}
               </p>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 16 }}>
-              {filtered.map((m) => <ModuleCard key={m.id} m={m} />)}
+
+            {editingModuleId && (
+              <form
+                onSubmit={saveEditModule}
+                className="fc-section-card"
+                style={{ padding: 16, display: 'grid', gap: 10, borderColor: 'rgba(56,189,248,0.35)' }}
+              >
+                <p style={{ margin: 0, fontSize: 12, color: '#7dd3fc', fontWeight: 700 }}>Update Module</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+                  <DarkInput label="Code" val={editingForm.code} onChange={(v) => setEditingForm((p) => ({ ...p, code: v }))} />
+                  <DarkInput label="Name" val={editingForm.name} onChange={(v) => setEditingForm((p) => ({ ...p, name: v }))} />
+                  <label style={{ display: 'block' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)', display: 'block', marginBottom: 6 }}>Specialization</span>
+                    <select
+                      value={editingForm.department}
+                      onChange={(e) => setEditingForm((p) => ({ ...p, department: e.target.value }))}
+                      style={{
+                        width: '100%', padding: '10px 14px', borderRadius: 10,
+                        background: '#ffffff', border: '1px solid rgba(148,163,184,0.4)',
+                        color: '#0f172a', fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                      }}
+                    >
+                      {['IM', 'DS', 'SE', 'CSNE', 'ISE', 'IT', 'CYBER SECURITY', 'GENERAL'].map((dep) => (
+                        <option key={dep} value={dep}>{dep}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <DarkInput label="Academic Year" val={editingForm.academic_year} onChange={(v) => setEditingForm((p) => ({ ...p, academic_year: v }))} />
+                  <DarkInput label="Semester" val={editingForm.semester} onChange={(v) => setEditingForm((p) => ({ ...p, semester: v }))} />
+                  <DarkInput label="Credits" val={editingForm.credits} onChange={(v) => setEditingForm((p) => ({ ...p, credits: v }))} />
+                  <DarkInput label="Lectures / Week" val={editingForm.lectures_per_week} onChange={(v) => setEditingForm((p) => ({ ...p, lectures_per_week: v }))} />
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button type="submit" className="fc-btn" style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid rgba(34,197,94,0.45)', background: 'rgba(34,197,94,0.16)', color: '#86efac', fontWeight: 700 }}>Save</button>
+                  <button type="button" onClick={cancelEditModule} className="fc-btn" style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid rgba(239,68,68,0.45)', background: 'rgba(239,68,68,0.16)', color: '#fca5a5', fontWeight: 700 }}>Cancel</button>
+                </div>
+              </form>
+            )}
+
+            <div className="fc-section-card" style={{ padding: 0, overflow: 'hidden' }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 920 }}>
+                  <thead>
+                    <tr style={{ background: 'rgba(15,23,42,0.9)' }}>
+                      {['Code', 'Name', 'Specialization', 'Year/Sem', 'Credits', 'Lectures/Week', 'Actions'].map((head) => (
+                        <th key={head} style={{ textAlign: 'left', padding: '12px 14px', fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.9)', borderBottom: '1px solid rgba(148,163,184,0.2)' }}>{head}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((m) => {
+                      const s = getStyle(m.department);
+                      return (
+                        <tr key={m.id} style={{ borderBottom: '1px solid rgba(148,163,184,0.14)' }}>
+                          <td style={{ padding: '12px 14px', color: '#f1f5f9', fontWeight: 700 }}>{m.code}</td>
+                          <td style={{ padding: '12px 14px', color: 'rgba(226,232,240,0.95)' }}>{m.name}</td>
+                          <td style={{ padding: '12px 14px' }}>
+                            <span style={{ padding: '4px 10px', borderRadius: 16, fontSize: 11, fontWeight: 700, background: s.bg, border: `1px solid ${s.border}`, color: s.color }}>
+                              {m.department}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 14px', color: '#cbd5e1' }}>Y{m.academic_year || '-'} / S{m.semester || '-'}</td>
+                          <td style={{ padding: '12px 14px', color: '#cbd5e1' }}>{m.credits || '-'}</td>
+                          <td style={{ padding: '12px 14px', color: '#cbd5e1' }}>{m.lectures_per_week || '-'}</td>
+                          <td style={{ padding: '12px 14px' }}>
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                              <button
+                                type="button"
+                                onClick={() => beginEditModule(m)}
+                                className="fc-btn"
+                                style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(56,189,248,0.5)', background: 'rgba(56,189,248,0.18)', color: '#7dd3fc', fontSize: 12, fontWeight: 700 }}
+                              >
+                                Update
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteModule(m.id)}
+                                className="fc-btn"
+                                style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.5)', background: 'rgba(239,68,68,0.16)', color: '#fca5a5', fontSize: 12, fontWeight: 700 }}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </>
         )}

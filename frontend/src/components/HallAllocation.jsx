@@ -4,6 +4,7 @@ import HallResourcesPanel from './HallResourcesPanel.jsx';
 import HallRatingsPanel from './HallRatingsPanel.jsx';
 import ActivityLogPanel from './ActivityLogPanel.jsx';
 import SmartRecommendationsPanel from './SmartRecommendationsPanel.jsx';
+import Building2DView from './Building2DView.jsx';
 
 const AMENITIES = [
   { id: 'projector', label: 'Projector', icon: '🎬' },
@@ -579,6 +580,16 @@ const HallAllocation = ({ apiBase }) => {
     }
   }, [currentPage, totalPages]);
 
+  useEffect(() => {
+    if (selectedHall && !halls.some((hall) => hall.id === selectedHall.id)) {
+      setSelectedHall(null);
+    }
+  }, [halls, selectedHall]);
+
+  useEffect(() => {
+    setCompareSelection((previous) => previous.filter((hallId) => halls.some((hall) => hall.id === hallId)).slice(0, 2));
+  }, [halls]);
+
   const paginatedHalls = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredHalls.slice(start, start + pageSize);
@@ -711,20 +722,24 @@ const HallAllocation = ({ apiBase }) => {
   if (loading) return <div className="p-4">Loading Hall Allocation...</div>;
 
   return (
-    <div className="hall-allocation-container p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold">🏛️ Hall Allocation</h2>
-        <div className="flex gap-2">
+    <div className="hall-allocation-container p-4 sm:p-5">
+      <div className="mb-5 rounded-2xl border border-teal-100 bg-gradient-to-r from-teal-50 via-cyan-50 to-sky-50 p-4 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">Hall Allocation</h2>
+            <p className="mt-1 text-sm font-medium text-slate-700">Manage halls with clearer controls, better visibility, and quick insights.</p>
+          </div>
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
           <button
             type="button"
-            className="dashboard-btn hall-primary-btn"
+            className="dashboard-btn hall-primary-btn flex-1 sm:flex-none"
             onClick={() => setShowRecommendationsModal(true)}
           >
              Get Recommendations
           </button>
           <button
             type="button"
-            className="dashboard-btn hall-primary-btn"
+            className="dashboard-btn hall-primary-btn flex-1 sm:flex-none"
             onClick={() => {
               setHallForm({
                 hallId: '',
@@ -743,6 +758,7 @@ const HallAllocation = ({ apiBase }) => {
           >
             + Add Hall
           </button>
+          </div>
         </div>
       </div>
 
@@ -751,103 +767,112 @@ const HallAllocation = ({ apiBase }) => {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         {/* Halls */}
         <div className="panel xl:col-span-2">
-          <div className="mb-4">
-            <h3 className="mb-3">Available Halls</h3>
-
-            {/* Search Input */}
-            <div className="mb-3">
-              <input
-                type="text"
-                placeholder="Search by ID, name, type, or building..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-              />
-            </div>
-
-            {/* Filter and Sort Row */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+          <div className="hall-control-panel mx-auto mb-6 mt-3 max-w-6xl rounded-3xl border border-cyan-100 bg-gradient-to-br from-white via-slate-50 to-cyan-50 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+            <div className="mb-4 flex flex-col gap-1 text-center sm:flex-row sm:items-end sm:justify-between sm:text-left">
               <div>
-                <label className="block text-xs font-medium mb-1">Min Capacity</label>
-                <input
-                  type="number"
-                  placeholder="Min"
-                  value={minCapacity}
-                  onChange={(e) => setMinCapacity(e.target.value)}
-                  className="w-full border rounded-lg px-2 py-1 text-sm"
-                />
+                <h3 className="text-lg font-semibold text-slate-900">Available Halls</h3>
+                <p className="text-sm text-slate-600">Search, filter, and switch between card, table, or campus views.</p>
               </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Max Capacity</label>
-                <input
-                  type="number"
-                  placeholder="Max"
-                  value={maxCapacity}
-                  onChange={(e) => setMaxCapacity(e.target.value)}
-                  className="w-full border rounded-lg px-2 py-1 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Sort By</label>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="w-full border rounded-lg px-2 py-1 text-sm"
-                >
-                  <option value="name">Name</option>
-                  <option value="capacity">Capacity</option>
-                  <option value="building">Building</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Results</label>
-                <div className="flex items-center justify-center h-8 text-sm font-semibold text-slate-700">
-                  {filteredHalls.length} hall(s)
-                </div>
+              <div className="rounded-full border border-cyan-100 bg-cyan-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-800">
+                {filteredHalls.length} hall(s)
               </div>
             </div>
 
-            <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-2">
-              <div>
-                <label className="block text-xs font-medium mb-1">Group By</label>
-                <select
-                  value={groupBy}
-                  onChange={(e) => setGroupBy(e.target.value)}
-                  className="w-full border rounded-lg px-2 py-1 text-sm"
-                >
-                  <option value="building">Building</option>
-                  <option value="floor">Floor</option>
-                </select>
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+              <div className="xl:col-span-12">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-700">Search</label>
+                <input
+                  type="text"
+                  placeholder="Search by ID, name, type, or building..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                />
               </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">View Mode</label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    className={`px-3 py-1 rounded-lg text-sm border ${viewMode === 'card' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-700 border-slate-200'}`}
-                    onClick={() => setViewMode('card')}
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:col-span-8 xl:grid-cols-4">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-700">Min Capacity</label>
+                  <input
+                    type="number"
+                    placeholder="Min"
+                    value={minCapacity}
+                    onChange={(e) => setMinCapacity(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-700">Max Capacity</label>
+                  <input
+                    type="number"
+                    placeholder="Max"
+                    value={maxCapacity}
+                    onChange={(e) => setMaxCapacity(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-700">Sort By</label>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200"
                   >
-                    Card
-                  </button>
-                  <button
-                    type="button"
-                    className={`px-3 py-1 rounded-lg text-sm border ${viewMode === 'table' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-700 border-slate-200'}`}
-                    onClick={() => setViewMode('table')}
+                    <option value="name">Name</option>
+                    <option value="capacity">Capacity</option>
+                    <option value="building">Building</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-700">Group By</label>
+                  <select
+                    value={groupBy}
+                    onChange={(e) => setGroupBy(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200"
                   >
-                    Table
-                  </button>
+                    <option value="building">Building</option>
+                    <option value="floor">Floor</option>
+                  </select>
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Compare</label>
-                <div className="h-8 px-2 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-700 flex items-center">
-                  {compareSelection.length}/2 selected
+
+              <div className="grid grid-cols-1 gap-3 xl:col-span-4">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="lg:max-w-[180px]">
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-700">View Mode</label>
+                      <p className="text-xs text-slate-500">Choose how the hall list should be displayed.</p>
+                    </div>
+                    <div className="lg:min-w-[260px]">
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-700 lg:sr-only">Select View</label>
+                      <select
+                        value={viewMode}
+                        onChange={(e) => setViewMode(e.target.value)}
+                        className="hall-view-select w-full max-w-[220px] text-black"
+                        aria-label="Select view mode"
+                      >
+                        <option value="card" className="text-black">Card</option>
+                        <option value="table" className="text-black">Table</option>
+                        <option value="campus" className="text-black">Campus 2D</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Page</label>
-                <div className="h-8 px-2 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-700 flex items-center justify-center">
-                  {currentPage}/{totalPages}
+
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-2">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-700">Compare</label>
+                    <div className="flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800">
+                      {compareSelection.length}/2 selected
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-700">Page</label>
+                    <div className="flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-900">
+                      {currentPage}/{totalPages}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -890,7 +915,34 @@ const HallAllocation = ({ apiBase }) => {
           {filteredHalls.length === 0 && halls.length > 0 && (
             <div className="p-2 text-sm text-gray-500">No halls match your search or filter criteria.</div>
           )}
-          {groupKeys.map((groupKey) => {
+          {viewMode === 'campus' && (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-slate-200 bg-gradient-to-b from-sky-100 via-sky-50 to-white p-4">
+                <h4 className="text-base font-semibold text-slate-800">Campus 2D View</h4>
+                <p className="text-xs text-slate-600 mt-1">
+                  Halls are arranged floor-by-floor for quick 2D hall allocation review.
+                </p>
+              </div>
+
+              {filteredHalls.length === 0 && (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-600">
+                  No hall records available for campus view.
+                </div>
+              )}
+
+              {filteredHalls.length > 0 && (
+                <div className="rounded-xl border border-slate-200 bg-gradient-to-b from-white to-slate-100 p-4">
+                  <Building2DView
+                    halls={filteredHalls}
+                    selectedHallId={selectedHall?.id}
+                    onSelectHall={setSelectedHall}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {viewMode !== 'campus' && groupKeys.map((groupKey) => {
             const hallsInGroup = groupedHalls[groupKey] || [];
             const isCollapsed = collapsedSections[groupKey];
 
@@ -917,10 +969,10 @@ const HallAllocation = ({ apiBase }) => {
                         {compareSelection.includes(hall.id) ? 'Selected' : 'Compare'}
                       </button>
                     </div>
-                    <div className="text-sm text-gray-600 mt-1">Capacity: {hall.capacity || '-'}</div>
-                    <div className="text-sm text-gray-600">Type: {hall.features?.hallType || '-'}</div>
-                    <div className="text-sm text-gray-600">Building: {hall.features?.building || '-'}</div>
-                    <div className="text-sm text-gray-600">Floor: {getHallFloor(hall)}</div>
+                    <div className="mt-1 text-sm font-medium text-slate-700">Capacity: {hall.capacity || '-'}</div>
+                    <div className="text-sm font-medium text-slate-700">Type: {hall.features?.hallType || '-'}</div>
+                    <div className="text-sm font-medium text-slate-700">Building: {hall.features?.building || '-'}</div>
+                    <div className="text-sm font-medium text-slate-700">Floor: {getHallFloor(hall)}</div>
 
                     <div className="mt-2 p-2 bg-gray-50 rounded border border-gray-200">
                       <div className="text-xs font-semibold text-gray-700 mb-2">Amenities:</div>
@@ -997,11 +1049,10 @@ const HallAllocation = ({ apiBase }) => {
                       </button>
                       <button
                         type="button"
-                        className="hall-action-btn"
-                        style={{ backgroundColor: '#8b5cf6', color: 'white' }}
+                        className="hall-action-btn hall-action-btn--info"
                         onClick={() => setSelectedHall(hall)}
                       >
-                        📋 Details
+                        Details
                       </button>
                     </div>
                   </div>
@@ -1084,26 +1135,29 @@ const HallAllocation = ({ apiBase }) => {
           })}
 
           {filteredHalls.length > pageSize && (
-            <div className="mt-4 flex items-center justify-between border-t pt-3">
-              <div className="text-xs text-slate-600">
+            <div className="mt-5 flex flex-col gap-3 rounded-xl border border-slate-200 bg-gradient-to-r from-slate-50 to-cyan-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm font-semibold text-slate-700">
                 Showing {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, filteredHalls.length)} of {filteredHalls.length}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 self-end sm:self-auto">
                 <button
                   type="button"
-                  className="px-3 py-1 rounded border border-slate-300 text-sm disabled:opacity-50"
+                  className="hall-pagination-btn"
                   onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                   disabled={currentPage === 1}
                 >
-                  Previous
+                  ← Previous
                 </button>
+                <div className="rounded-lg border border-cyan-200 bg-cyan-100 px-3 py-1 text-sm font-bold text-cyan-900">
+                  Page {currentPage} / {totalPages}
+                </div>
                 <button
                   type="button"
-                  className="px-3 py-1 rounded border border-slate-300 text-sm disabled:opacity-50"
+                  className="hall-pagination-btn"
                   onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
                   disabled={currentPage === totalPages}
                 >
-                  Next
+                  Next →
                 </button>
               </div>
             </div>
@@ -1244,105 +1298,136 @@ const HallAllocation = ({ apiBase }) => {
             setHallError('');
           }}
         >
-          <div className="bg-white w-full max-w-md rounded-xl shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Add Hall</h3>
-              <button
-                type="button"
-                className="text-gray-500 hover:text-gray-800"
-                onClick={() => {
-                  setShowAddHallModal(false);
-                  setHallError('');
-                }}
-              >
-                ✕
-              </button>
+          <div className="w-full max-w-2xl overflow-hidden rounded-3xl border border-cyan-100 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-cyan-700 via-teal-700 to-sky-700 px-6 py-5 text-white">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="inline-flex rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-50">
+                    Hall Form
+                  </div>
+                  <h3 className="mt-3 text-2xl font-bold">Add a New Hall</h3>
+                  <p className="mt-1 max-w-xl text-sm text-cyan-50/90">
+                    Create a new hall record with clearly labeled details, amenities, and status information.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-white/20"
+                  onClick={() => {
+                    setShowAddHallModal(false);
+                    setHallError('');
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
-            <form onSubmit={handleAddHall} className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">Hall ID</label>
-                <input
-                  type="text"
-                  name="hallId"
-                  value={hallForm.hallId}
-                  onChange={handleHallInputChange}
-                  className="w-full border rounded-lg px-3 py-2"
-                  placeholder="e.g. H101"
-                />
+            <form onSubmit={handleAddHall} className="space-y-5 p-6">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-slate-800">
+                    <span className="text-cyan-700">Hall</span> ID
+                  </label>
+                  <input
+                    type="text"
+                    name="hallId"
+                    value={hallForm.hallId}
+                    onChange={handleHallInputChange}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:border-cyan-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                    placeholder="e.g. H101"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-slate-800">
+                    <span className="text-cyan-700">Capacity</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="capacity"
+                    value={hallForm.capacity}
+                    onChange={handleHallInputChange}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:border-cyan-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                    placeholder="e.g. 100"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-slate-800">
+                    <span className="text-cyan-700">Hall</span> Type
+                  </label>
+                  <input
+                    type="text"
+                    name="hallType"
+                    value={hallForm.hallType}
+                    onChange={handleHallInputChange}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:border-cyan-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                    placeholder="e.g. Lecture Theatre"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-slate-800">
+                    <span className="text-cyan-700">Floor</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="floor"
+                    value={hallForm.floor}
+                    onChange={handleHallInputChange}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:border-cyan-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                    placeholder="e.g. 1st Floor"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-sm font-semibold text-slate-800">
+                    <span className="text-cyan-700">Building</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="building"
+                    value={hallForm.building}
+                    onChange={handleHallInputChange}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:border-cyan-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                    placeholder="e.g. Main Building"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Hall Type</label>
-                <input
-                  type="text"
-                  name="hallType"
-                  value={hallForm.hallType}
-                  onChange={handleHallInputChange}
-                  className="w-full border rounded-lg px-3 py-2"
-                  placeholder="e.g. Lecture Theatre"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Capacity</label>
-                <input
-                  type="number"
-                  name="capacity"
-                  value={hallForm.capacity}
-                  onChange={handleHallInputChange}
-                  className="w-full border rounded-lg px-3 py-2"
-                  placeholder="e.g. 100"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Building</label>
-                <input
-                  type="text"
-                  name="building"
-                  value={hallForm.building}
-                  onChange={handleHallInputChange}
-                  className="w-full border rounded-lg px-3 py-2"
-                  placeholder="e.g. Main Building"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Floor</label>
-                <input
-                  type="text"
-                  name="floor"
-                  value={hallForm.floor}
-                  onChange={handleHallInputChange}
-                  className="w-full border rounded-lg px-3 py-2"
-                  placeholder="e.g. 1st Floor"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Amenities</label>
-                <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-800">Amenities</div>
+                    <div className="text-xs text-slate-600">Highlight the facilities this hall supports.</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {AMENITIES.map((amenity) => (
-                    <label key={amenity.id} className="flex items-center text-sm">
+                    <label
+                      key={amenity.id}
+                      className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-cyan-200 hover:bg-cyan-50"
+                    >
                       <input
                         type="checkbox"
                         checked={hallForm.amenities[amenity.id] || false}
                         onChange={() => handleAmenityToggle(amenity.id)}
-                        className="mr-2 rounded border-gray-300"
+                        className="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-200"
                       />
-                      <span>{amenity.icon} {amenity.label}</span>
+                      <span className="text-base">{amenity.icon}</span>
+                      <span className="font-medium text-slate-800">{amenity.label}</span>
                     </label>
                   ))}
                 </div>
               </div>
 
-              {hallError && <p className="text-sm text-red-600">{hallError}</p>}
+              {hallError && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{hallError}</p>}
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
                 <button
                   type="button"
-                  className="px-4 py-2 rounded-lg border"
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
                   onClick={() => {
                     setShowAddHallModal(false);
                     setHallError('');
@@ -1350,7 +1435,7 @@ const HallAllocation = ({ apiBase }) => {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="dashboard-btn" disabled={submittingHall}>
+                <button type="submit" className="dashboard-btn hall-primary-btn px-5 py-2.5" disabled={submittingHall}>
                   {submittingHall ? 'Saving...' : 'Save Hall'}
                 </button>
               </div>
@@ -1368,101 +1453,132 @@ const HallAllocation = ({ apiBase }) => {
             setEditTargetHallId('');
           }}
         >
-          <div className="bg-white w-full max-w-md rounded-xl shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Edit Hall</h3>
-              <button
-                type="button"
-                className="text-gray-500 hover:text-gray-800"
-                onClick={() => {
-                  setShowEditHallModal(false);
-                  setEditHallError('');
-                  setEditTargetHallId('');
-                }}
-              >
-                ✕
-              </button>
+          <div className="w-full max-w-2xl overflow-hidden rounded-3xl border border-cyan-100 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-slate-800 via-cyan-800 to-teal-800 px-6 py-5 text-white">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="inline-flex rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-50">
+                    Hall Form
+                  </div>
+                  <h3 className="mt-3 text-2xl font-bold">Edit Hall Details</h3>
+                  <p className="mt-1 max-w-xl text-sm text-cyan-50/90">
+                    Update hall information, capacity, and available amenities with clear, editable fields.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-white/20"
+                  onClick={() => {
+                    setShowEditHallModal(false);
+                    setEditHallError('');
+                    setEditTargetHallId('');
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
-            <form onSubmit={handleEditHall} className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">Hall ID</label>
-                <input
-                  type="text"
-                  name="hallId"
-                  value={editHallForm.hallId}
-                  onChange={handleEditHallInputChange}
-                  className="w-full border rounded-lg px-3 py-2"
-                />
+            <form onSubmit={handleEditHall} className="space-y-5 p-6">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-slate-800">
+                    <span className="text-cyan-700">Hall</span> ID
+                  </label>
+                  <input
+                    type="text"
+                    name="hallId"
+                    value={editHallForm.hallId}
+                    onChange={handleEditHallInputChange}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-slate-800">
+                    <span className="text-cyan-700">Capacity</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="capacity"
+                    value={editHallForm.capacity}
+                    onChange={handleEditHallInputChange}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-slate-800">
+                    <span className="text-cyan-700">Hall</span> Type
+                  </label>
+                  <input
+                    type="text"
+                    name="hallType"
+                    value={editHallForm.hallType}
+                    onChange={handleEditHallInputChange}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-slate-800">
+                    <span className="text-cyan-700">Floor</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="floor"
+                    value={editHallForm.floor}
+                    onChange={handleEditHallInputChange}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-sm font-semibold text-slate-800">
+                    <span className="text-cyan-700">Building</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="building"
+                    value={editHallForm.building}
+                    onChange={handleEditHallInputChange}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Hall Type</label>
-                <input
-                  type="text"
-                  name="hallType"
-                  value={editHallForm.hallType}
-                  onChange={handleEditHallInputChange}
-                  className="w-full border rounded-lg px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Capacity</label>
-                <input
-                  type="number"
-                  name="capacity"
-                  value={editHallForm.capacity}
-                  onChange={handleEditHallInputChange}
-                  className="w-full border rounded-lg px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Building</label>
-                <input
-                  type="text"
-                  name="building"
-                  value={editHallForm.building}
-                  onChange={handleEditHallInputChange}
-                  className="w-full border rounded-lg px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Floor</label>
-                <input
-                  type="text"
-                  name="floor"
-                  value={editHallForm.floor}
-                  onChange={handleEditHallInputChange}
-                  className="w-full border rounded-lg px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Amenities</label>
-                <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-800">Amenities</div>
+                    <div className="text-xs text-slate-600">Keep the facility flags accurate for allocation decisions.</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {AMENITIES.map((amenity) => (
-                    <label key={amenity.id} className="flex items-center text-sm">
+                    <label
+                      key={amenity.id}
+                      className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-cyan-200 hover:bg-cyan-50"
+                    >
                       <input
                         type="checkbox"
                         checked={editHallForm.amenities[amenity.id] || false}
                         onChange={() => handleEditAmenityToggle(amenity.id)}
-                        className="mr-2 rounded border-gray-300"
+                        className="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-200"
                       />
-                      <span>{amenity.icon} {amenity.label}</span>
+                      <span className="text-base">{amenity.icon}</span>
+                      <span className="font-medium text-slate-800">{amenity.label}</span>
                     </label>
                   ))}
                 </div>
               </div>
 
-              {editHallError && <p className="text-sm text-red-600">{editHallError}</p>}
+              {editHallError && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{editHallError}</p>}
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
                 <button
                   type="button"
-                  className="px-4 py-2 rounded-lg border"
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
                   onClick={() => {
                     setShowEditHallModal(false);
                     setEditHallError('');
@@ -1471,7 +1587,7 @@ const HallAllocation = ({ apiBase }) => {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="dashboard-btn" disabled={submittingEditHall}>
+                <button type="submit" className="dashboard-btn hall-primary-btn px-5 py-2.5" disabled={submittingEditHall}>
                   {submittingEditHall ? 'Updating...' : 'Update Hall'}
                 </button>
               </div>

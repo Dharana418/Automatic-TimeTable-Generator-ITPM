@@ -31,6 +31,10 @@ const normalizeSpecialization = (value = '') => {
     INFORMATICS: 'IM',
     INFORMATIONSYSTEMSENGINEERING: 'ISE',
     COMPUTER_SYSTEMS_NETWORK_ENGINEERING: 'CSNE',
+    IM: 'IME',
+    IE: 'IME',
+    CYBERSECURITY: 'CYBER SECURITY',
+    CYBER: 'CYBER SECURITY',
   };
 
   const compact = raw.replace(/[^A-Z0-9]/g, '');
@@ -56,10 +60,12 @@ const inferSpecializationFromModule = (module = {}) => {
   if (code.startsWith('SE')) return 'SE';
   if (code.startsWith('CS')) return 'CS';
   if (code.startsWith('IS')) return 'ISE';
-  if (code.startsWith('IM')) return 'IM';
+  if (code.startsWith('IM') || code.startsWith('IE')) return 'IME';
   if (code.startsWith('CN')) return 'CSNE';
   return 'General';
 };
+
+const DEFAULT_SPECIALIZATIONS = ['SE', 'IT', 'CS', 'IME', 'ISE', 'CSNE', 'CYBER SECURITY', 'General'];
 
 const TimetableGenerationByYearSemester = () => {
   const [academicYears, setAcademicYears] = useState([]);
@@ -100,7 +106,7 @@ const TimetableGenerationByYearSemester = () => {
     }
   }, []);
 
-  const fetchAcademicModules = useCallback(async (year, semester, specialization) => {
+  const fetchAcademicModules = useCallback(async (year, semester) => {
     if (!year) {
       setModulesFromAcademic([]);
       return;
@@ -108,7 +114,7 @@ const TimetableGenerationByYearSemester = () => {
 
     try {
       setLoadingModules(true);
-      const response = await getModulesByYear(year, semester || null, specialization || 'ALL');
+      const response = await getModulesByYear(year, semester || null, 'ALL');
       const mapped = (response.data || []).map((module) => ({
         ...module,
         specialization: inferSpecializationFromModule(module),
@@ -137,14 +143,13 @@ const TimetableGenerationByYearSemester = () => {
     }
 
     if (selectedYear) {
-      fetchAcademicModules(selectedYear, selectedSemester, selectedSpecialization);
+      fetchAcademicModules(selectedYear, selectedSemester);
     } else {
       setModulesFromAcademic([]);
     }
   }, [
     selectedYear,
     selectedSemester,
-    selectedSpecialization,
     fetchExistingTimetables,
     fetchAcademicModules,
   ]);
@@ -154,7 +159,7 @@ const TimetableGenerationByYearSemester = () => {
   }, [selectedYear]);
 
   const specializationOptions = React.useMemo(() => {
-    const values = [...new Set(modulesFromAcademic.map((m) => m.specialization).filter(Boolean))];
+    const values = [...new Set([...DEFAULT_SPECIALIZATIONS, ...modulesFromAcademic.map((m) => m.specialization).filter(Boolean)])];
     return ['ALL', ...values.sort((a, b) => a.localeCompare(b))];
   }, [modulesFromAcademic]);
 

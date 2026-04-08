@@ -33,6 +33,7 @@ const SEMESTER_OPTIONS = ['1', '2'];
 
 const toUpper = (value = '') => String(value).trim().toUpperCase();
 const SUBGROUP_INPUT_PATTERN = /^(0?[1-2])?$/;
+const cleanTwoDigitGroupValue = (value = '') => String(value || '').replace(/[^0-9]/g, '').slice(0, 2);
 
 const getBatchMeta = (batchId = '') => {
   const normalized = String(batchId).trim();
@@ -409,20 +410,21 @@ export default function BatchList({ initialQuery = '' }) {
 
           <input
             className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-mono text-slate-900 outline-none transition-all placeholder:text-slate-500 focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
-            placeholder="Group (e.g. 01)"
+            placeholder="Group (2 digits)"
             value={form.group}
-            onChange={(e) => setForm((prev) => ({ ...prev, group: e.target.value }))}
+            inputMode="numeric"
+            maxLength={2}
+            onChange={(e) => setForm((prev) => ({ ...prev, group: cleanTwoDigitGroupValue(e.target.value) }))}
           />
 
           <input
             className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-mono text-slate-900 outline-none transition-all placeholder:text-slate-500 focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
-            placeholder="Subgroup (e.g. 01)"
+            placeholder="Subgroup (2 digits)"
             value={form.subgroup}
+            inputMode="numeric"
+            maxLength={2}
             onChange={(e) => {
-              const nextValue = String(e.target.value || '').trim();
-              if (!SUBGROUP_INPUT_PATTERN.test(nextValue)) {
-                return;
-              }
+              const nextValue = cleanTwoDigitGroupValue(e.target.value);
               setForm((prev) => ({ ...prev, subgroup: nextValue }));
             }}
           />
