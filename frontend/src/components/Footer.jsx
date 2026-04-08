@@ -1,11 +1,17 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
-const Footer = ({ isAuthenticated, user }) => {
+const Footer = ({ isAuthenticated, user, hasFixedSidebarOffset = false }) => {
+  const location = useLocation();
   const year = new Date().getFullYear();
+  const shouldOffsetForSidebar = hasFixedSidebarOffset && (
+    location.pathname === '/dashboard'
+    || location.pathname.startsWith('/faculty')
+    || location.pathname.startsWith('/scheduler')
+  );
 
   return (
     <footer className="border-t border-blue-300/30 bg-gradient-to-r from-slate-900 via-blue-900 to-indigo-900 text-slate-100">
-      <div className="mx-auto grid w-full max-w-none grid-cols-1 gap-8 px-4 py-8 sm:px-6 lg:grid-cols-3 lg:px-12 xl:px-16">
+      <div className={`mx-auto grid w-full max-w-none grid-cols-1 gap-8 px-4 py-8 sm:px-6 lg:grid-cols-3 lg:px-12 xl:px-16 ${shouldOffsetForSidebar ? 'lg:pl-[284px]' : ''}`}>
         <section>
           <h3 className="text-base font-bold tracking-wide text-white">SLIIT Timetable Generator</h3>
           <p className="mt-2 text-sm leading-relaxed text-blue-100/90">
@@ -39,7 +45,7 @@ const Footer = ({ isAuthenticated, user }) => {
         </section>
       </div>
 
-      <div className="border-t border-blue-200/20 px-4 py-3 text-center text-xs text-blue-100/80 sm:px-6 lg:px-12 xl:px-16">
+      <div className={`border-t border-blue-200/20 px-4 py-3 text-center text-xs text-blue-100/80 sm:px-6 lg:px-12 xl:px-16 ${shouldOffsetForSidebar ? 'lg:pl-[284px]' : ''}`}>
         Copyright {year} SLIIT Timetable Generator. All rights reserved.
       </div>
     </footer>

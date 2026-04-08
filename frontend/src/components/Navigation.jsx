@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import Swal from 'sweetalert2';
 import autoschedule from '../assets/SLIIT_LOGO.png';
 
-const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000" }) => {
+const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", hasFixedSidebarOffset = false }) => {
     const location = useLocation();
     const [logoHighlighted, setLogoHighlighted] = useState(false);
     const [showTagline, setShowTagline] = useState(false);
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -29,6 +31,12 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000" }
     const navBtnDanger = `${navBtnBase} border-rose-300/80 bg-gradient-to-r from-rose-600 to-red-700 text-white shadow-[0_10px_20px_rgba(190,24,93,0.28)] hover:-translate-y-0.5 hover:brightness-110`;
 
     const handleLogout = async () => {
+        if (isLoggingOut) {
+            return;
+        }
+
+        setIsLoggingOut(true);
+
         try {
             const response = await fetch(`${apiBase}/api/auth/logout`, {
                 method: 'POST',
@@ -42,24 +50,72 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000" }
                 // Clear any local storage data
                 localStorage.clear();
                 sessionStorage.clear();
+
+                await Swal.fire({
+                    icon: 'success',
+                    title: 'Logged out',
+                    text: 'You have been logged out successfully.',
+                    timer: 1200,
+                    showConfirmButton: false,
+                    confirmButtonColor: '#2563eb',
+                });
                 
                 // Redirect to home page
-                setTimeout(() => {
-                    window.location.href = '/';
-                }, 100);
+                window.location.href = '/';
             } else {
                 const errorData = await response.json().catch(() => ({}));
                 console.error('Logout failed:', errorData);
-                alert('Logout failed. Please try again.');
+                await Swal.fire({
+                    icon: 'error',
+                    title: 'Logout failed',
+                    text: 'Please try again.',
+                    confirmButtonColor: '#2563eb',
+                });
             }
         } catch (error) {
             console.error('Logout error:', error);
-            alert('An error occurred during logout. Please try again.');
+            await Swal.fire({
+                icon: 'error',
+                title: 'Logout failed',
+                text: 'An error occurred during logout. Please try again.',
+                confirmButtonColor: '#2563eb',
+            });
+        } finally {
+            setIsLoggingOut(false);
         }
     };
+
+    const requestLogoutConfirmation = async () => {
+        if (isLoggingOut) {
+            return;
+        }
+
+        const result = await Swal.fire({
+            icon: 'warning',
+            title: 'Are you sure?',
+            text: 'Do you want to logout now?',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, logout',
+            cancelButtonText: 'Cancel',
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#64748b',
+        });
+
+        if (!result.isConfirmed) {
+            return;
+        }
+
+        handleLogout();
+    };
     
+    const shouldOffsetForSidebar = hasFixedSidebarOffset && (
+        location.pathname === '/dashboard'
+        || location.pathname.startsWith('/faculty')
+        || location.pathname.startsWith('/scheduler')
+    );
+
     return (
-            <nav className="sticky top-0 z-50 border-b border-indigo-300/35 bg-gradient-to-r from-slate-950 via-indigo-900 to-blue-900 px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.34)] sm:px-6 lg:px-12 xl:px-16">
+            <nav className={`sticky top-0 z-50 border-b border-indigo-300/35 bg-gradient-to-r from-slate-950 via-indigo-900 to-blue-900 px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.34)] sm:px-6 lg:px-12 xl:px-16 ${shouldOffsetForSidebar ? 'lg:pl-[284px]' : ''}`}>
                 <div className="mx-auto flex w-full max-w-none items-center justify-between gap-4">
                 <Link to="/" className="group flex items-center gap-3 no-underline">
                     <span className={`relative inline-flex rounded-xl border p-1.5 backdrop-blur-sm transition-all duration-500 group-hover:-translate-y-0.5 ${logoHighlighted
@@ -85,7 +141,7 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000" }
 
             <div className="flex items-center gap-1.5 md:gap-2">
 
-                {isAuthenticated ? (
+                        {isAuthenticated ? (
                     <>
                         {location.pathname !== '/dashboard' && (
                             <Link to="/dashboard" className={`${navBtnNeutral} md:w-24`}>Dashboard</Link>
@@ -95,7 +151,7 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000" }
                             <Link to="/scheduler/by-year" className={`${navBtnPrimary} md:w-28`}>Schedule</Link>
                         )}
 
-                        <button onClick={handleLogout} className={`${navBtnDanger} md:w-20`}>Logout</button>
+                        <button onClick={requestLogoutConfirmation} className={`${navBtnDanger} md:w-20`}>Logout</button>
                     </>
                 ) : (
                     <>

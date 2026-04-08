@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 /* ── SVG icon set ─────────────────────────────────────────────── */
@@ -40,6 +40,23 @@ const Icon = {
       <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
     </svg>
   ),
+  archive: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+      <rect x="3" y="4" width="18" height="5" rx="1" />
+      <path d="M5 9h14v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V9Z" />
+      <path d="M10 13h4" />
+    </svg>
+  ),
+  activity: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+    </svg>
+  ),
+  settings: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+      <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 0-.33 1V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-.33-1 1.65 1.65 0 0 0-1-.6 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 0-1-.33H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1-.33 1.65 1.65 0 0 0 .6-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6 1.65 1.65 0 0 0 .33-1V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 .33 1 1.65 1.65 0 0 0 1 .6 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.22.31.51.55.86.69.32.13.66.2 1 .2H21a2 2 0 1 1 0 4h-.09c-.34 0-.68.07-1 .2a1.65 1.65 0 0 0-.51.33Z" />
+    </svg>
+  ),
   chevronLeft: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
       <polyline points="15 18 9 12 15 6" />
@@ -67,7 +84,9 @@ const Icon = {
   ),
 };
 
-const NAV_GROUPS = [
+const normalizeRoleKey = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const FACULTY_NAV_GROUPS = [
   {
     title: 'Workspace',
     items: [
@@ -80,7 +99,28 @@ const NAV_GROUPS = [
     items: [
       { id: 'batches', label: 'Batches', to: '/faculty/batches', icon: Icon.users },
       { id: 'modules', label: 'Modules', to: '/faculty/modules', icon: Icon.book },
+      { id: 'addedModules', label: 'Added Modules', to: '/faculty/modules/added', icon: Icon.archive },
       { id: 'hallAllocations', label: 'Hall Allocations', to: '/faculty/hall-allocations', icon: Icon.building },
+    ],
+  },
+];
+
+const ACADEMIC_NAV_GROUPS = [
+  {
+    title: 'Workspace',
+    items: [
+      { id: 'overview', label: 'Overview', to: '/dashboard#acOverview', icon: Icon.grid, type: 'section' },
+      { id: 'modulesAssignment', label: 'Modules Assignment', to: '/dashboard#main-view-panel-lectures', icon: Icon.book, type: 'section' },
+      { id: 'hallAllocation', label: 'Hall Allocation', to: '/dashboard#main-view-panel-hallAllocation', icon: Icon.building, type: 'section' },
+    ],
+  },
+  {
+    title: 'Review',
+    items: [
+      { id: 'timetablePanel', label: 'Timetables', to: '/dashboard#timetablePanel', icon: Icon.calendar, type: 'section' },
+      { id: 'acConflictsPanel', label: 'Conflicts', to: '/dashboard#acConflictsPanel', icon: Icon.activity, type: 'section' },
+      { id: 'acResourcesPanel', label: 'Resources', to: '/dashboard#acResourcesPanel', icon: Icon.building, type: 'section' },
+      { id: 'acCalendarPanel', label: 'Academic Calendar', to: '/dashboard#acCalendarPanel', icon: Icon.settings, type: 'section' },
     ],
   },
 ];
@@ -94,11 +134,17 @@ export default function FacultyCoordinatorShell({
   children,
   headerActions,
   footerNote,
+  navigationGroups,
+  brandCode = 'FC',
+  brandTitle = 'Faculty Coordinator',
+  brandSubtitle = 'Scheduling Console',
+  sidebarSections = [],
 }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [hoveredNavId, setHoveredNavId] = useState('');
 
   const displayName = user?.name || user?.username || 'Faculty Coordinator';
   const initials = useMemo(() => {
@@ -111,17 +157,112 @@ export default function FacultyCoordinatorShell({
     return chars || 'FC';
   }, [displayName]);
 
-  const mainPl = sidebarCollapsed ? 'lg:pl-[72px]' : 'lg:pl-[260px]';
   const currentYear = new Date().getFullYear();
+  const roleKey = normalizeRoleKey(user?.role);
+
+  const roleDefaultNavGroups = roleKey === 'academiccoordinator' ? ACADEMIC_NAV_GROUPS : FACULTY_NAV_GROUPS;
+
+  const navGroups = useMemo(() => {
+    const baseGroups = Array.isArray(navigationGroups) && navigationGroups.length
+      ? navigationGroups
+      : roleDefaultNavGroups;
+
+    if (!Array.isArray(sidebarSections) || !sidebarSections.length) {
+      return baseGroups;
+    }
+
+    const defaultSectionIcons = {
+      fcOverview: Icon.grid,
+      fcOperations: Icon.users,
+      fcActivity: Icon.activity,
+      fcTimetables: Icon.calendar,
+      fcSoftConstraints: Icon.settings,
+    };
+
+    const sectionGroup = {
+      title: 'Dashboard Sections',
+      items: sidebarSections.map((section, index) => ({
+        id: section.id || `section-${index}`,
+        label: section.label || `Section ${index + 1}`,
+        to: `/dashboard#${section.id || `section-${index}`}`,
+        icon: section.icon || defaultSectionIcons[section.id] || Icon.grid,
+        type: 'section',
+      })),
+    };
+
+    return [...baseGroups, sectionGroup];
+  }, [navigationGroups, roleDefaultNavGroups, sidebarSections]);
+
+  const hexToRgba = (hex, alpha) => {
+    const cleanHex = String(hex || '').replace('#', '');
+    if (!/^[\da-fA-F]{6}$/.test(cleanHex)) {
+      return `rgba(34, 197, 94, ${alpha})`;
+    }
+    const r = parseInt(cleanHex.slice(0, 2), 16);
+    const g = parseInt(cleanHex.slice(2, 4), 16);
+    const b = parseInt(cleanHex.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+
+  const scrollToSection = (sectionId) => {
+    const target = document.getElementById(sectionId);
+    if (!target) {
+      return false;
+    }
+
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return true;
+  };
+
+  const handleNavItemClick = (item) => {
+    if (item.type === 'section') {
+      const sectionId = item.id;
+      if (location.pathname === '/dashboard') {
+        navigate(`/dashboard#${sectionId}`);
+        setTimeout(() => {
+          scrollToSection(sectionId);
+        }, 80);
+      } else {
+        navigate(`/dashboard#${sectionId}`);
+      }
+      setMobileOpen(false);
+      return;
+    }
+
+    navigate(item.to);
+    setMobileOpen(false);
+  };
+
+  useEffect(() => {
+    const previousScrollBehavior = document.documentElement.style.scrollBehavior;
+    document.documentElement.style.scrollBehavior = 'smooth';
+
+    return () => {
+      document.documentElement.style.scrollBehavior = previousScrollBehavior;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (location.pathname !== '/dashboard' || !location.hash) {
+      return;
+    }
+
+    const sectionId = location.hash.replace('#', '');
+    const timer = setTimeout(() => {
+      scrollToSection(sectionId);
+    }, 80);
+
+    return () => clearTimeout(timer);
+  }, [location.pathname, location.hash]);
 
   return (
     <div
-      className="relative min-h-screen overflow-x-hidden"
+      className="relative min-h-screen overflow-x-hidden fc-shell-layout"
       style={{
         fontFamily: "'Inter', 'Segoe UI', sans-serif",
         backgroundImage: backgroundImage
           ? `linear-gradient(135deg, rgba(15,23,42,0.66) 0%, rgba(12,22,40,0.58) 55%, rgba(15,23,42,0.68) 100%), url(${backgroundImage})`
-          : 'linear-gradient(135deg, #0f172a 0%, #0c1628 50%, #0f172a 100%)',
+          : 'linear-gradient(135deg, #091120 0%, #152238 52%, #091120 100%)',
         backgroundSize: backgroundImage ? 'cover' : 'auto',
         backgroundPosition: backgroundImage ? 'center' : 'initial',
         backgroundRepeat: backgroundImage ? 'no-repeat' : 'repeat',
@@ -130,9 +271,9 @@ export default function FacultyCoordinatorShell({
     >
       {/* Animated background orbs */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden" style={{ zIndex: 0 }}>
-        <div style={{ position: 'absolute', width: 600, height: 600, top: '-200px', left: '-150px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(56,189,248,0.08) 0%, transparent 70%)', animation: 'fcOrb1 20s ease-in-out infinite' }} />
-        <div style={{ position: 'absolute', width: 500, height: 500, bottom: '-100px', right: '-100px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(139,92,246,0.08) 0%, transparent 70%)', animation: 'fcOrb2 25s ease-in-out infinite' }} />
-        <div style={{ position: 'absolute', width: 300, height: 300, top: '40%', left: '50%', borderRadius: '50%', background: 'radial-gradient(circle, rgba(34,211,238,0.05) 0%, transparent 70%)', animation: 'fcOrb3 18s ease-in-out infinite' }} />
+        <div style={{ position: 'absolute', width: 600, height: 600, top: '-200px', left: '-150px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(34,197,94,0.1) 0%, transparent 70%)', animation: 'fcOrb1 20s ease-in-out infinite' }} />
+        <div style={{ position: 'absolute', width: 500, height: 500, bottom: '-100px', right: '-100px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(245,158,11,0.08) 0%, transparent 70%)', animation: 'fcOrb2 25s ease-in-out infinite' }} />
+        <div style={{ position: 'absolute', width: 300, height: 300, top: '40%', left: '50%', borderRadius: '50%', background: 'radial-gradient(circle, rgba(225,29,72,0.06) 0%, transparent 70%)', animation: 'fcOrb3 18s ease-in-out infinite' }} />
       </div>
 
       <style>{`
@@ -142,15 +283,40 @@ export default function FacultyCoordinatorShell({
         @keyframes fcSlideIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes fcPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
         @keyframes fcShimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-        .fc-nav-item { transition: all 0.2s cubic-bezier(0.4,0,0.2,1); }
+        .fc-nav-item { transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1); }
         .fc-nav-item:hover { transform: translateX(3px); }
         .fc-card-hover { transition: all 0.25s cubic-bezier(0.4,0,0.2,1); }
         .fc-card-hover:hover { transform: translateY(-2px); }
-        .fc-btn { transition: all 0.2s cubic-bezier(0.4,0,0.2,1); }
+        .fc-btn { transition: all 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
         .fc-btn:hover { transform: translateY(-1px); }
         .fc-btn:active { transform: translateY(0); }
         .fc-animate-in { animation: fcSlideIn 0.4s ease forwards; }
         .fc-pulse-dot { animation: fcPulse 2s infinite; }
+        .fc-shell-sidebar {
+          position: fixed;
+          top: 0;
+          left: 0;
+          bottom: 0;
+          z-index: 50;
+          overflow-y: auto;
+        }
+        .fc-main-shell {
+          margin-left: 0;
+          width: 100%;
+        }
+        @media (min-width: 1024px) {
+          .fc-shell-sidebar {
+            top: var(--fc-global-header-offset, 80px);
+            bottom: var(--fc-global-footer-offset, 144px);
+            z-index: 40;
+            border-top-right-radius: 18px;
+            border-bottom-right-radius: 18px;
+          }
+          .fc-main-shell {
+            margin-left: var(--fc-sidebar-width);
+            width: calc(100% - var(--fc-sidebar-width));
+          }
+        }
       `}</style>
 
       {/* Mobile overlay */}
@@ -166,7 +332,6 @@ export default function FacultyCoordinatorShell({
       {/* Sidebar */}
       <aside
         style={{
-          position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 50,
           display: 'flex', flexDirection: 'column',
           width: sidebarCollapsed ? 72 : 260,
           background: 'linear-gradient(180deg, rgba(2,8,23,0.97) 0%, rgba(7,20,43,0.97) 100%)',
@@ -176,29 +341,29 @@ export default function FacultyCoordinatorShell({
           transition: 'width 0.3s cubic-bezier(0.4,0,0.2,1)',
           transform: mobileOpen ? 'translateX(0)' : undefined,
         }}
-        className={`${mobileOpen ? '' : '-translate-x-full'} lg:translate-x-0`}
+        className={`fc-shell-sidebar ${mobileOpen ? '' : '-translate-x-full'} lg:translate-x-0`}
       >
         {/* Brand bar */}
         <div style={{ padding: sidebarCollapsed ? '20px 12px' : '20px', borderBottom: '1px solid rgba(148,163,184,0.1)', display: 'flex', alignItems: 'center', gap: 12, overflow: 'hidden' }}>
           <div style={{
             minWidth: 42, height: 42, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%)',
-            boxShadow: '0 8px 24px rgba(14,165,233,0.35)',
+            background: 'linear-gradient(135deg, #166534 0%, #22c55e 100%)',
+            boxShadow: '0 8px 24px rgba(34,197,94,0.35)',
             fontSize: 16, fontWeight: 800, color: '#fff', letterSpacing: 1,
           }}>
-            FC
+            {brandCode}
           </div>
           {!sidebarCollapsed && (
             <div style={{ overflow: 'hidden' }}>
-              <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(56,189,248,0.85)', margin: 0 }}>Faculty Coordinator</p>
-              <p style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', margin: 0, marginTop: 2 }}>Scheduling Console</p>
+              <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(34,197,94,0.9)', margin: 0 }}>{brandTitle}</p>
+              <p style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', margin: 0, marginTop: 2 }}>{brandSubtitle}</p>
             </div>
           )}
         </div>
 
         {/* Nav */}
         <nav style={{ flex: 1, overflowY: 'auto', padding: sidebarCollapsed ? '16px 8px' : '16px 12px', display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {NAV_GROUPS.map((group) => (
+          {navGroups.map((group) => (
             <div key={group.title}>
               {!sidebarCollapsed && (
                 <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.6)', marginBottom: 8, paddingLeft: 8 }}>
@@ -207,32 +372,71 @@ export default function FacultyCoordinatorShell({
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {group.items.map((item) => {
-                  const isActive = location.pathname === item.to;
+                  const itemAccent = item.color || '#38bdf8';
+                  const isActive = item.type === 'section'
+                    ? location.pathname === '/dashboard' && location.hash === `#${item.id}`
+                    : location.pathname === item.to;
                   return (
                     <button
                       key={item.id}
                       type="button"
                       className="fc-nav-item"
-                      onClick={() => { navigate(item.to); setMobileOpen(false); }}
+                      onClick={() => handleNavItemClick(item)}
+                      onMouseEnter={() => {
+                        if (sidebarCollapsed) setHoveredNavId(item.id);
+                      }}
+                      onMouseLeave={() => {
+                        if (sidebarCollapsed) setHoveredNavId('');
+                      }}
+                      onFocus={() => {
+                        if (sidebarCollapsed) setHoveredNavId(item.id);
+                      }}
+                      onBlur={() => {
+                        if (sidebarCollapsed) setHoveredNavId('');
+                      }}
                       title={sidebarCollapsed ? item.label : undefined}
                       style={{
+                        position: 'relative',
                         display: 'flex', alignItems: 'center', gap: 10,
                         padding: sidebarCollapsed ? '10px' : '10px 12px',
                         borderRadius: 12,
-                        border: isActive ? '1px solid rgba(56,189,248,0.35)' : '1px solid transparent',
+                        border: isActive ? `1px solid ${hexToRgba(itemAccent, 0.38)}` : '1px solid transparent',
                         background: isActive
-                          ? 'linear-gradient(90deg, rgba(14,165,233,0.22) 0%, rgba(99,102,241,0.16) 100%)'
+                          ? `linear-gradient(90deg, ${hexToRgba(itemAccent, 0.24)} 0%, ${hexToRgba(itemAccent, 0.14)} 100%)`
                           : 'transparent',
-                        boxShadow: isActive ? '0 4px 20px rgba(14,165,233,0.15)' : 'none',
+                        boxShadow: isActive ? `0 0 0 1px ${hexToRgba(itemAccent, 0.32)}, 0 6px 24px ${hexToRgba(itemAccent, 0.22)}` : 'none',
                         color: isActive ? '#e0f2fe' : 'rgba(148,163,184,0.85)',
                         fontSize: 14, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
                         justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
                       }}
                     >
-                      <span style={{ color: isActive ? '#38bdf8' : 'rgba(148,163,184,0.7)', flexShrink: 0 }}>{item.icon}</span>
+                      <span style={{ color: isActive ? itemAccent : 'rgba(148,163,184,0.7)', flexShrink: 0 }}>{item.icon}</span>
                       {!sidebarCollapsed && <span>{item.label}</span>}
+                      {sidebarCollapsed && hoveredNavId === item.id && (
+                        <span
+                          style={{
+                            position: 'absolute',
+                            left: 'calc(100% + 10px)',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            whiteSpace: 'nowrap',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: '#f8fafc',
+                            background: 'linear-gradient(135deg, rgba(2,8,23,0.95), rgba(15,23,42,0.95))',
+                            border: '1px solid rgba(148,163,184,0.3)',
+                            borderRadius: 8,
+                            padding: '5px 10px',
+                            boxShadow: '0 8px 20px rgba(0,0,0,0.35)',
+                            pointerEvents: 'none',
+                            zIndex: 70,
+                          }}
+                        >
+                          {item.label}
+                        </span>
+                      )}
                       {isActive && !sidebarCollapsed && (
-                        <span style={{ marginLeft: 'auto', width: 6, height: 6, borderRadius: '50%', background: '#38bdf8', flexShrink: 0 }} className="fc-pulse-dot" />
+                        <span style={{ marginLeft: 'auto', width: 6, height: 6, borderRadius: '50%', background: itemAccent, flexShrink: 0 }} className="fc-pulse-dot" />
                       )}
                     </button>
                   );
@@ -252,7 +456,7 @@ export default function FacultyCoordinatorShell({
           }}>
             <div style={{
               width: 34, height: 34, minWidth: 34, borderRadius: '50%',
-              background: 'linear-gradient(135deg, #0ea5e9, #6366f1)',
+              background: 'linear-gradient(135deg, #14532d, #22c55e)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 12, fontWeight: 800, color: '#fff',
             }}>{initials}</div>
@@ -285,7 +489,7 @@ export default function FacultyCoordinatorShell({
       </aside>
 
       {/* Main content */}
-      <main style={{ position: 'relative', zIndex: 10, minHeight: '100vh', display: 'flex', flexDirection: 'column' }} className={`transition-all duration-300 ${mainPl}`}>
+      <main style={{ position: 'relative', zIndex: 10, minHeight: '100vh', display: 'flex', flexDirection: 'column', '--fc-sidebar-width': `${sidebarCollapsed ? 72 : 260}px` }} className="fc-main-shell transition-all duration-300">
         {/* Top header */}
         <header style={{
           position: 'sticky', top: 0, zIndex: 30,

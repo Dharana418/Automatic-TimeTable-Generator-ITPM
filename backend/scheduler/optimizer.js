@@ -80,6 +80,27 @@ function normalizeAmenities(amenities = null) {
   );
 }
 
+function getEffectiveHallCapacity(hall = {}) {
+  const rawCapacity = Number(hall?.capacity || 0);
+  const normalizedCapacity = Number.isFinite(rawCapacity) && rawCapacity > 0 ? rawCapacity : 0;
+
+  const hallType = normalizeText(
+    hall?.features?.hallType || hall?.features?.roomType || hall?.roomType || hall?.hallType
+  );
+
+  const isLectureOrLab =
+    hallType.includes('lecture') ||
+    hallType.includes('hall') ||
+    hallType.includes('lab');
+
+  if (isLectureOrLab) {
+    // Domain rule: one lecture hall or one lab can host at most 120 students.
+    return normalizedCapacity ? Math.min(normalizedCapacity, 120) : 120;
+  }
+
+  return normalizedCapacity;
+}
+
 function getModuleStructureRequirements(module = {}) {
   const details = module?.details || {};
 
@@ -129,7 +150,7 @@ function hallMatchesModule(hall, module) {
   }
 
   const expectedSize = getModuleExpectedSize(module);
-  const hallCapacity = Number(hall?.capacity || 0);
+  const hallCapacity = getEffectiveHallCapacity(hall);
   if (Number.isFinite(expectedSize) && expectedSize > 0 && Number.isFinite(hallCapacity) && hallCapacity > 0 && hallCapacity < expectedSize) {
     return false;
   }
@@ -341,14 +362,15 @@ export function evaluateSolution(solution, problem, options = {}) {
     const slotLabels = placement.slotIndexes.map((slotIdx) => problem.slots[slotIdx]);
     const startSlot = slotLabels[0];
 
-    if (!hall || (session.expectedStudents && hall.capacity && Number(hall.capacity) < Number(session.expectedStudents))) {
+    const effectiveHallCapacity = getEffectiveHallCapacity(hall);
+    if (!hall || (session.expectedStudents && effectiveHallCapacity && Number(effectiveHallCapacity) < Number(session.expectedStudents))) {
       capacityViolations += 1;
       hardConflicts.push({
         type: 'capacity_violation',
         moduleId: session.module.id || session.module.code || session.module.name,
         hallId: hall?.id || hall?.name || null,
         expected: session.expectedStudents,
-        capacity: hall?.capacity || null,
+        capacity: effectiveHallCapacity || null,
       });
     }
 

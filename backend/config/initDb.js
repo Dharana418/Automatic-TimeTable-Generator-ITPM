@@ -1,5 +1,373 @@
 import pool from './db.js';
 
+const DEMO_SPECIALIZATION_BLUEPRINTS = [
+    {
+        specialization: 'IT',
+        department: 'Information Technology',
+        year: 1,
+        semester: 1,
+        building: 'New Building',
+        floor: '1',
+        weekdayModule: { code: 'IT1010', name: 'Information Technology Foundations' },
+        weekendModule: { code: 'IT1020', name: 'IT Systems Lab' },
+    },
+    {
+        specialization: 'SE',
+        department: 'Software Engineering',
+        year: 1,
+        semester: 2,
+        building: 'New Building',
+        floor: '2',
+        weekdayModule: { code: 'SE1110', name: 'Software Engineering Principles' },
+        weekendModule: { code: 'SE1120', name: 'Software Engineering Studio' },
+    },
+    {
+        specialization: 'CYBER SECURITY',
+        department: 'Cyber Security',
+        year: 2,
+        semester: 1,
+        building: 'Main Building',
+        floor: '2',
+        weekdayModule: { code: 'CYB1210', name: 'Cyber Security Foundations' },
+        weekendModule: { code: 'CYB1220', name: 'Cyber Security Lab' },
+    },
+    {
+        specialization: 'CS',
+        department: 'Computer Science',
+        year: 2,
+        semester: 1,
+        building: 'Main Building',
+        floor: '1',
+        weekdayModule: { code: 'CS1210', name: 'Computer Science Foundations' },
+        weekendModule: { code: 'CS1220', name: 'Computer Science Lab' },
+    },
+    {
+        specialization: 'ISE',
+        department: 'Information Systems Engineering',
+        year: 2,
+        semester: 2,
+        building: 'Main Building',
+        floor: '2',
+        weekdayModule: { code: 'ISE1310', name: 'Information Systems Engineering' },
+        weekendModule: { code: 'ISE1320', name: 'Information Systems Workshop' },
+    },
+    {
+        specialization: 'CSNE',
+        department: 'Computer Systems Network Engineering',
+        year: 3,
+        semester: 1,
+        building: 'Main Building',
+        floor: '3',
+        weekdayModule: { code: 'CSNE1410', name: 'Network Engineering Fundamentals' },
+        weekendModule: { code: 'CSNE1420', name: 'Network Engineering Lab' },
+    },
+    {
+        specialization: 'IME',
+        department: 'Interactive Media',
+        year: 3,
+        semester: 2,
+        building: 'Main Building',
+        floor: '4',
+        weekdayModule: { code: 'IME1510', name: 'Interactive Media Systems' },
+        weekendModule: { code: 'IME1520', name: 'Interactive Media Studio' },
+    },
+    {
+        specialization: 'DS',
+        department: 'Data Science',
+        year: 4,
+        semester: 1,
+        building: 'Main Building',
+        floor: '5',
+        weekdayModule: { code: 'DS1610', name: 'Data Science Foundations' },
+        weekendModule: { code: 'DS1620', name: 'Data Science Lab' },
+    },
+    {
+        specialization: 'AI',
+        department: 'Artificial Intelligence',
+        year: 4,
+        semester: 2,
+        building: 'Main Building',
+        floor: '6',
+        weekdayModule: { code: 'AI1710', name: 'Artificial Intelligence Foundations' },
+        weekendModule: { code: 'AI1720', name: 'Artificial Intelligence Lab' },
+    },
+];
+
+const toSpecializationKey = (value = '') => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+const MODULE_SPECIALIZATIONS = ['IT', 'SE', 'CS', 'ISE', 'CSNE', 'IME', 'DS', 'AI', 'CYBER SECURITY'];
+const MODULES_PER_SPECIALIZATION_PER_SEMESTER = 5;
+
+const SPECIALIZATION_CODE_PREFIX = {
+    IT: 'IT',
+    SE: 'SE',
+    CS: 'CS',
+    ISE: 'IS',
+    CSNE: 'CN',
+    IME: 'IE',
+    DS: 'DS',
+    AI: 'AI',
+    'CYBER SECURITY': 'CYB',
+};
+
+const buildHallFeatures = ({ building, floor, hallType }) => ({
+    building,
+    floor,
+    hallType,
+    roomType: hallType,
+    amenities: {
+        projector: true,
+        wifi: true,
+        ac: hallType === 'lecture_hall',
+        lab_equipment: hallType === 'lab',
+        accessibility: true,
+        whiteboard: true,
+        sound_system: hallType === 'lecture_hall',
+    },
+});
+
+const buildDemoHalls = () => {
+    const hallRows = [];
+    const buildingBlueprints = [
+        { building: 'Main Building', prefix: 'MB', floors: [1, 2, 3, 4, 5, 6, 7, 8] },
+        { building: 'New Building', prefix: 'NB', floors: [1, 2, 3, 4] },
+    ];
+
+    for (const buildingBlueprint of buildingBlueprints) {
+        for (const floor of buildingBlueprint.floors) {
+            hallRows.push({
+                id: `${buildingBlueprint.prefix}-F${String(floor).padStart(2, '0')}-LH-01`,
+                name: `${buildingBlueprint.prefix} Floor ${floor} Lecture Hall 01`,
+                capacity: floor <= 2 ? 120 : 100,
+                features: buildHallFeatures({ building: buildingBlueprint.building, floor: String(floor), hallType: 'lecture_hall' }),
+                status: 'available',
+                maintenance_start: null,
+                maintenance_end: null,
+            });
+
+            hallRows.push({
+                id: `${buildingBlueprint.prefix}-F${String(floor).padStart(2, '0')}-LAB-01`,
+                name: `${buildingBlueprint.prefix} Floor ${floor} Lab 01`,
+                capacity: 60,
+                features: buildHallFeatures({ building: buildingBlueprint.building, floor: String(floor), hallType: 'lab' }),
+                status: 'available',
+                maintenance_start: null,
+                maintenance_end: null,
+            });
+        }
+    }
+
+    return hallRows;
+};
+
+const buildDemoDepartments = () => DEMO_SPECIALIZATION_BLUEPRINTS.map((blueprint) => ({
+    id: `dept_${toSpecializationKey(blueprint.specialization)}`,
+    code: blueprint.specialization,
+    name: `Department of ${blueprint.department}`,
+}));
+
+const buildDemoLics = () => DEMO_SPECIALIZATION_BLUEPRINTS.map((blueprint) => ({
+    id: `lic_${toSpecializationKey(blueprint.specialization)}`,
+    name: `${blueprint.specialization} LIC`,
+    department: blueprint.department,
+    details: JSON.stringify({ specialization: blueprint.specialization, building: blueprint.building, floor: blueprint.floor }),
+}));
+
+const buildDemoInstructors = () => DEMO_SPECIALIZATION_BLUEPRINTS.map((blueprint) => ({
+    id: `inst_${toSpecializationKey(blueprint.specialization)}`,
+    name: `${blueprint.specialization} Instructor`,
+    email: `${toSpecializationKey(blueprint.specialization)}@example.com`,
+    department: blueprint.department,
+    availabilities: JSON.stringify([
+        { day: 'Mon', slots: ['09:00-10:00', '10:00-11:00', '11:00-12:00'] },
+        { day: 'Sat', slots: ['09:00-10:00', '10:00-11:00'] },
+    ]),
+    details: JSON.stringify({ specialization: blueprint.specialization, building: blueprint.building, floor: blueprint.floor }),
+    lic_id: `lic_${toSpecializationKey(blueprint.specialization)}`,
+}));
+
+const buildDemoModules = () => {
+    const rows = [];
+
+    const specializationMeta = new Map(
+        DEMO_SPECIALIZATION_BLUEPRINTS.map((blueprint) => [
+            blueprint.specialization,
+            {
+                building: blueprint.building,
+                floor: blueprint.floor,
+                department: blueprint.department,
+            },
+        ]),
+    );
+
+    for (let year = 1; year <= 4; year += 1) {
+        for (const semester of [1, 2]) {
+            for (const specialization of MODULE_SPECIALIZATIONS) {
+                const meta = specializationMeta.get(specialization) || {
+                    building: 'Main Building',
+                    floor: String(Math.min(8, Math.max(1, year + semester))),
+                    department: specialization,
+                };
+
+                const prefix = SPECIALIZATION_CODE_PREFIX[specialization] || 'GEN';
+
+                for (let index = 1; index <= MODULES_PER_SPECIALIZATION_PER_SEMESTER; index += 1) {
+                    const isWeekendLab = index === MODULES_PER_SPECIALIZATION_PER_SEMESTER;
+                    const code = `${prefix}${year}${semester}${index}0`;
+                    const moduleName = `${specialization} Year ${year} Semester ${semester} Module ${index}`;
+
+                    rows.push({
+                        id: `module_${toSpecializationKey(specialization)}_${year}_${semester}_${index}`,
+                        code,
+                        name: moduleName,
+                        batch_size: isWeekendLab ? 100 : 120,
+                        day_type: isWeekendLab ? 'weekend' : 'weekday',
+                        credits: isWeekendLab ? 2 : 3,
+                        lectures_per_week: isWeekendLab ? 2 : 3,
+                        details: JSON.stringify({
+                            specialization,
+                            academic_year: year,
+                            semester,
+                            day_type: isWeekendLab ? 'weekend' : 'weekday',
+                            expected_students: isWeekendLab ? 100 : 120,
+                            requiredHallType: isWeekendLab ? 'lab' : 'lecture_hall',
+                            preferredBuilding: meta.building,
+                            preferredFloor: meta.floor,
+                        }),
+                        lic_id: `lic_${toSpecializationKey(specialization)}`,
+                        academic_year: String(year),
+                        semester: String(semester),
+                        created_by: null,
+                    });
+                }
+            }
+        }
+    }
+
+    return rows;
+};
+
+const createBatchRows = ({ year, semester, specialization, weekday = [], weekend = [] }) => {
+    const rows = [];
+
+    weekday.forEach((capacity, index) => {
+        const subgroup = String(index + 1).padStart(2, '0');
+        rows.push({
+            id: `Y${year}.S${semester}.WD.${specialization}.01.${subgroup}`,
+            name: `Y${year}.S${semester}.WD.${specialization}.01.${subgroup}`,
+            department_id: `dept_${toSpecializationKey(specialization)}`,
+            capacity,
+        });
+    });
+
+    weekend.forEach((capacity, index) => {
+        const subgroup = String(index + 1).padStart(2, '0');
+        rows.push({
+            id: `Y${year}.S${semester}.WE.${specialization}.02.${subgroup}`,
+            name: `Y${year}.S${semester}.WE.${specialization}.02.${subgroup}`,
+            department_id: `dept_${toSpecializationKey(specialization)}`,
+            capacity,
+        });
+    });
+
+    return rows;
+};
+
+const buildDemoBatches = () => {
+    const rows = [];
+
+    // Requested: Year 1 Semester 1 total = 2000 students.
+    rows.push(...createBatchRows({ year: 1, semester: 1, specialization: 'IT', weekday: [500, 500], weekend: [500, 500] }));
+
+    // Requested: Year 1 Semester 2 total = 1900 students.
+    rows.push(...createBatchRows({ year: 1, semester: 2, specialization: 'SE', weekday: [500, 500], weekend: [450, 450] }));
+
+    // Requested: Year 2 Semester 1 Cyber Security has 100 students.
+    rows.push(...createBatchRows({ year: 2, semester: 1, specialization: 'CYBERSECURITY', weekday: [50], weekend: [50] }));
+
+    // Keep existing Year 2 Semester 1 stream with realistic volume.
+    rows.push(...createBatchRows({ year: 2, semester: 1, specialization: 'CS', weekday: [240, 240], weekend: [120, 120] }));
+
+    // Year 2 Semester 2 transitional intake.
+    rows.push(...createBatchRows({ year: 2, semester: 2, specialization: 'ISE', weekday: [220, 220], weekend: [120, 120] }));
+
+    // Requested: From Year 3 onward, all specializations are represented and yearly total exceeds 2000.
+    const year3AndAboveSpecializations = ['IT', 'SE', 'CS', 'ISE', 'CSNE', 'IME', 'DS', 'AI'];
+    for (const year of [3, 4]) {
+        for (const semester of [1, 2]) {
+            for (const specialization of year3AndAboveSpecializations) {
+                rows.push(
+                    ...createBatchRows({
+                        year,
+                        semester,
+                        specialization,
+                        weekday: [50, 50],
+                        weekend: [25, 25],
+                    }),
+                );
+            }
+        }
+    }
+
+    return rows;
+};
+
+const insertSeedRows = async (table, columns, rows) => {
+    if (!rows.length) return;
+
+    const values = [];
+    const placeholders = rows
+        .map((row, rowIndex) => {
+            columns.forEach((column) => values.push(row[column] ?? null));
+            const offset = rowIndex * columns.length;
+            return `(${columns.map((_, columnIndex) => `$${offset + columnIndex + 1}`).join(', ')})`;
+        })
+        .join(', ');
+
+    await pool.query(
+        `INSERT INTO ${table} (${columns.join(', ')}) VALUES ${placeholders} ON CONFLICT (id) DO NOTHING`,
+        values,
+    );
+};
+
+const upsertSeedRows = async (table, columns, rows) => {
+    if (!rows.length) return;
+
+    const values = [];
+    const placeholders = rows
+        .map((row, rowIndex) => {
+            columns.forEach((column) => values.push(row[column] ?? null));
+            const offset = rowIndex * columns.length;
+            return `(${columns.map((_, columnIndex) => `$${offset + columnIndex + 1}`).join(', ')})`;
+        })
+        .join(', ');
+
+    const updatableColumns = columns.filter((column) => column !== 'id');
+    const updateAssignments = updatableColumns
+        .map((column) => `${column} = EXCLUDED.${column}`)
+        .join(', ');
+
+    await pool.query(
+        `INSERT INTO ${table} (${columns.join(', ')})
+         VALUES ${placeholders}
+         ON CONFLICT (id)
+         DO UPDATE SET ${updateAssignments}`,
+        values,
+    );
+};
+
+const seedDemoData = async () => {
+    await insertSeedRows('departments', ['id', 'code', 'name'], buildDemoDepartments());
+    await insertSeedRows('lics', ['id', 'name', 'department', 'details'], buildDemoLics());
+    await insertSeedRows('instructors', ['id', 'name', 'email', 'department', 'availabilities', 'details', 'lic_id'], buildDemoInstructors());
+    await insertSeedRows('halls', ['id', 'name', 'capacity', 'features', 'status', 'maintenance_start', 'maintenance_end'], buildDemoHalls().map((hall) => ({
+        ...hall,
+        features: JSON.stringify(hall.features),
+    })));
+    await insertSeedRows('modules', ['id', 'code', 'name', 'batch_size', 'day_type', 'credits', 'lectures_per_week', 'details', 'lic_id', 'academic_year', 'semester', 'created_by'], buildDemoModules());
+    await upsertSeedRows('batches', ['id', 'name', 'department_id', 'capacity'], buildDemoBatches());
+};
+
 export async function initDb() {
     try {
         // Check if pool is valid
@@ -334,6 +702,9 @@ export async function initDb() {
             CREATE INDEX IF NOT EXISTS idx_hall_recommendations_hall_id ON hall_recommendations(recommended_hall_id)
         `);
         console.log('✓ indexes created');
+
+        await seedDemoData();
+        console.log('✓ demo timetable data seeded');
 
         console.log('✅ All database tables initialized successfully');
         return true;
