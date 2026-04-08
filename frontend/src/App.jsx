@@ -12,6 +12,7 @@ import FacultyBatchesPage from "./pages/FacultyBatchesPage.jsx";
 import FacultyModulesPage from "./pages/FacultyModulesPage.jsx";
 import FacultyAddedModulesPage from "./pages/FacultyAddedModulesPage.jsx";
 import FacultyHallAllocationPage from "./pages/FacultyHallAllocationPage.jsx";
+import FacultyCoordinatorTimetableSidebarPage from "./pages/FacultyCoordinatorTimetableSidebarPage.jsx";
 import LICDashboard from "./pages/LICDashboard.jsx";
 import AcademicCoordinatorDashboard from "./pages/AC_before_merge.jsx";
 import InstructorDashboard from "./pages/InstructorDashboard.jsx";
@@ -177,6 +178,12 @@ function App() {
         <Route path="/faculty/hall-allocations" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
             {roleKey === "facultycoordinator" ? <FacultyHallAllocationPage user={user} /> : <Navigate to="/dashboard" replace />}
+          </ProtectedRoute>
+        } />
+
+        <Route path="/faculty/timetable-report" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
+            {roleKey === "facultycoordinator" ? <FacultyCoordinatorTimetableSidebarPage user={user} /> : <Navigate to="/dashboard" replace />}
           </ProtectedRoute>
         } />
 

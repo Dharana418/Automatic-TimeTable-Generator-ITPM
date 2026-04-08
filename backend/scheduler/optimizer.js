@@ -200,11 +200,24 @@ function instructorAvailable(instructor, day, slotIndexes) {
   return slotIndexes.every((idx) => dayAvail.slots.includes(SLOTS[idx]));
 }
 
-function getAllowedDays(module) {
+function resolveWeekdayFreeDay(options = {}) {
+  const configuredDay = getNormalizedDay(
+    options.weekdayFreeDay || options?.softConstraints?.weekdayFreeDay || 'Fri'
+  );
+  if (!configuredDay || !WEEKDAYS.includes(configuredDay)) return 'Fri';
+  return configuredDay;
+}
+
+function getAllowedDays(module, options = {}) {
   const dt = String(module.day_type || module?.details?.day_type || 'weekday').toLowerCase();
+  const weekdayFreeDay = resolveWeekdayFreeDay(options);
+
+  const weekdayDays = WEEKDAYS.filter((day) => day !== weekdayFreeDay);
+  const safeWeekdayDays = weekdayDays.length ? weekdayDays : [...WEEKDAYS];
+
   if (dt === 'weekend') return WEEKEND;
-  if (dt === 'any' || dt === 'both') return [...WEEKDAYS, ...WEEKEND];
-  return WEEKDAYS;
+  if (dt === 'any' || dt === 'both') return [...safeWeekdayDays, ...WEEKEND];
+  return safeWeekdayDays;
 }
 
 function getModuleBatchKeys(module, batches = []) {
@@ -271,7 +284,7 @@ export function buildProblem(constraints = {}, options = {}) {
 
   const placements = sessions.map((session) => {
     const possible = [];
-    const allowedDays = getAllowedDays(session.module);
+    const allowedDays = getAllowedDays(session.module, options);
     const maxStart = SLOTS.length - session.durationSlots;
 
     for (const day of allowedDays) {
@@ -297,7 +310,7 @@ export function buildProblem(constraints = {}, options = {}) {
     }
 
     if (!possible.length && halls.length) {
-      const fallbackDays = [...WEEKDAYS, ...WEEKEND];
+      const fallbackDays = getAllowedDays(session.module, options);
       const maxStartFallback = Math.max(0, SLOTS.length - session.durationSlots);
       for (const day of fallbackDays) {
         for (let start = 0; start <= maxStartFallback; start += 1) {

@@ -1798,9 +1798,31 @@ export const runSchedulerForYearSemester = async (req, res) => {
     const batches = batchesRes.rows;
 
     const requestedSpecialization = normalizeSpecializationCode(options.specialization || '');
-    const filteredModules = requestedSpecialization
+    const moduleLimitPerSpecialization = Number(options.moduleLimitPerSpecialization || 5);
+
+    const specializationFilteredModules = requestedSpecialization
       ? modules.filter((module) => normalizeSpecializationCode(inferModuleSpecialization(module)) === requestedSpecialization)
       : modules;
+
+    const orderedModules = [...specializationFilteredModules].sort((left, right) => {
+      const leftTime = new Date(left?.created_at || 0).getTime();
+      const rightTime = new Date(right?.created_at || 0).getTime();
+      return rightTime - leftTime;
+    });
+
+    const specializationBuckets = new Map();
+    orderedModules.forEach((module) => {
+      const specialization = normalizeSpecializationCode(inferModuleSpecialization(module)) || 'General';
+      if (!specializationBuckets.has(specialization)) {
+        specializationBuckets.set(specialization, []);
+      }
+      specializationBuckets.get(specialization).push(module);
+    });
+
+    const filteredModules = [];
+    specializationBuckets.forEach((bucketModules) => {
+      filteredModules.push(...bucketModules.slice(0, Math.max(1, moduleLimitPerSpecialization)));
+    });
 
     // Validation
     if (!halls.length) {
