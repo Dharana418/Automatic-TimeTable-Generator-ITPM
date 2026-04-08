@@ -4,7 +4,22 @@
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const WEEKEND = ['Sat', 'Sun'];
 const DAYS = [...WEEKDAYS, ...WEEKEND];
-const SLOTS = ['09:00-10:00', '10:00-11:00', '11:00-12:00', '13:00-14:00', '14:00-15:00'];
+const WEEKDAY_SLOTS = [
+  '09:00-10:00',
+  '10:00-11:00',
+  '11:00-12:00',
+  '13:30-14:30',
+  '14:30-15:30',
+  '15:30-16:30',
+  '16:30-17:30',
+];
+const WEEKEND_SLOTS = [
+  ...WEEKDAY_SLOTS,
+  '17:30-18:30',
+  '18:30-19:30',
+  '19:30-20:30',
+];
+const SLOTS = [...WEEKEND_SLOTS];
 
 function parseJSONField(val) {
   if (!val) return null;
@@ -110,8 +125,19 @@ export function scheduleGreedy(constraints = {}, options = {}) {
       let placed = false;
       // try allowed day-slot combos
       let allowedDays = WEEKDAYS;
+      let allowedSlots = WEEKDAY_SLOTS;
       if (mod.day_type === 'weekend') allowedDays = WEEKEND;
-      else if (mod.day_type === 'any' || mod.day_type === 'both') allowedDays = WEEKDAYS.concat(WEEKEND);
+      else if (mod.day_type === 'any' || mod.day_type === 'both') {
+        allowedDays = WEEKDAYS.concat(WEEKEND);
+      } else {
+        allowedSlots = WEEKDAY_SLOTS;
+      }
+
+      if (mod.day_type === 'weekend') {
+        allowedSlots = WEEKEND_SLOTS;
+      } else if (mod.day_type === 'any' || mod.day_type === 'both') {
+        allowedSlots = SLOTS;
+      }
       else allowedDays = WEEKDAYS.filter((day) => day !== weekdayFreeDay);
 
       if (!allowedDays.length) {
@@ -119,7 +145,7 @@ export function scheduleGreedy(constraints = {}, options = {}) {
       }
 
       for (const day of allowedDays) {
-        for (const slot of SLOTS) {
+        for (const slot of allowedSlots) {
           // ensure not already occupied too many times
           // find instructor candidate
           let instructorCandidate = assignedInstructor;

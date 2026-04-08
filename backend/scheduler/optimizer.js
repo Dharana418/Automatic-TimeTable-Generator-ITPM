@@ -11,7 +11,22 @@ function parseJSONField(value) {
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const WEEKEND = ['Sat', 'Sun'];
-const SLOTS = ['09:00-10:00', '10:00-11:00', '11:00-12:00', '13:00-14:00', '14:00-15:00'];
+const WEEKDAY_SLOTS = [
+  '09:00-10:00',
+  '10:00-11:00',
+  '11:00-12:00',
+  '13:30-14:30',
+  '14:30-15:30',
+  '15:30-16:30',
+  '16:30-17:30',
+];
+const WEEKEND_SLOTS = [
+  ...WEEKDAY_SLOTS,
+  '17:30-18:30',
+  '18:30-19:30',
+  '19:30-20:30',
+];
+const SLOTS = [...WEEKEND_SLOTS];
 
 const DEFAULT_WEIGHTS = {
   w1: 100,
@@ -220,6 +235,26 @@ function getAllowedDays(module, options = {}) {
   return safeWeekdayDays;
 }
 
+function getAllowedSlotIndexes(module, allSlots = SLOTS) {
+  const dt = String(module.day_type || module?.details?.day_type || 'weekday').toLowerCase();
+
+  const allowedLabels =
+    dt === 'weekend'
+      ? WEEKEND_SLOTS
+      : dt === 'any' || dt === 'both'
+        ? allSlots
+        : WEEKDAY_SLOTS;
+
+  const allowedSet = new Set();
+  allSlots.forEach((label, idx) => {
+    if (allowedLabels.includes(label)) {
+      allowedSet.add(idx);
+    }
+  });
+
+  return allowedSet;
+}
+
 function getModuleBatchKeys(module, batches = []) {
   const details = module?.details || {};
   const keys = new Set();
@@ -285,11 +320,14 @@ export function buildProblem(constraints = {}, options = {}) {
   const placements = sessions.map((session) => {
     const possible = [];
     const allowedDays = getAllowedDays(session.module, options);
+    const allowedSlotIndexes = getAllowedSlotIndexes(session.module, SLOTS);
     const maxStart = SLOTS.length - session.durationSlots;
 
     for (const day of allowedDays) {
       for (let start = 0; start <= maxStart; start += 1) {
+        if (!allowedSlotIndexes.has(start)) continue;
         const slotIndexes = Array.from({ length: session.durationSlots }, (_, i) => start + i);
+        if (!slotIndexes.every((idx) => allowedSlotIndexes.has(idx))) continue;
 
         for (let hallIndex = 0; hallIndex < halls.length; hallIndex += 1) {
           const hall = halls[hallIndex];
@@ -314,7 +352,9 @@ export function buildProblem(constraints = {}, options = {}) {
       const maxStartFallback = Math.max(0, SLOTS.length - session.durationSlots);
       for (const day of fallbackDays) {
         for (let start = 0; start <= maxStartFallback; start += 1) {
+          if (!allowedSlotIndexes.has(start)) continue;
           const slotIndexes = Array.from({ length: session.durationSlots }, (_, i) => start + i);
+          if (!slotIndexes.every((idx) => allowedSlotIndexes.has(idx))) continue;
           for (let hallIndex = 0; hallIndex < halls.length; hallIndex += 1) {
             possible.push({ day, slotIndexes, hallIndex, instructorIndex: null });
           }

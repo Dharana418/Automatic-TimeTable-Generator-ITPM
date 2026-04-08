@@ -156,7 +156,26 @@ const HallAllocation = ({ apiBase }) => {
   }, []);
 
   const getHallBookingCount = useCallback((hall) => {
-    return timetables.filter((t) => t.hall_id === hall.id || t.data?.includes(hall.id)).length;
+    const hallId = String(hall?.id || '').trim();
+
+    return timetables.filter((t) => {
+      if (String(t?.hall_id || '').trim() === hallId) return true;
+
+      const rawData = t?.data;
+      if (typeof rawData === 'string') {
+        return rawData.includes(hallId);
+      }
+
+      if (rawData && typeof rawData === 'object') {
+        try {
+          return JSON.stringify(rawData).includes(hallId);
+        } catch {
+          return false;
+        }
+      }
+
+      return false;
+    }).length;
   }, [timetables]);
 
   const getHallAvailability = useCallback((hall) => {
@@ -212,14 +231,22 @@ const HallAllocation = ({ apiBase }) => {
       const hallsData = await hallRes.json();
       const timetableData = await timetableRes.json();
 
-      if (hallsData.success) {
-        const dbHalls = hallsData.items || hallsData.data || [];
-        setHalls(dbHalls.map(normalizeHall));
+      if (!hallRes.ok) {
+        throw new Error(hallsData?.error || hallsData?.message || `Failed to load halls (${hallRes.status})`);
       }
-      if (timetableData.success) setTimetables(timetableData.data || []);
+
+      if (!timetableRes.ok) {
+        throw new Error(timetableData?.error || timetableData?.message || `Failed to load timetables (${timetableRes.status})`);
+      }
+
+      const dbHalls = hallsData.items || hallsData.data || [];
+      setHalls(Array.isArray(dbHalls) ? dbHalls.map(normalizeHall) : []);
+
+      const rows = timetableData.data || timetableData.items || [];
+      setTimetables(Array.isArray(rows) ? rows : []);
     } catch (err) {
       console.error('Hall allocation load error:', err);
-      setToast({ message: 'Failed to load hall allocation data.', type: 'error' });
+      setToast({ message: err?.message || 'Failed to load hall allocation data.', type: 'error' });
     } finally {
       setLoading(false);
     }

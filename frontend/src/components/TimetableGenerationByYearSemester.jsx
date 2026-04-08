@@ -69,17 +69,6 @@ const DEFAULT_SPECIALIZATIONS = ['SE', 'IT', 'CS', 'IME', 'ISE', 'CSNE', 'CYBER 
 const WEEKDAY_FREE_DAY_OPTIONS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const MODULE_LIMIT_PER_SPECIALIZATION = 5;
 
-const formatGenerationStamp = () => {
-  const now = new Date();
-  const pad = (value) => String(value).padStart(2, '0');
-  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
-};
-
-const buildGeneratedTimetableName = ({ year, semester, specialization = 'ALL' }) => {
-  const safeSpecialization = String(specialization || 'ALL').trim().replace(/\s+/g, '_').toUpperCase();
-  return `Generated_Y${year}_S${semester}_${safeSpecialization}_${formatGenerationStamp()}`;
-};
-
 const TimetableGenerationByYearSemester = () => {
   const [academicYears, setAcademicYears] = useState([]);
   const [selectedYear, setSelectedYear] = useState('');
@@ -246,13 +235,14 @@ const TimetableGenerationByYearSemester = () => {
       return;
     }
 
+    if (!String(timetableName || '').trim()) {
+      setError('Timetable name is required');
+      return;
+    }
+
     try {
       setLoading(true);
-      const resolvedTimetableName = timetableName || buildGeneratedTimetableName({
-        year: selectedYear,
-        semester: selectedSemester,
-        specialization: selectedSpecialization !== 'ALL' ? selectedSpecialization : 'ALL',
-      });
+      const resolvedTimetableName = String(timetableName).trim();
 
       const response = await generateTimetableForYearSemester(
         selectedYear,
@@ -327,6 +317,11 @@ const TimetableGenerationByYearSemester = () => {
       return;
     }
 
+    if (!String(timetableName || '').trim()) {
+      setError('Timetable name is required');
+      return;
+    }
+
     const key = `${selectedYear}-${selectedSemester}-${specialization}`;
     try {
       setCategoryGenerating((prev) => ({ ...prev, [key]: true }));
@@ -334,11 +329,7 @@ const TimetableGenerationByYearSemester = () => {
 
       const response = await generateTimetableForYearSemester(selectedYear, selectedSemester, {
         algorithms,
-        timetableName: timetableName || buildGeneratedTimetableName({
-          year: selectedYear,
-          semester: selectedSemester,
-          specialization,
-        }),
+        timetableName: String(timetableName).trim(),
         specialization,
         weekdayFreeDay,
         moduleLimitPerSpecialization: MODULE_LIMIT_PER_SPECIALIZATION,
@@ -367,6 +358,11 @@ const TimetableGenerationByYearSemester = () => {
       return;
     }
 
+    if (!String(timetableName || '').trim()) {
+      setError('Timetable name is required');
+      return;
+    }
+
     try {
       setBulkGenerating(true);
       setError(null);
@@ -374,11 +370,7 @@ const TimetableGenerationByYearSemester = () => {
       for (const row of specializationCategoryRows) {
         await generateTimetableForYearSemester(selectedYear, selectedSemester, {
           algorithms,
-          timetableName: timetableName || buildGeneratedTimetableName({
-            year: selectedYear,
-            semester: selectedSemester,
-            specialization: row.specialization,
-          }),
+          timetableName: `${String(timetableName).trim()}_${row.specialization.replace(/\s+/g, '_')}`,
           specialization: row.specialization,
           weekdayFreeDay,
           moduleLimitPerSpecialization: MODULE_LIMIT_PER_SPECIALIZATION,
@@ -503,14 +495,15 @@ const TimetableGenerationByYearSemester = () => {
               {/* Timetable Name */}
               <div>
                 <label className="block text-sm font-medium mb-2">
-                  Timetable Name (Optional)
+                  Timetable Name *
                 </label>
                 <input
                   type="text"
                   value={timetableName}
                   onChange={(e) => setTimetableName(e.target.value)}
+                  required
                   className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., Spring 2025 Final Schedule"
+                  placeholder="Required: e.g., Semester1_Weekday_Final"
                 />
               </div>
 
