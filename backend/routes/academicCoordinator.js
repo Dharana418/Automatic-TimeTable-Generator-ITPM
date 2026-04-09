@@ -240,365 +240,112 @@ router.post('/calendar', async (req, res) => {
   }
 });
 
-// ============= MODULE MANAGEMENT BY ACADEMIC YEAR =============
-
-// Get all academic years with module count
-router.get('/modules/years', async (req, res) => {
+router.put('/calendar/:id', async (req, res) => {
   try {
-    const { rows } = await pool.query(`
-      SELECT DISTINCT academic_year, COUNT(*) AS module_count
-      FROM modules
-      WHERE academic_year IS NOT NULL
-      GROUP BY academic_year
-      ORDER BY academic_year DESC
-    `);
+    const { id } = req.params;
+    const {
+      event_name,
+      event_type,
+      start_date,
+      end_date,
+      academic_year,
+      semester,
+    } = req.body || {};
 
-    return res.json({
-      success: true,
-      data: rows,
-      total_years: rows.length,
-    });
+    if (!event_name || !event_type || !start_date || !academic_year || !semester) {
+      return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
+
+    const { rows, rowCount } = await pool.query(
+      `UPDATE academic_calendar
+       SET event_name = $1,
+           event_type = $2,
+           start_date = $3,
+           end_date = $4,
+           academic_year = $5,
+           semester = $6
+       WHERE id = $7
+       RETURNING *`,
+      [
+        event_name,
+        event_type,
+        start_date,
+        end_date || start_date,
+        academic_year,
+        semester,
+        id
+      ]
+    );
+
+    if (!rowCount) {
+      return res.status(404).json({ success: false, error: 'Calendar event not found' });
+    }
+
+    return res.json({ success: true, data: rows[0] });
   } catch (err) {
-    console.error('Error fetching academic years:', err.message);
-    return res.status(500).json({ success: false, error: 'Failed to fetch academic years' });
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// Get modules for a specific academic year
+router.delete('/calendar/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rowCount } = await pool.query(
+      'DELETE FROM academic_calendar WHERE id = $1',
+      [id]
+    );
+
+    if (!rowCount) {
+      return res.status(404).json({ success: false, error: 'Calendar event not found' });
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get('/modules/years', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT academic_year, COUNT(*) as module_count 
+       FROM modules 
+       WHERE academic_year IS NOT NULL 
+       GROUP BY academic_year 
+       ORDER BY academic_year DESC`
+    );
+    return res.json({ success: true, data: rows });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.get('/modules/year/:academicYear', async (req, res) => {
   try {
     const { academicYear } = req.params;
     const { semester, specialization } = req.query;
-    const requestedSpecialization = normalizeSpecializationCode(specialization || '');
-
-    let query = `
-      SELECT 
-        id,
-        code,
-        name,
-        batch_size,
-        day_type,
-        credits,
-        lectures_per_week,
-        academic_year,
-        semester,
-        lic_id,
-        details,
-        created_at,
-        created_by
-      FROM modules
-      WHERE academic_year = $1
-    `;
+    
+    let query = `SELECT * FROM modules WHERE academic_year = $1`;
     const params = [academicYear];
-
+    
     if (semester) {
-      query += ` AND semester = $${params.length + 1}`;
       params.push(semester);
+      query += ` AND semester = $${params.length}`;
     }
-
-    query += ` ORDER BY code ASC`;
-
+    
+    query += ` ORDER BY created_at DESC`;
+    
     const { rows } = await pool.query(query, params);
-    const filteredRows = requestedSpecialization
-      ? rows.filter((module) => inferModuleSpecialization(module) === requestedSpecialization)
-      : rows;
-
-    return res.json({
-      success: true,
-      academic_year: academicYear,
-      semester: semester || 'all',
-      specialization: requestedSpecialization || 'all',
-      data: filteredRows,
-      total_modules: filteredRows.length,
-    });
+    
+    let filtered = rows;
+    if (specialization && specialization.toUpperCase() !== 'ALL') {
+      const spec = specialization.toUpperCase();
+      filtered = rows.filter(m => inferModuleSpecialization(m) === spec);
+    }
+    
+    return res.json({ success: true, data: filtered });
   } catch (err) {
-    console.error('Error fetching modules for year:', err.message);
-    return res.status(500).json({ success: false, error: 'Failed to fetch modules for year' });
-  }
-});
-
-// Add new module for a specific academic year (Academic Coordinator only)
-router.post('/modules/year/:academicYear', authorize('admin', 'academiccoordinator', 'Admin', 'Academic Coordinator'), async (req, res) => {
-  try {
-    const { academicYear } = req.params;
-    const {
-      code,
-      name,
-      batch_size,
-      day_type,
-      credits,
-      lectures_per_week,
-      semester,
-      details,
-      lic_id,
-    } = req.body || {};
-
-    // Validation
-    if (!code || !name) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Module code and name are required' 
-      });
-    }
-
-    if (!academicYear) {
-      return res.status(400).json({
-        success: false,
-        error: 'Academic year is required',
-      });
-    }
-
-    // Check if module code already exists for this year
-    const existing = await pool.query(
-      'SELECT id, code FROM modules WHERE code = $1 AND academic_year = $2',
-      [code, academicYear]
-    );
-
-    if (existing.rows.length > 0) {
-      return res.status(409).json({
-        success: false,
-        error: `Module with code '${code}' already exists for academic year ${academicYear}`,
-        existing: existing.rows[0],
-      });
-    }
-
-    const moduleId = `module_${academicYear}_${code}_${Date.now()}`;
-
-    const { rows } = await pool.query(
-      `INSERT INTO modules (
-        id, code, name, batch_size, day_type, credits, lectures_per_week, 
-        academic_year, semester, details, lic_id, created_by
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-      RETURNING id, code, name, batch_size, day_type, credits, lectures_per_week, 
-                academic_year, semester, details, lic_id, created_at, created_by`,
-      [
-        moduleId,
-        code,
-        name,
-        batch_size || null,
-        day_type || null,
-        credits || null,
-        lectures_per_week || null,
-        academicYear,
-        semester || null,
-        details ? JSON.stringify(details) : null,
-        lic_id || null,
-        req.user?.id || null,
-      ]
-    );
-
-    return res.status(201).json({
-      success: true,
-      message: `Module '${code}' added for academic year ${academicYear}`,
-      data: rows[0],
-    });
-  } catch (err) {
-    console.error('Error adding module for year:', err.message);
-    return res.status(500).json({ success: false, error: 'Failed to add module' });
-  }
-});
-
-// Update module for a specific academic year
-router.put('/modules/year/:academicYear/:moduleId', authorize('admin', 'academiccoordinator', 'Admin', 'Academic Coordinator'), async (req, res) => {
-  try {
-    const { academicYear, moduleId } = req.params;
-    const {
-      code,
-      name,
-      batch_size,
-      day_type,
-      credits,
-      lectures_per_week,
-      semester,
-      details,
-    } = req.body || {};
-
-    // Get existing module
-    const existing = await pool.query(
-      'SELECT * FROM modules WHERE id = $1 AND academic_year = $2',
-      [moduleId, academicYear]
-    );
-
-    if (existing.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Module not found for this academic year',
-      });
-    }
-
-    // If code is being changed, check for conflicts
-    if (code && code !== existing.rows[0].code) {
-      const conflicting = await pool.query(
-        'SELECT id FROM modules WHERE code = $1 AND academic_year = $2 AND id != $3',
-        [code, academicYear, moduleId]
-      );
-      if (conflicting.rows.length > 0) {
-        return res.status(409).json({
-          success: false,
-          error: `Module code '${code}' already exists for this academic year`,
-        });
-      }
-    }
-
-    const { rows } = await pool.query(
-      `UPDATE modules SET
-        code = COALESCE($2, code),
-        name = COALESCE($3, name),
-        batch_size = COALESCE($4, batch_size),
-        day_type = COALESCE($5, day_type),
-        credits = COALESCE($6, credits),
-        lectures_per_week = COALESCE($7, lectures_per_week),
-        semester = COALESCE($8, semester),
-        details = COALESCE($9, details)
-      WHERE id = $1 AND academic_year = $10
-      RETURNING id, code, name, batch_size, day_type, credits, lectures_per_week,
-                academic_year, semester, details, lic_id, created_at`,
-      [
-        moduleId,
-        code || null,
-        name || null,
-        batch_size || null,
-        day_type || null,
-        credits || null,
-        lectures_per_week || null,
-        semester || null,
-        details ? JSON.stringify(details) : null,
-        academicYear,
-      ]
-    );
-
-    return res.json({
-      success: true,
-      message: 'Module updated successfully',
-      data: rows[0],
-    });
-  } catch (err) {
-    console.error('Error updating module:', err.message);
-    return res.status(500).json({ success: false, error: 'Failed to update module' });
-  }
-});
-
-// Delete module for a specific academic year
-router.delete('/modules/year/:academicYear/:moduleId', authorize('admin', 'academiccoordinator', 'Admin', 'Academic Coordinator'), async (req, res) => {
-  try {
-    const { academicYear, moduleId } = req.params;
-
-    const { rows, rowCount } = await pool.query(
-      'DELETE FROM modules WHERE id = $1 AND academic_year = $2 RETURNING id, code, name',
-      [moduleId, academicYear]
-    );
-
-    if (rowCount === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Module not found for this academic year',
-      });
-    }
-
-    return res.json({
-      success: true,
-      message: `Module '${rows[0].code}' deleted from academic year ${academicYear}`,
-      data: rows[0],
-    });
-  } catch (err) {
-    console.error('Error deleting module:', err.message);
-    return res.status(500).json({ success: false, error: 'Failed to delete module' });
-  }
-});
-
-// Get modules by year and semester summary
-router.get('/modules/summary/year-semester', async (req, res) => {
-  try {
-    const { rows } = await pool.query(`
-      SELECT 
-        academic_year,
-        semester,
-        COUNT(*) AS module_count,
-        STRING_AGG(DISTINCT code, ', ' ORDER BY code) AS module_codes,
-        ARRAY_AGG(DISTINCT credits) AS credit_distribution
-      FROM modules
-      WHERE academic_year IS NOT NULL
-      GROUP BY academic_year, semester
-      ORDER BY academic_year DESC, semester ASC
-    `);
-
-    return res.json({
-      success: true,
-      data: rows,
-      total_records: rows.length,
-    });
-  } catch (err) {
-    console.error('Error fetching module summary:', err.message);
-    return res.status(500).json({ success: false, error: 'Failed to fetch module summary' });
-  }
-});
-
-// Initialize academic years for all modules (Admin/Academic Coordinator only)
-router.post('/modules/initialize-years', authorize('admin', 'academiccoordinator', 'Admin', 'Academic Coordinator'), async (req, res) => {
-  try {
-    const { academicYear, semester, modules } = req.body;
-
-    if (!academicYear) {
-      return res.status(400).json({
-        success: false,
-        error: 'Academic year is required',
-      });
-    }
-
-    if (!modules || !Array.isArray(modules) || modules.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Modules array is required and must not be empty',
-      });
-    }
-
-    // Update each module with academic year and semester
-    const updatePromises = modules.map((moduleId) =>
-      pool.query(
-        `UPDATE modules 
-         SET academic_year = $1, semester = $2, created_by = $3
-         WHERE id = $4 AND academic_year IS NULL
-         RETURNING id, code, name, academic_year, semester`,
-        [academicYear, semester || '1', req.user?.id || null, moduleId]
-      )
-    );
-
-    const results = await Promise.all(updatePromises);
-    const updated = results.filter((r) => r.rowCount > 0).map((r) => r.rows[0]);
-
-    return res.json({
-      success: true,
-      message: `Successfully initialized ${updated.length} modules with academic year and semester`,
-      data: updated,
-      academic_year: academicYear,
-      semester: semester || '1',
-      total_initialized: updated.length,
-    });
-  } catch (err) {
-    console.error('Error initializing academic years:', err.message);
-    return res.status(500).json({ success: false, error: 'Failed to initialize academic years' });
-  }
-});
-
-// Get all modules without academic year assignment
-router.get('/modules/unassigned-years', async (req, res) => {
-  try {
-    const { rows } = await pool.query(`
-      SELECT id, code, name, batch_size, credits, lectures_per_week
-      FROM modules
-      WHERE academic_year IS NULL
-      ORDER BY code ASC
-    `);
-
-    return res.json({
-      success: true,
-      data: rows,
-      total_unassigned: rows.length,
-    });
-  } catch (err) {
-    console.error('Error fetching unassigned modules:', err.message);
-    return res.status(500).json({ success: false, error: 'Failed to fetch unassigned modules' });
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

@@ -14,7 +14,12 @@ import FacultyAddedModulesPage from "./pages/FacultyAddedModulesPage.jsx";
 import FacultyHallAllocationPage from "./pages/FacultyHallAllocationPage.jsx";
 import FacultyCoordinatorTimetableSidebarPage from "./pages/FacultyCoordinatorTimetableSidebarPage.jsx";
 import LICDashboard from "./pages/LICDashboard.jsx";
-import AcademicCoordinatorDashboard from "./pages/AC_before_merge.jsx";
+import AcademicCoordinatorDashboard from "./pages/AcademicCoordinatorDashboard.jsx";
+import AcademicModulesPage from "./pages/AcademicModulesPage.jsx";
+import AcademicPersonnelPage from "./pages/AcademicPersonnelPage.jsx";
+import AcademicAssignmentsPage from "./pages/AcademicAssignmentsPage.jsx";
+import AcademicCalendarPage from "./pages/AcademicCalendarPage.jsx";
+import AcademicConflictsPage from "./pages/AcademicConflictsPage.jsx";
 import InstructorDashboard from "./pages/InstructorDashboard.jsx";
 import LecturerDashboard from "./pages/LecturerDashboard.jsx";
 import CommonDashboard from "./pages/CommonDashboard.jsx";
@@ -76,7 +81,7 @@ function App() {
   };
 
   const roleKey = normalizeRoleKey(user?.role);
-  const hasFixedSidebarOffset = isAuthenticated && (roleKey === 'facultycoordinator' || roleKey === 'academiccoordinator');
+  const hasFixedSidebarOffset = false; // Disabled shifting since sidebar is under nav now
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -115,7 +120,7 @@ function App() {
   return (
     <Router>
       <ScrollToTop />
-      <div className="flex min-h-screen flex-col">
+      <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
         <Navigation
           isAuthenticated={isAuthenticated}
           user={user}
@@ -125,7 +130,7 @@ function App() {
           hasFixedSidebarOffset={hasFixedSidebarOffset}
         />
 
-        <main className="flex-1">
+        <main className="flex-1 relative flex flex-col">
           <Routes>
         <Route path="/" element={<Home />} />
 
@@ -153,13 +158,44 @@ function App() {
 
         <Route path="/scheduler/by-year" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
-            {roleKey === "facultycoordinator" ? <FacultyCoordinatorSchedulerPage user={user} /> : <Navigate to="/dashboard" replace />}
+            {roleKey === "facultycoordinator" || roleKey === "academiccoordinator" ? <FacultyCoordinatorSchedulerPage user={user} /> : <Navigate to="/dashboard" replace />}
           </ProtectedRoute>
         } />
 
         <Route path="/faculty/batches" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
             {roleKey === "facultycoordinator" ? <FacultyBatchesPage user={user} /> : <Navigate to="/dashboard" replace />}
+          </ProtectedRoute>
+        } />
+
+        {/* Academic Coordinator Exclusive Routes */}
+        <Route path="/academic/modules" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
+            {roleKey === "academiccoordinator" ? <AcademicModulesPage user={user} /> : <Navigate to="/dashboard" replace />}
+          </ProtectedRoute>
+        } />
+
+        <Route path="/academic/personnel" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
+            {roleKey === "academiccoordinator" ? <AcademicPersonnelPage user={user} /> : <Navigate to="/dashboard" replace />}
+          </ProtectedRoute>
+        } />
+
+        <Route path="/academic/assignments" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
+            {roleKey === "academiccoordinator" ? <AcademicAssignmentsPage user={user} /> : <Navigate to="/dashboard" replace />}
+          </ProtectedRoute>
+        } />
+
+        <Route path="/academic/calendar" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
+            {roleKey === "academiccoordinator" ? <AcademicCalendarPage user={user} /> : <Navigate to="/dashboard" replace />}
+          </ProtectedRoute>
+        } />
+
+        <Route path="/academic/conflicts" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
+            {roleKey === "academiccoordinator" ? <AcademicConflictsPage user={user} /> : <Navigate to="/dashboard" replace />}
           </ProtectedRoute>
         } />
 
@@ -177,7 +213,7 @@ function App() {
 
         <Route path="/faculty/hall-allocations" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
-            {roleKey === "facultycoordinator" ? <FacultyHallAllocationPage user={user} /> : <Navigate to="/dashboard" replace />}
+            {roleKey === "facultycoordinator" || roleKey === "academiccoordinator" ? <FacultyHallAllocationPage user={user} /> : <Navigate to="/dashboard" replace />}
           </ProtectedRoute>
         } />
 
@@ -193,8 +229,8 @@ function App() {
           </ProtectedRoute>
         } />
 
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
         </main>
 
         <Footer isAuthenticated={isAuthenticated} user={user} hasFixedSidebarOffset={hasFixedSidebarOffset} />
@@ -202,20 +238,12 @@ function App() {
 
       <ToastContainer
         position="top-right"
-        autoClose={3200}
+        autoClose={3000}
         hideProgressBar={false}
-        newestOnTop
-        closeOnClick={false}
-        pauseOnFocusLoss
-        draggable
+        closeOnClick
         pauseOnHover
-        limit={3}
+        draggable
         theme="light"
-        transition={Slide}
-        icon={false}
-        toastClassName="ac-toast"
-        bodyClassName="ac-toast-body"
-        progressClassName="ac-toast-progress"
       />
     </Router>
   );
