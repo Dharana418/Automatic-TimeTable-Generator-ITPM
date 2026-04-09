@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { toast } from 'react-toastify';
+import { Edit2, X } from 'lucide-react';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell';
 import { format, parseISO } from 'date-fns';
 
@@ -81,6 +82,8 @@ export default function AcademicCalendarPage({ user }) {
     description: ''
   });
 
+  const [editingId, setEditingId] = useState(null);
+
   const today = new Date().toISOString().split('T')[0];
 
   const isRangeInvalid = useMemo(() => {
@@ -121,8 +124,13 @@ export default function AcademicCalendarPage({ user }) {
 
     try {
       setSaving(true);
-      const res = await fetch(`${API_BASE}/api/academic-coordinator/calendar`, {
-        method: 'POST',
+      const url = editingId 
+        ? `${API_BASE}/api/academic-coordinator/calendar/${editingId}`
+        : `${API_BASE}/api/academic-coordinator/calendar`;
+      const method = editingId ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)
@@ -130,11 +138,8 @@ export default function AcademicCalendarPage({ user }) {
       const data = await res.json();
       
       if (data.success || res.ok) {
-        toast.success('Calendar event formally published.');
-        setForm({
-          event_name: '', event_type: 'semester_start', start_date: '',
-          end_date: '', academic_year: '1', semester: '1', description: ''
-        });
+        toast.success(editingId ? 'Calendar event updated.' : 'Calendar event formally published.');
+        handleCancelEdit();
         fetchEvents();
       } else {
         throw new Error(data.error || 'Failed to map event');
@@ -144,6 +149,28 @@ export default function AcademicCalendarPage({ user }) {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleEdit = (ev) => {
+    setEditingId(ev.id);
+    setForm({
+      event_name: ev.event_name || '',
+      event_type: ev.event_type || 'semester_start',
+      start_date: ev.start_date ? ev.start_date.split('T')[0] : '',
+      end_date: ev.end_date ? ev.end_date.split('T')[0] : '',
+      academic_year: ev.academic_year?.toString() || '1',
+      semester: ev.semester?.toString() || '1',
+      description: ev.description || ''
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setForm({
+      event_name: '', event_type: 'semester_start', start_date: '',
+      end_date: '', academic_year: '1', semester: '1', description: ''
+    });
   };
   
   const handleDeleteEvent = async (id) => {
@@ -244,7 +271,12 @@ export default function AcademicCalendarPage({ user }) {
               />
             </label>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10, gap: 12 }}>
+              {editingId && (
+                <button type="button" onClick={handleCancelEdit} style={{ background: 'transparent', border: '1px solid rgba(148,163,184,0.3)', color: '#f1f5f9', padding: '12px 20px', borderRadius: 12, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <X className="h-4 w-4" /> Cancel Edit
+                </button>
+              )}
               <button 
                 type="submit" disabled={saving || isRangeInvalid} className="ac-btn-primary"
                 style={{
@@ -254,7 +286,7 @@ export default function AcademicCalendarPage({ user }) {
                   opacity: (saving || isRangeInvalid) ? 0.7 : 1
                 }}
               >
-                {saving ? 'Publishing...' : 'Publish to Calendar'}
+                {saving ? 'Processing...' : (editingId ? 'Update Event' : 'Publish to Calendar')}
               </button>
             </div>
           </form>
@@ -304,17 +336,30 @@ export default function AcademicCalendarPage({ user }) {
                       )}
                     </div>
                     
-                    <button 
-                      onClick={() => handleDeleteEvent(ev.id)}
-                      style={{
-                        background: 'transparent', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444',
-                        padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s', marginLeft: 16
-                      }}
-                      onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; }}
-                      onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                    >
-                      Delete
-                    </button>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 16 }}>
+                      <button 
+                        onClick={() => handleEdit(ev)}
+                        style={{
+                          background: 'transparent', border: '1px solid rgba(56,189,248,0.3)', color: '#38bdf8',
+                          padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center'
+                        }}
+                        onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(56,189,248,0.1)'; }}
+                        onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                      >
+                        <Edit2 className="h-3 w-3" style={{ marginRight: 4 }}/> Edit
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteEvent(ev.id)}
+                        style={{
+                          background: 'transparent', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444',
+                          padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center'
+                        }}
+                        onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; }}
+                        onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 );
               })}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { toast } from 'react-toastify';
+import { Edit2, X } from 'lucide-react';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell';
 import api from '../api/scheduler';
 
@@ -70,6 +71,8 @@ export default function AcademicAssignmentsPage({ user }) {
     semester: '1'
   });
 
+  const [editingId, setEditingId] = useState(null);
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -105,15 +108,37 @@ export default function AcademicAssignmentsPage({ user }) {
     }
     try {
       setSaving(true);
-      await api.createAssignment(form);
-      toast.success('Assignment safely mapped to the registry.');
-      setForm({ moduleId: '', lecturerId: '', licId: '', academicYear: '1', semester: '1' });
+      if (editingId) {
+        await api.updateAssignment(editingId, form);
+        toast.success('Assignment safely updated in the registry.');
+      } else {
+        await api.createAssignment(form);
+        toast.success('Assignment safely mapped to the registry.');
+      }
+      handleCancelEdit();
       fetchData();
     } catch (err) {
       toast.error(err.message || 'Error mapping assignment.');
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleEdit = (a) => {
+    setEditingId(a.id);
+    setForm({
+      moduleId: a.module_id || '',
+      lecturerId: a.lecturer_id || '',
+      licId: a.lic_id || '',
+      academicYear: a.academic_year?.toString() || '1',
+      semester: a.semester?.toString() || '1'
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setForm({ moduleId: '', lecturerId: '', licId: '', academicYear: '1', semester: '1' });
   };
 
   const handleDeleteAssignment = async (id) => {
@@ -195,7 +220,12 @@ export default function AcademicAssignmentsPage({ user }) {
               <DarkInput label="Semester" val={form.semester} onChange={v => setForm(p => ({...p, semester: v}))} type="number" min="1" max="2" />
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10, gap: 12 }}>
+              {editingId && (
+                <button type="button" onClick={handleCancelEdit} style={{ background: 'transparent', border: '1px solid rgba(148,163,184,0.3)', color: '#f1f5f9', padding: '12px 20px', borderRadius: 12, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <X className="h-4 w-4" /> Cancel
+                </button>
+              )}
               <button 
                 type="submit" 
                 disabled={saving}
@@ -207,7 +237,7 @@ export default function AcademicAssignmentsPage({ user }) {
                   opacity: saving ? 0.7 : 1
                 }}
               >
-                {saving ? 'Mapping Assignment...' : 'Map Assignment'}
+                {saving ? 'Processing...' : (editingId ? 'Update Assignment' : 'Map Assignment')}
               </button>
             </div>
           </form>
@@ -263,15 +293,26 @@ export default function AcademicAssignmentsPage({ user }) {
                       <td style={{ padding: '14px', color: '#e2e8f0', fontSize: 13 }}>{a.lecturer_name || '—'}</td>
                       <td style={{ padding: '14px', color: '#cbd5e1', fontSize: 13 }}>{a.lic_name ? <span style={{ color: '#a78bfa' }}>{a.lic_name}</span> : '—'}</td>
                       <td style={{ padding: '14px' }}>
-                        <button 
-                          onClick={() => handleDeleteAssignment(a.id)}
-                          style={{
-                            background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)',
-                            padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer'
-                          }}
-                        >
-                          Revoke
-                        </button>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button 
+                            onClick={() => handleEdit(a)}
+                            style={{
+                              background: 'rgba(56,189,248,0.1)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.3)',
+                              padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
+                            }}
+                          >
+                            <Edit2 className="h-3 w-3" /> Edit
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteAssignment(a.id)}
+                            style={{
+                              background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)',
+                              padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer'
+                            }}
+                          >
+                            Revoke
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )) : (
