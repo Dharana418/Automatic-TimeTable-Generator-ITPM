@@ -114,28 +114,18 @@ function App() {
 
   return (
     <Router>
-<<<<<<< HEAD
-      <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
-=======
       <ScrollToTop />
-      <div className="flex min-h-screen flex-col">
->>>>>>> 29beebfdd1205a2730c59b7d38d4062b142ec07e
+      <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
         <Navigation
           isAuthenticated={isAuthenticated}
           user={user}
           apiBase={API_BASE}
           theme={theme}
           onToggleTheme={toggleTheme}
-<<<<<<< HEAD
-        />
-
-        <main className="flex-1 relative flex flex-col">
-=======
           hasFixedSidebarOffset={hasFixedSidebarOffset}
         />
 
-        <main className="flex-1">
->>>>>>> 29beebfdd1205a2730c59b7d38d4062b142ec07e
+        <main className="flex-1 relative flex flex-col">
           <Routes>
         <Route path="/" element={<Home />} />
 
@@ -203,16 +193,8 @@ function App() {
           </ProtectedRoute>
         } />
 
-<<<<<<< HEAD
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-        </main>
-        
-        <Footer />
-      </div>
-=======
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
         </main>
 
         <Footer isAuthenticated={isAuthenticated} user={user} hasFixedSidebarOffset={hasFixedSidebarOffset} />
@@ -235,7 +217,6 @@ function App() {
         bodyClassName="ac-toast-body"
         progressClassName="ac-toast-progress"
       />
->>>>>>> 29beebfdd1205a2730c59b7d38d4062b142ec07e
     </Router>
   );
 }

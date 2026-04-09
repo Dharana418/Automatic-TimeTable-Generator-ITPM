@@ -23,11 +23,7 @@
     margin: 0;
     min-width: 320px;
     overflow-x: hidden;
-<<<<<<< HEAD
     @apply bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 text-slate-800 antialiased transition-colors duration-300 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800 dark:text-slate-100;
-=======
-    @apply bg-gradient-to-br from-slate-100 via-slate-50 to-blue-100 text-slate-800 antialiased transition-colors duration-300;
->>>>>>> 29beebfdd1205a2730c59b7d38d4062b142ec07e
     font-weight: 500;
   }
 
@@ -436,7 +432,6 @@
     @apply mt-1 text-xs text-slate-500;
   }
 
-<<<<<<< HEAD
   /* Form Element Styles - Ensure Text Visibility */
 input, select, textarea {
   @apply text-slate-800 bg-white;
@@ -488,7 +483,7 @@ select option:not([value=""]) {
 }
 
   /* Admin Timetable Page Styles */
-=======
+
   .lic-hero-title {
     @apply flex items-center gap-3 text-slate-900;
   }
@@ -535,8 +530,6 @@ select option:not([value=""]) {
     transform: translateY(-1px);
     box-shadow: 0 8px 18px rgba(220, 38, 38, 0.24);
   }
-
->>>>>>> 29beebfdd1205a2730c59b7d38d4062b142ec07e
   .admin-timetable-page {
     @apply relative overflow-hidden;
     isolation: isolate;
@@ -739,19 +732,12 @@ select option:not([value=""]) {
 
   .ac-approve-btn,
   .ac-resolve-btn {
-<<<<<<< HEAD
-    @apply mr-2 rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white transition-all hover:bg-emerald-700 hover:scale-105;
-=======
-    @apply mr-2 inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-700;
->>>>>>> 29beebfdd1205a2730c59b7d38d4062b142ec07e
+    @apply mr-2 inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white transition-all hover:bg-emerald-700 hover:scale-105;
   }
 
   .ac-reject-btn,
   .ac-remove-btn {
-<<<<<<< HEAD
-    @apply rounded-md bg-red-600 px-2 py-1 text-xs font-semibold text-white transition-all hover:bg-red-700 hover:scale-105;
-=======
-    @apply inline-flex items-center gap-1 rounded-md bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700;
+    @apply inline-flex items-center gap-1 rounded-md bg-red-600 px-2 py-1 text-xs font-semibold text-white transition-all hover:bg-red-700 hover:scale-105;
   }
 
   .dashboard-btn.ac-ui-action {
@@ -1012,7 +998,6 @@ select option:not([value=""]) {
 
   .ac-calendar-type.special_event {
     @apply bg-indigo-100 text-indigo-700;
->>>>>>> 29beebfdd1205a2730c59b7d38d4062b142ec07e
   }
 
   .ac-message {
@@ -2137,11 +2122,7 @@ select option:not([value=""]) {
   }
 }
 
-<<<<<<< HEAD
-@media (max-width: 768px) {
-  .dashboard-container {
-    @apply p-4;
-=======
+
 /* Keep 3D scene as plain CSS for transform fidelity */
 .ac-3d-controls {
   display: grid;
@@ -2535,7 +2516,6 @@ select option:not([value=""]) {
 @media (max-width: 900px) {
   .ac-dnd-board {
     grid-template-columns: 1fr;
->>>>>>> 29beebfdd1205a2730c59b7d38d4062b142ec07e
   }
   
   .dashboard-hero {
@@ -2557,9 +2537,8 @@ select option:not([value=""]) {
   .ac-calendar-grid {
     @apply grid-cols-1;
   }
+}
 
-<<<<<<< HEAD
-=======
 @keyframes shimmer {
   0% {
     background-position: -1000px 0;
@@ -3295,7 +3274,6 @@ textarea.swal-beautiful-input {
     width: 100% !important;
   }
 }
-<<<<<<< HEAD
 
 /* Animations */
 @keyframes fadeIn {
@@ -3345,7 +3323,7 @@ textarea.swal-beautiful-input {
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-gray-500;
 }
-=======
+
 /* ========== TOAST POP-IN ANIMATIONS ========== */
 
 /* React-Toastify toast animations */
@@ -3557,4 +3535,3 @@ textarea.swal-beautiful-input {
 .Toastify__toast--info .Toastify__progress-bar {
   background: linear-gradient(90deg, #60a5fa, #3b82f6) !important;
 }
->>>>>>> 29beebfdd1205a2730c59b7d38d4062b142ec07e

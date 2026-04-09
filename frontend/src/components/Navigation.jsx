@@ -4,7 +4,7 @@ import Swal from 'sweetalert2';
 import autoschedule from '../assets/SLIIT_LOGO.png';
 import { Sun, Moon, LogOut, LayoutDashboard, User, Calendar, LogIn, Home } from 'lucide-react';
 
-const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", hasFixedSidebarOffset = false }) => {
+const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", theme, onToggleTheme, hasFixedSidebarOffset = false }) => {
     const location = useLocation();
     const [logoHighlighted, setLogoHighlighted] = useState(false);
     const [showTagline, setShowTagline] = useState(false);
@@ -25,6 +25,11 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
 
         return () => clearTimeout(timer);
     }, []);
+
+    const displayName = user?.name || user?.username || '';
+    const displayRole = user?.role || '';
+    const shouldShowName = Boolean(displayName);
+    const profilePhoto = user?.profilePhoto || null;
 
     const navBtnBase = 'inline-flex items-center justify-center rounded-lg border px-3 py-2 text-xs font-semibold tracking-wide transition duration-200';
     const navBtnNeutral = `${navBtnBase} border-slate-300/90 bg-white/90 text-slate-700 shadow-sm hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700`;
@@ -116,8 +121,7 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
     );
 
     return (
-<<<<<<< HEAD
-        <nav className="sticky top-0 z-50 transition-colors duration-300 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl supports-[backdrop-filter]:bg-white/60">
+        <nav className={`sticky top-0 z-50 transition-all duration-300 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl supports-[backdrop-filter]:bg-white/60 ${shouldOffsetForSidebar ? 'lg:pl-[284px]' : ''}`}>
             <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
                 {/* Brand / Logo Area */}
                 <Link to="/" className="group flex items-center gap-3 no-underline transition-transform hover:scale-105 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-lg">
@@ -232,57 +236,6 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
                         </>
                     )}
                 </div>
-=======
-            <nav className={`sticky top-0 z-50 border-b border-indigo-300/35 bg-gradient-to-r from-slate-950 via-indigo-900 to-blue-900 px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.34)] sm:px-6 lg:px-12 xl:px-16 ${shouldOffsetForSidebar ? 'lg:pl-[284px]' : ''}`}>
-                <div className="mx-auto flex w-full max-w-none items-center justify-between gap-4">
-                <Link to="/" className="group flex items-center gap-3 no-underline">
-                    <span className={`relative inline-flex rounded-xl border p-1.5 backdrop-blur-sm transition-all duration-500 group-hover:-translate-y-0.5 ${logoHighlighted
-                        ? 'border-cyan-200/70 bg-gradient-to-br from-blue-200/25 via-sky-200/15 to-indigo-200/25 shadow-[0_0_0_1px_rgba(191,219,254,0.45),0_0_30px_rgba(56,189,248,0.3),0_12px_24px_rgba(15,23,42,0.42)] ring-1 ring-cyan-200/65'
-                        : 'border-white/35 bg-white/10 shadow-[0_8px_18px_rgba(15,23,42,0.35)] ring-1 ring-white/15'
-                        }`}>
-                        <span className={`absolute inset-0 rounded-xl transition-opacity duration-500 ${logoHighlighted
-                            ? 'bg-gradient-to-br from-cyan-200/35 via-blue-100/10 to-indigo-100/30 opacity-100'
-                            : 'bg-gradient-to-br from-blue-300/20 via-transparent to-indigo-200/20 opacity-90'
-                            }`} aria-hidden />
-                        <img src={autoschedule} alt="SLIIT Logo" className="relative h-9 w-auto rounded-lg object-contain md:h-10" />
-                    </span>
-                    <div className="flex flex-col">
-                        <h2 className="m-0 select-none bg-gradient-to-r from-indigo-100 via-blue-100 to-slate-100 bg-clip-text text-lg font-bold tracking-wide text-transparent md:text-xl">SLIIT Timetable</h2>
-                        <span
-                            className={`origin-left text-[10px] font-semibold tracking-[0.2em] text-cyan-100 transition-all duration-700 ${showTagline ? 'max-h-5 translate-y-0 scale-100 opacity-100' : 'max-h-0 -translate-y-1 scale-95 opacity-0'
-                                }`}
-                        >
-                            DISCOVER YOUR FUTURE
-                        </span>
-                    </div>
-                </Link>
-
-            <div className="flex items-center gap-1.5 md:gap-2">
-
-                        {isAuthenticated ? (
-                    <>
-                        {location.pathname !== '/dashboard' && (
-                            <Link to="/dashboard" className={`${navBtnNeutral} md:w-24`}>Dashboard</Link>
-                        )}
-
-                        {user?.role === 'Faculty Coordinator' && location.pathname !== '/scheduler/by-year' && (
-                            <Link to="/scheduler/by-year" className={`${navBtnPrimary} md:w-28`}>Schedule</Link>
-                        )}
-
-                        <button onClick={requestLogoutConfirmation} className={`${navBtnDanger} md:w-20`}>Logout</button>
-                    </>
-                ) : (
-                    <>
-                        {location.pathname !== '/' && (
-                            <Link to="/" className={`${navBtnPrimary} md:w-20`}>Home</Link>
-                        )}
-
-                        {location.pathname !== '/login' && (
-                            <Link to="/login" className={`${navBtnPrimary} md:w-20`}>Login</Link>
-                        )}
-                    </>
-                )}
->>>>>>> 29beebfdd1205a2730c59b7d38d4062b142ec07e
             </div>
         </nav>
     );

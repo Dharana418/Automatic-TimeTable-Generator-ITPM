@@ -1,13 +1,18 @@
-<<<<<<< HEAD
-import { Link } from 'react-router-dom';
-import { Calendar, Github, Twitter, Linkedin, Mail, MapPin, Phone } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { Mail, MapPin, Phone } from 'lucide-react';
 import autoschedule from '../assets/SLIIT_LOGO.png';
 
-const Footer = () => {
+const Footer = ({ isAuthenticated, user, hasFixedSidebarOffset = false }) => {
     const currentYear = new Date().getFullYear();
+    const location = useLocation();
+    const shouldOffsetForSidebar = hasFixedSidebarOffset && (
+        location.pathname === '/dashboard'
+        || location.pathname.startsWith('/faculty')
+        || location.pathname.startsWith('/scheduler')
+    );
 
     return (
-        <footer className="mt-auto border-t border-slate-200/60 bg-white/80 backdrop-blur-xl transition-colors duration-300 dark:border-slate-800/60 dark:bg-slate-950/80">
+        <footer className={`mt-auto border-t border-slate-200/60 bg-white/80 backdrop-blur-xl transition-all duration-300 dark:border-slate-800/60 dark:bg-slate-950/80 ${shouldOffsetForSidebar ? 'lg:pl-[284px]' : ''}`}>
             <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
                 <div className="grid grid-cols-1 gap-8 md:grid-cols-4 lg:gap-12">
                     {/* Brand Section */}
@@ -26,16 +31,16 @@ const Footer = () => {
                             The next-generation smart timetable generation and resource allocation platform designed exclusively for the Sri Lanka Institute of Information Technology.
                         </p>
                         <div className="mt-6 flex gap-4">
-                            <a href="#" className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:bg-slate-800/50 dark:text-slate-400 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-400">
-                                <Twitter className="h-5 w-5" />
+                            <a href="#" className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:bg-slate-800/50 dark:text-slate-400 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-400 text-sm font-bold" title="Twitter">
+                                𝕏
                                 <span className="sr-only">Twitter</span>
                             </a>
-                            <a href="#" className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:bg-slate-800/50 dark:text-slate-400 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-400">
-                                <Github className="h-5 w-5" />
+                            <a href="#" className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:bg-slate-800/50 dark:text-slate-400 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-400 text-sm font-bold" title="GitHub">
+                                ⚙️
                                 <span className="sr-only">GitHub</span>
                             </a>
-                            <a href="#" className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:bg-slate-800/50 dark:text-slate-400 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-400">
-                                <Linkedin className="h-5 w-5" />
+                            <a href="#" className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:bg-slate-800/50 dark:text-slate-400 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-400 text-sm font-bold" title="LinkedIn">
+                                in
                                 <span className="sr-only">LinkedIn</span>
                             </a>
                         </div>
@@ -114,60 +119,6 @@ const Footer = () => {
             </div>
         </footer>
     );
-=======
-import { Link, useLocation } from 'react-router-dom';
-
-const Footer = ({ isAuthenticated, user, hasFixedSidebarOffset = false }) => {
-  const location = useLocation();
-  const year = new Date().getFullYear();
-  const shouldOffsetForSidebar = hasFixedSidebarOffset && (
-    location.pathname === '/dashboard'
-    || location.pathname.startsWith('/faculty')
-    || location.pathname.startsWith('/scheduler')
-  );
-
-  return (
-    <footer className="border-t border-blue-300/30 bg-gradient-to-r from-slate-900 via-blue-900 to-indigo-900 text-slate-100">
-      <div className={`mx-auto grid w-full max-w-none grid-cols-1 gap-8 px-4 py-8 sm:px-6 lg:grid-cols-3 lg:px-12 xl:px-16 ${shouldOffsetForSidebar ? 'lg:pl-[284px]' : ''}`}>
-        <section>
-          <h3 className="text-base font-bold tracking-wide text-white">SLIIT Timetable Generator</h3>
-          <p className="mt-2 text-sm leading-relaxed text-blue-100/90">
-            Intelligent timetable generation platform for faculty scheduling, allocation planning, and academic operations.
-          </p>
-        </section>
-
-        <section>
-          <h4 className="text-sm font-semibold uppercase tracking-[0.12em] text-blue-100">Quick Links</h4>
-          <nav className="mt-3 flex flex-wrap gap-2">
-            <Link to="/" className="rounded-md border border-blue-200/30 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20">Home</Link>
-            {!isAuthenticated && (
-              <Link to="/login" className="rounded-md border border-blue-200/30 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20">Login</Link>
-            )}
-            {isAuthenticated && (
-              <Link to="/dashboard" className="rounded-md border border-blue-200/30 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20">Dashboard</Link>
-            )}
-            {isAuthenticated && user?.role === 'Faculty Coordinator' && (
-              <Link to="/scheduler/by-year" className="rounded-md border border-blue-200/30 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20">Schedule</Link>
-            )}
-          </nav>
-        </section>
-
-        <section>
-          <h4 className="text-sm font-semibold uppercase tracking-[0.12em] text-blue-100">Contact</h4>
-          <ul className="mt-3 space-y-1 text-sm text-blue-100/90">
-            <li>Email: timetable.support@sliit.lk</li>
-            <li>Campus: SLIIT Malabe</li>
-            <li>Status: {isAuthenticated ? `Signed in as ${user?.name || user?.username || 'User'}` : 'Guest session'}</li>
-          </ul>
-        </section>
-      </div>
-
-      <div className={`border-t border-blue-200/20 px-4 py-3 text-center text-xs text-blue-100/80 sm:px-6 lg:px-12 xl:px-16 ${shouldOffsetForSidebar ? 'lg:pl-[284px]' : ''}`}>
-        Copyright {year} SLIIT Timetable Generator. All rights reserved.
-      </div>
-    </footer>
-  );
->>>>>>> 29beebfdd1205a2730c59b7d38d4062b142ec07e
 };
 
 export default Footer;

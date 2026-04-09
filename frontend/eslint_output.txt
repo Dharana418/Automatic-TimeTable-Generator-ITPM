@@ -1,0 +1,29 @@
+[0m[0m
+[0m[4mD:\Automatic-TimeTable-Generator-ITPM\frontend\src\components\BatchStatisticsPieCharts.jsx[24m[0m
+[0m  [2m141:9[22m   [33mwarning[39m  The 'getCurrentData' function makes the dependencies of useMemo Hook (at line 163) change on every render. To fix this, wrap the definition of 'getCurrentData' in its own useCallback() Hook  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m  [2m181:9[22m   [31merror[39m    Duplicate key 'border'                                                                                                                                                                         [2mno-dupe-keys[22m[0m
+[0m  [2m331:25[22m  [31merror[39m    'name' is defined but never used                                                                                                                                                               [2mno-unused-vars[22m[0m
+[0m  [2m331:31[22m  [31merror[39m    'value' is defined but never used                                                                                                                                                              [2mno-unused-vars[22m[0m
+[0m[0m
+[0m[4mD:\Automatic-TimeTable-Generator-ITPM\frontend\src\components\Footer.jsx[24m[0m
+[0m  [2m5:19[22m  [31merror[39m  'isAuthenticated' is defined but never used  [2mno-unused-vars[22m[0m
+[0m  [2m5:36[22m  [31merror[39m  'user' is defined but never used             [2mno-unused-vars[22m[0m
+[0m[0m
+[0m[4mD:\Automatic-TimeTable-Generator-ITPM\frontend\src\components\Navigation.jsx[24m[0m
+[0m   [2m9:12[22m  [31merror[39m  'logoHighlighted' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u            [2mno-unused-vars[22m[0m
+[0m  [2m10:12[22m  [31merror[39m  'showTagline' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                [2mno-unused-vars[22m[0m
+[0m  [2m35:11[22m  [31merror[39m  'navBtnNeutral' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u              [2mno-unused-vars[22m[0m
+[0m  [2m36:11[22m  [31merror[39m  'navBtnPrimary' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u              [2mno-unused-vars[22m[0m
+[0m  [2m37:11[22m  [31merror[39m  'navBtnDanger' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u               [2mno-unused-vars[22m[0m
+[0m  [2m94:11[22m  [31merror[39m  'requestLogoutConfirmation' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u  [2mno-unused-vars[22m[0m
+[0m[0m
+[0m[4mD:\Automatic-TimeTable-Generator-ITPM\frontend\src\pages\AcademicCoordinatorDashboard.jsx[24m[0m
+[0m   [2m97:10[22m  [31merror[39m    'assigning' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                        [2mno-unused-vars[22m[0m
+[0m  [2m140:6[22m   [33mwarning[39m  React Hook useEffect has missing dependencies: 'loadAcademicCalendar', 'loadConflicts', 'loadTimetables', and 'showMessage'. Either include them or remove the dependency array  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m  [2m270:9[22m   [31merror[39m    'addCampusStructure' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                               [2mno-unused-vars[22m[0m
+[0m  [2m365:14[22m  [31merror[39m    'err' is defined but never used                                                                                                                                                  [2mno-unused-vars[22m[0m
+[0m  [2m387:14[22m  [31merror[39m    'err' is defined but never used                                                                                                                                                  [2mno-unused-vars[22m[0m
+[0m  [2m409:14[22m  [31merror[39m    'err' is defined but never used                                                                                                                                                  [2mno-unused-vars[22m[0m
+[0m[0m
+[0m[31m[1m✖ 18 problems (16 errors, 2 warnings)[22m[39m[0m
+[0m[31m[1m[22m[39m[0m
