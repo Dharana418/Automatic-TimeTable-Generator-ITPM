@@ -64,7 +64,7 @@ export const generateTimetableForYearSemester = async (
  */
 export const getAllTimetables = async () => {
   try {
-    const response = await fetchFromAPI('/api/scheduler/timetables');
+    const response = await fetchFromAPI('/api/academic-coordinator/timetables');
     return {
       data: response.data || [],
     };
@@ -82,7 +82,7 @@ export const getAllTimetables = async () => {
  */
 export const getTimetablesForYearSemester = async (year, semester) => {
   try {
-    const response = await fetchFromAPI(`/api/scheduler/timetables?year=${encodeURIComponent(year)}&semester=${encodeURIComponent(semester)}`);
+    const response = await fetchFromAPI(`/api/academic-coordinator/timetables?year=${encodeURIComponent(year)}&semester=${encodeURIComponent(semester)}`);
     const timetables = response.data || [];
 
     return {
@@ -104,7 +104,7 @@ export const getTimetablesForYearSemester = async (year, semester) => {
  */
 export const approveTimetable = async (timetableId) => {
   try {
-    const response = await fetchFromAPI(`/api/scheduler/timetables/${encodeURIComponent(timetableId)}/approve`, {
+    const response = await fetchFromAPI(`/api/academic-coordinator/timetables/${encodeURIComponent(timetableId)}/approve`, {
       method: 'PUT',
       body: JSON.stringify({}),
     });
@@ -123,7 +123,7 @@ export const approveTimetable = async (timetableId) => {
  */
 export const rejectTimetable = async (timetableId, comments = '') => {
   try {
-    const response = await fetchFromAPI(`/api/scheduler/timetables/${encodeURIComponent(timetableId)}/reject`, {
+    const response = await fetchFromAPI(`/api/academic-coordinator/timetables/${encodeURIComponent(timetableId)}/reject`, {
       method: 'PUT',
       body: JSON.stringify({ comments: comments || null }),
     });

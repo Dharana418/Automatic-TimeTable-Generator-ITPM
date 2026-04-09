@@ -87,7 +87,23 @@ router.use(
 
 router.get('/timetables', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM timetables ORDER BY created_at DESC');
+    const { year, semester } = req.query;
+    let query = 'SELECT * FROM timetables';
+    const params = [];
+    
+    if (year && semester) {
+      params.push(year, semester);
+      query += ' WHERE year = $1 AND semester = $2';
+    } else if (year) {
+      params.push(year);
+      query += ' WHERE year = $1';
+    } else if (semester) {
+      params.push(semester);
+      query += ' WHERE semester = $1';
+    }
+    
+    query += ' ORDER BY created_at DESC';
+    const { rows } = await pool.query(query, params);
     return res.json({ success: true, data: rows });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });

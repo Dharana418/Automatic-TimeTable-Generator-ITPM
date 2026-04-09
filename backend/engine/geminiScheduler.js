@@ -9,7 +9,7 @@ export const generateTimetableWithGemini = async (options) => {
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   // We use flash for speed, assuming a very robust JSON extraction prompt
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
   const systemContext = `
 You are an advanced mathematics and resource-allocation AI built into a University scheduling system.
