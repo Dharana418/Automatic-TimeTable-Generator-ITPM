@@ -158,7 +158,7 @@ function App() {
 
         <Route path="/scheduler/by-year" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
-            {roleKey === "facultycoordinator" ? <FacultyCoordinatorSchedulerPage user={user} /> : <Navigate to="/dashboard" replace />}
+            {roleKey === "facultycoordinator" || roleKey === "academiccoordinator" ? <FacultyCoordinatorSchedulerPage user={user} /> : <Navigate to="/dashboard" replace />}
           </ProtectedRoute>
         } />
 

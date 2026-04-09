@@ -161,7 +161,8 @@ export const formatTimetable = (timetable) => {
  */
 export const getAvailableAlgorithms = () => {
   return [
-    { value: 'hybrid', label: 'Hybrid (Recommended)', description: 'Combines multiple algorithms' },
+    { value: 'gemini', label: 'Gemini AI Engine (Advanced)', description: 'LIVE dynamic JSON timetable mapping engine (Recommended)' },
+    { value: 'hybrid', label: 'Hybrid (Legacy)', description: 'Combines multiple algorithms' },
     { value: 'pso', label: 'Particle Swarm Optimization', description: 'PSO algorithm' },
     { value: 'genetic', label: 'Genetic Algorithm', description: 'GA approach' },
     { value: 'ant', label: 'Ant Colony', description: 'Ant colony optimization' },

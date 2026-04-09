@@ -78,7 +78,7 @@ const TimetableGenerationByYearSemester = () => {
   const [success, setSuccess] = useState(null);
 
   // Generation options
-  const [algorithms, setAlgorithms] = useState(['hybrid']);
+  const [algorithms, setAlgorithms] = useState(['gemini']);
   const [timetableName, setTimetableName] = useState('');
   const [generatedTimetable, setGeneratedTimetable] = useState(null);
   const [existingTimetables, setExistingTimetables] = useState([]);

@@ -3,6 +3,7 @@ import psoScheduler from '../scheduler/psoScheduler.js';
 import hybridScheduler from '../scheduler/hybridScheduler.js';
 import geneticScheduler from '../scheduler/geneticScheduler.js';
 import tabuScheduler from '../scheduler/tabuScheduler.js';
+import { generateTimetableWithGemini } from '../engine/geminiScheduler.js';
 import pool from '../config/db.js';
 
 const allowedTypes = ['halls', 'modules', 'lics', 'instructors', 'departments', 'batches'];
@@ -336,9 +337,31 @@ const validateBatchSubgroupRules = async ({ batchId, ignoreId = null }) => {
   return null;
 };
 
-const runSelectedAlgorithms = (constraints, algorithms, options) => {
+const runSelectedAlgorithms = async (constraints, algorithms, options) => {
   const normalizedAlgorithms = (algorithms || []).map(normalizeAlgorithmKey);
   const results = {};
+
+  if (normalizedAlgorithms.includes('gemini')) {
+    try {
+      const assignmentsDb = await pool.query('SELECT * FROM module_assignments');
+      const geminiInput = { ...constraints, assignments: assignmentsDb.rows };
+      const geminiOutput = await generateTimetableWithGemini(geminiInput);
+      results.gemini = { schedule: geminiOutput.timetable || [], score: 100 };
+      
+      // Route constraint bottlenecks directly to the Mission Control Conflict Dashboard
+      if (geminiOutput.conflicts && geminiOutput.conflicts.length > 0) {
+        for (const conflict of geminiOutput.conflicts) {
+           await pool.query(
+            `INSERT INTO scheduling_conflicts (conflict_type, description, resolved) VALUES ($1, $2, false)`,
+            [conflict.conflict_type || 'AI Generator Halt', conflict.description || JSON.stringify(conflict)]
+           );
+        }
+      }
+    } catch (err) {
+       console.error("Gemini Failure:", err);
+       results.gemini = { schedule: [], score: 0, error: err.message };
+    }
+  }
 
   if (normalizedAlgorithms.includes('pso')) {
     results.pso = psoScheduler(constraints, options);
@@ -1636,7 +1659,7 @@ export const runScheduler = async (req, res) => {
 
     const mergedOptions = await withFacultySoftConstraints(req.user, options);
     const constraints = { halls, modules, lics, instructors, batches, options: mergedOptions };
-    const results = runSelectedAlgorithms(constraints, algorithms, mergedOptions);
+    const results = await runSelectedAlgorithms(constraints, algorithms, mergedOptions);
 
     return res.json({ success: true, results });
   } catch (err) {
@@ -1740,7 +1763,7 @@ export const runSchedulerBySegments = async (req, res) => {
         },
       };
 
-      const results = runSelectedAlgorithms(constraints, algorithms, constraints.options);
+      const results = await runSelectedAlgorithms(constraints, algorithms, constraints.options);
       segmentedResults.push({
         segment: {
           key: segment.key,
@@ -1872,7 +1895,7 @@ export const runSchedulerForYearSemester = async (req, res) => {
     };
 
     // Run selected algorithms
-    const results = runSelectedAlgorithms(constraints, algorithms, mergedOptions);
+    const results = await runSelectedAlgorithms(constraints, algorithms, mergedOptions);
 
     // Prepare timetable metadata
     const generatedTimetable = {
@@ -1889,7 +1912,7 @@ export const runSchedulerForYearSemester = async (req, res) => {
         hallAllocations: Object.fromEntries(hallAllocationMap),
         modulesCount: filteredModules.length,
         hallsCount: halls.length,
-        schedule: results.hybrid?.schedule || results.pso?.schedule || results.genetic?.schedule || results.ant?.schedule || results.tabu?.schedule || [],
+        schedule: results.gemini?.schedule || results.hybrid?.schedule || results.pso?.schedule || results.genetic?.schedule || results.ant?.schedule || results.tabu?.schedule || [],
         allResults: results,
       },
     };

@@ -305,4 +305,48 @@ router.delete('/calendar/:id', async (req, res) => {
   }
 });
 
+router.get('/modules/years', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT academic_year, COUNT(*) as module_count 
+       FROM modules 
+       WHERE academic_year IS NOT NULL 
+       GROUP BY academic_year 
+       ORDER BY academic_year DESC`
+    );
+    return res.json({ success: true, data: rows });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get('/modules/year/:academicYear', async (req, res) => {
+  try {
+    const { academicYear } = req.params;
+    const { semester, specialization } = req.query;
+    
+    let query = `SELECT * FROM modules WHERE academic_year = $1`;
+    const params = [academicYear];
+    
+    if (semester) {
+      params.push(semester);
+      query += ` AND semester = $${params.length}`;
+    }
+    
+    query += ` ORDER BY created_at DESC`;
+    
+    const { rows } = await pool.query(query, params);
+    
+    let filtered = rows;
+    if (specialization && specialization.toUpperCase() !== 'ALL') {
+      const spec = specialization.toUpperCase();
+      filtered = rows.filter(m => inferModuleSpecialization(m) === spec);
+    }
+    
+    return res.json({ success: true, data: filtered });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;
