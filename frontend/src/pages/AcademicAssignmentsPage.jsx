@@ -4,13 +4,20 @@ import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell';
 import api from '../api/scheduler';
 
 /* ── UI Components ──────────────────────────────────────────────── */
-const DarkInput = ({ label, val, onChange, type = 'text', placeholder = '' }) => (
+const DarkInput = ({ label, val, onChange, type = 'text', placeholder = '', min, max }) => (
   <label style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
     <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>{label}</span>
     <input
       type={type}
       value={val}
-      onChange={(e) => onChange(e.target.value)}
+      min={min}
+      max={max}
+      onChange={(e) => {
+        let v = e.target.value;
+        if (type === 'number' && typeof max !== 'undefined' && Number(v) > Number(max)) v = max;
+        if (type === 'number' && typeof min !== 'undefined' && v !== '' && Number(v) < Number(min)) v = min;
+        onChange(v);
+      }}
       placeholder={placeholder}
       className="ac-input-hover"
       style={{
@@ -77,7 +84,7 @@ export default function AcademicAssignmentsPage({ user }) {
         modules: modulesRes.items || [],
         instructors: instRes.items || [],
         lics: licsRes.items || [],
-        assignments: assignRes.assignments || []
+        assignments: assignRes.items || []
       });
     } catch (err) {
       console.error(err);
@@ -184,8 +191,8 @@ export default function AcademicAssignmentsPage({ user }) {
             </div>
             
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', maxWidth: '600px' }}>
-              <DarkInput label="Academic Year *" val={form.academicYear} onChange={v => setForm(p => ({...p, academicYear: v}))} type="number" />
-              <DarkInput label="Semester" val={form.semester} onChange={v => setForm(p => ({...p, semester: v}))} type="number" />
+              <DarkInput label="Academic Year *" val={form.academicYear} onChange={v => setForm(p => ({...p, academicYear: v}))} type="number" min="1" max="4" />
+              <DarkInput label="Semester" val={form.semester} onChange={v => setForm(p => ({...p, semester: v}))} type="number" min="1" max="2" />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>

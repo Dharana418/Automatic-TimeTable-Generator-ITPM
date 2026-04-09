@@ -61,6 +61,7 @@ export default function AcademicPersonnelPage({ user }) {
   const [licForm, setLicForm] = useState({ name: '', department: 'GENERAL' });
 
   const FORBIDDEN_CHARS = /[~!@#$%^&*()_+]/;
+  const HAS_NUMBERS = /\d/;
 
   const fetchPersonnel = async () => {
     try {
@@ -90,6 +91,9 @@ export default function AcademicPersonnelPage({ user }) {
     if (FORBIDDEN_CHARS.test(lecForm.name) || FORBIDDEN_CHARS.test(lecForm.department)) {
       return toast.warn('Name/department cannot contain forbidden special characters.');
     }
+    if (HAS_NUMBERS.test(lecForm.name)) {
+      return toast.warn('Lecturer name cannot contain numbers.');
+    }
     if (lecForm.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lecForm.email)) {
       return toast.warn('Please provide a valid lecturer email address.');
     }
@@ -116,6 +120,9 @@ export default function AcademicPersonnelPage({ user }) {
     if (!licForm.name.trim()) return toast.warn('LIC name is required.');
     if (FORBIDDEN_CHARS.test(licForm.name) || FORBIDDEN_CHARS.test(licForm.department)) {
       return toast.warn('Name/department cannot contain forbidden special characters.');
+    }
+    if (HAS_NUMBERS.test(licForm.name)) {
+      return toast.warn('LIC name cannot contain numbers.');
     }
 
     try {

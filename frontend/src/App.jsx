@@ -80,7 +80,7 @@ function App() {
   };
 
   const roleKey = normalizeRoleKey(user?.role);
-  const hasFixedSidebarOffset = isAuthenticated && (roleKey === 'facultycoordinator' || roleKey === 'academiccoordinator');
+  const hasFixedSidebarOffset = false; // Disabled shifting since sidebar is under nav now
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -206,7 +206,7 @@ function App() {
 
         <Route path="/faculty/hall-allocations" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
-            {roleKey === "facultycoordinator" ? <FacultyHallAllocationPage user={user} /> : <Navigate to="/dashboard" replace />}
+            {roleKey === "facultycoordinator" || roleKey === "academiccoordinator" ? <FacultyHallAllocationPage user={user} /> : <Navigate to="/dashboard" replace />}
           </ProtectedRoute>
         } />
 
@@ -231,20 +231,12 @@ function App() {
 
       <ToastContainer
         position="top-right"
-        autoClose={3200}
+        autoClose={3000}
         hideProgressBar={false}
-        newestOnTop
-        closeOnClick={false}
-        pauseOnFocusLoss
-        draggable
+        closeOnClick
         pauseOnHover
-        limit={3}
+        draggable
         theme="light"
-        transition={Slide}
-        icon={false}
-        toastClassName="ac-toast"
-        bodyClassName="ac-toast-body"
-        progressClassName="ac-toast-progress"
       />
     </Router>
   );

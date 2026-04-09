@@ -112,6 +112,7 @@ const ACADEMIC_NAV_GROUPS = [
     items: [
       { id: 'overview', label: 'Overview Dashboard', to: '/dashboard', icon: Icon.grid },
       { id: 'assignments', label: 'Module Assignments', to: '/academic/assignments', icon: Icon.activity, color: '#f59e0b' },
+      { id: 'hallAllocations', label: 'Hall Allocations', to: '/faculty/hall-allocations', icon: Icon.building, color: '#ef4444' },
     ],
   },
   {
@@ -306,10 +307,10 @@ export default function FacultyCoordinatorShell({
         }
         @media (min-width: 1024px) {
           .fc-shell-sidebar {
-            top: var(--fc-global-header-offset, 80px);
-            bottom: var(--fc-global-footer-offset, 144px);
+            top: 64px; /* Flush with the top Navigation bar */
+            bottom: 0px; /* Stretch completely to the bottom */
             z-index: 40;
-            border-top-right-radius: 18px;
+            border-top-right-radius: 0px;
             border-bottom-right-radius: 18px;
           }
           .fc-main-shell {

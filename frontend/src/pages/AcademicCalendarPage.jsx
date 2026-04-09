@@ -6,13 +6,20 @@ import { format, parseISO } from 'date-fns';
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 /* ── UI Components ──────────────────────────────────────────────── */
-const DarkInput = ({ label, val, onChange, type = 'text', placeholder = '' }) => (
+const DarkInput = ({ label, val, onChange, type = 'text', placeholder = '', help = '', min, max }) => (
   <label style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
     <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>{label}</span>
     <input
       type={type}
       value={val}
-      onChange={(e) => onChange(e.target.value)}
+      min={min}
+      max={max}
+      onChange={(e) => {
+        let v = e.target.value;
+        if (type === 'number' && typeof max !== 'undefined' && Number(v) > Number(max)) v = max;
+        if (type === 'number' && typeof min !== 'undefined' && v !== '' && Number(v) < Number(min)) v = min;
+        onChange(v);
+      }}
       placeholder={placeholder}
       className="ac-input-hover"
       style={{
@@ -69,9 +76,12 @@ export default function AcademicCalendarPage({ user }) {
     event_type: 'semester_start',
     start_date: '',
     end_date: '',
-    related_batch: '',
+    academic_year: '1',
+    semester: '1',
     description: ''
   });
+
+  const today = new Date().toISOString().split('T')[0];
 
   const isRangeInvalid = useMemo(() => {
     if (!form.start_date || !form.end_date) return false;
@@ -87,7 +97,7 @@ export default function AcademicCalendarPage({ user }) {
       });
       if (!res.ok) throw new Error('API Error');
       const data = await res.json();
-      setEvents(data.events || []);
+      setEvents(data.data || []);
     } catch (err) {
       console.warn('Could not load calendar events', err);
       toast.error('Failed to load academic calendar.');
@@ -123,7 +133,7 @@ export default function AcademicCalendarPage({ user }) {
         toast.success('Calendar event formally published.');
         setForm({
           event_name: '', event_type: 'semester_start', start_date: '',
-          end_date: '', related_batch: '', description: ''
+          end_date: '', academic_year: '1', semester: '1', description: ''
         });
         fetchEvents();
       } else {
@@ -199,12 +209,23 @@ export default function AcademicCalendarPage({ user }) {
                 onChange={(v) => setForm(p => ({...p, event_type: v}))}
                 options={EVENT_TYPES} 
               />
-              <DarkInput label="Target Batch" val={form.related_batch} onChange={v => setForm(p => ({...p, related_batch: v}))} placeholder="e.g. Y1S1 (Optional)" />
+            </div>
+            
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', maxWidth: 400 }}>
+              <DarkInput label="Academic Year *" type="number" val={form.academic_year} onChange={v => setForm(p => ({...p, academic_year: v}))} min="1" max="4" />
+              <DarkInput label="Semester *" type="number" val={form.semester} onChange={v => setForm(p => ({...p, semester: v}))} min="1" max="2" />
             </div>
             
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-              <DarkInput label="Start Date *" type="date" val={form.start_date} onChange={v => setForm(p => ({...p, start_date: v}))} />
-              <DarkInput label="End Date" type="date" val={form.end_date} onChange={v => setForm(p => ({...p, end_date: v}))} help="Leave blank for single-day event." />
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>Start Date *</span>
+                <input type="date" value={form.start_date} min={today} onChange={e => setForm(p => ({...p, start_date: e.target.value}))} className="ac-input-hover" style={{ padding: '10px 14px', borderRadius: 12, background: 'rgba(15,23,42,0.4)', border: '1px solid rgba(148,163,184,0.2)', color: '#f1f5f9', fontSize: 13, outline: 'none', transition: 'all 0.2s', width: '100%', boxSizing: 'border-box', colorScheme: 'dark' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>End Date</span>
+                <input type="date" value={form.end_date} min={form.start_date || today} onChange={e => setForm(p => ({...p, end_date: e.target.value}))} className="ac-input-hover" style={{ padding: '10px 14px', borderRadius: 12, background: 'rgba(15,23,42,0.4)', border: '1px solid rgba(148,163,184,0.2)', color: '#f1f5f9', fontSize: 13, outline: 'none', transition: 'all 0.2s', width: '100%', boxSizing: 'border-box', colorScheme: 'dark' }} />
+                <span style={{ fontSize: 11, color: 'rgba(148,163,184,0.5)' }}>Leave blank for single-day event.</span>
+              </label>
             </div>
             
             <label style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
@@ -268,8 +289,8 @@ export default function AcademicCalendarPage({ user }) {
                         <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 40, border: `1px solid ${accent}40`, color: accent, background: `${accent}15`, fontWeight: 700, textTransform: 'uppercase' }}>
                           {EVENT_TYPES.find(t => t.value === ev.event_type)?.label || ev.event_type}
                         </span>
-                        {ev.related_batch && (
-                          <span style={{ fontSize: 10, color: '#94a3b8', background: 'rgba(148,163,184,0.1)', padding: '2px 8px', borderRadius: 40 }}>For: {ev.related_batch}</span>
+                        {(ev.academic_year || ev.semester) && (
+                          <span style={{ fontSize: 10, color: '#94a3b8', background: 'rgba(148,163,184,0.1)', padding: '2px 8px', borderRadius: 40 }}>Y{ev.academic_year}S{ev.semester}</span>
                         )}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 12, color: 'rgba(148,163,184,0.8)', fontWeight: 600 }}>
