@@ -111,6 +111,7 @@ const ACADEMIC_NAV_GROUPS = [
     title: 'Mission Control',
     items: [
       { id: 'overview', label: 'Overview Dashboard', to: '/dashboard', icon: Icon.grid },
+      { id: 'conflicts', label: 'Conflict Resolutions', to: '/academic/conflicts', icon: Icon.shield, color: '#ef4444' },
       { id: 'assignments', label: 'Module Assignments', to: '/academic/assignments', icon: Icon.activity, color: '#f59e0b' },
       { id: 'hallAllocations', label: 'Hall Allocations', to: '/faculty/hall-allocations', icon: Icon.building, color: '#ef4444' },
     ],

@@ -19,6 +19,7 @@ import AcademicModulesPage from "./pages/AcademicModulesPage.jsx";
 import AcademicPersonnelPage from "./pages/AcademicPersonnelPage.jsx";
 import AcademicAssignmentsPage from "./pages/AcademicAssignmentsPage.jsx";
 import AcademicCalendarPage from "./pages/AcademicCalendarPage.jsx";
+import AcademicConflictsPage from "./pages/AcademicConflictsPage.jsx";
 import InstructorDashboard from "./pages/InstructorDashboard.jsx";
 import LecturerDashboard from "./pages/LecturerDashboard.jsx";
 import CommonDashboard from "./pages/CommonDashboard.jsx";
@@ -189,6 +190,12 @@ function App() {
         <Route path="/academic/calendar" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
             {roleKey === "academiccoordinator" ? <AcademicCalendarPage user={user} /> : <Navigate to="/dashboard" replace />}
+          </ProtectedRoute>
+        } />
+
+        <Route path="/academic/conflicts" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
+            {roleKey === "academiccoordinator" ? <AcademicConflictsPage user={user} /> : <Navigate to="/dashboard" replace />}
           </ProtectedRoute>
         } />
 
