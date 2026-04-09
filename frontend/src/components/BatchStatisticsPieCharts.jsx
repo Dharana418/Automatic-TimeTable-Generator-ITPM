@@ -168,7 +168,6 @@ const BatchStatisticsPieCharts = () => {
       style={{
         padding: '12px 18px',
         borderRadius: '12px',
-        border: 'none',
         background: isActive ? 'rgba(56,189,248,0.25)' : 'rgba(148,163,184,0.08)',
         color: isActive ? '#38bdf8' : 'rgba(148,163,184,0.7)',
         cursor: 'pointer',
