@@ -108,20 +108,19 @@ const FACULTY_NAV_GROUPS = [
 
 const ACADEMIC_NAV_GROUPS = [
   {
-    title: 'Workspace',
+    title: 'Mission Control',
     items: [
-      { id: 'overview', label: 'Overview', to: '/dashboard#acOverview', icon: Icon.grid, type: 'section' },
-      { id: 'modulesAssignment', label: 'Modules Assignment', to: '/dashboard#main-view-panel-lectures', icon: Icon.book, type: 'section' },
-      { id: 'hallAllocation', label: 'Hall Allocation', to: '/dashboard#main-view-panel-hallAllocation', icon: Icon.building, type: 'section' },
+      { id: 'overview', label: 'Overview Dashboard', to: '/dashboard', icon: Icon.grid },
+      { id: 'assignments', label: 'Module Assignments', to: '/academic/assignments', icon: Icon.activity, color: '#f59e0b' },
     ],
   },
   {
-    title: 'Review',
+    title: 'Registry Tools',
     items: [
-      { id: 'timetablePanel', label: 'Timetables', to: '/dashboard#timetablePanel', icon: Icon.calendar, type: 'section' },
-      { id: 'acConflictsPanel', label: 'Conflicts', to: '/dashboard#acConflictsPanel', icon: Icon.activity, type: 'section' },
-      { id: 'acResourcesPanel', label: 'Resources', to: '/dashboard#acResourcesPanel', icon: Icon.building, type: 'section' },
-      { id: 'acCalendarPanel', label: 'Academic Calendar', to: '/dashboard#acCalendarPanel', icon: Icon.settings, type: 'section' },
+      { id: 'modules', label: 'Module Registry', to: '/academic/modules', icon: Icon.book, color: '#38bdf8' },
+      { id: 'personnel', label: 'Personnel Roster', to: '/academic/personnel', icon: Icon.users, color: '#a78bfa' },
+      { id: 'calendar', label: 'Academic Calendar', to: '/academic/calendar', icon: Icon.calendar, color: '#f472b6' },
+      { id: 'timetable', label: 'Timetables', to: '/scheduler/by-year', icon: Icon.grid, color: '#4ade80' },
     ],
   },
 ];

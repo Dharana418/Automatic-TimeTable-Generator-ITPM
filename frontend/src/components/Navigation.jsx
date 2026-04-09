@@ -118,6 +118,7 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
         location.pathname === '/dashboard'
         || location.pathname.startsWith('/faculty')
         || location.pathname.startsWith('/scheduler')
+        || location.pathname.startsWith('/academic')
     );
 
     return (

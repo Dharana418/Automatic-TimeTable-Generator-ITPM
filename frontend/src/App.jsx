@@ -14,7 +14,11 @@ import FacultyAddedModulesPage from "./pages/FacultyAddedModulesPage.jsx";
 import FacultyHallAllocationPage from "./pages/FacultyHallAllocationPage.jsx";
 import FacultyCoordinatorTimetableSidebarPage from "./pages/FacultyCoordinatorTimetableSidebarPage.jsx";
 import LICDashboard from "./pages/LICDashboard.jsx";
-import AcademicCoordinatorDashboard from "./pages/AC_before_merge.jsx";
+import AcademicCoordinatorDashboard from "./pages/AcademicCoordinatorDashboard.jsx";
+import AcademicModulesPage from "./pages/AcademicModulesPage.jsx";
+import AcademicPersonnelPage from "./pages/AcademicPersonnelPage.jsx";
+import AcademicAssignmentsPage from "./pages/AcademicAssignmentsPage.jsx";
+import AcademicCalendarPage from "./pages/AcademicCalendarPage.jsx";
 import InstructorDashboard from "./pages/InstructorDashboard.jsx";
 import LecturerDashboard from "./pages/LecturerDashboard.jsx";
 import CommonDashboard from "./pages/CommonDashboard.jsx";
@@ -160,6 +164,31 @@ function App() {
         <Route path="/faculty/batches" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
             {roleKey === "facultycoordinator" ? <FacultyBatchesPage user={user} /> : <Navigate to="/dashboard" replace />}
+          </ProtectedRoute>
+        } />
+
+        {/* Academic Coordinator Exclusive Routes */}
+        <Route path="/academic/modules" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
+            {roleKey === "academiccoordinator" ? <AcademicModulesPage user={user} /> : <Navigate to="/dashboard" replace />}
+          </ProtectedRoute>
+        } />
+
+        <Route path="/academic/personnel" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
+            {roleKey === "academiccoordinator" ? <AcademicPersonnelPage user={user} /> : <Navigate to="/dashboard" replace />}
+          </ProtectedRoute>
+        } />
+
+        <Route path="/academic/assignments" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
+            {roleKey === "academiccoordinator" ? <AcademicAssignmentsPage user={user} /> : <Navigate to="/dashboard" replace />}
+          </ProtectedRoute>
+        } />
+
+        <Route path="/academic/calendar" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
+            {roleKey === "academiccoordinator" ? <AcademicCalendarPage user={user} /> : <Navigate to="/dashboard" replace />}
           </ProtectedRoute>
         } />
 
