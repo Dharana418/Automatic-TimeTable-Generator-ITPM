@@ -100,10 +100,24 @@ export async function initDb() {
                 lic_id TEXT REFERENCES lics(id) ON DELETE CASCADE,
                 academic_year TEXT NOT NULL,
                 semester TEXT,
-                created_at TIMESTAMP DEFAULT NOW()
+                created_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(module_id, lecturer_id, lic_id, academic_year, semester)
             )
         `);
         console.log('✓ module_assignments table ready');
+
+        try {
+            await pool.query(`
+                ALTER TABLE module_assignments 
+                ADD CONSTRAINT module_assignments_unique_assignment 
+                UNIQUE (module_id, lecturer_id, lic_id, academic_year, semester)
+            `);
+        } catch (e) {
+            if (e.code !== '42710') { // 42710 is duplicate_object
+                // Ignore if it already exists
+            }
+        }
+
 
         await pool.query(`
             CREATE TABLE IF NOT EXISTS faculty_soft_constraints (

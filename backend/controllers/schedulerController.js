@@ -605,6 +605,16 @@ export const createModuleAssignment = async (req, res) => {
       return res.status(400).json({ error: 'moduleId, lecturerId and academicYear are required' });
     }
 
+    const moduleResult = await pool.query('SELECT id FROM modules WHERE id = $1', [moduleId]);
+    if (moduleResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Module not found' });
+    }
+
+    const lecturerResult = await pool.query('SELECT id FROM instructors WHERE id = $1', [lecturerId]);
+    if (lecturerResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Lecturer not found' });
+    }
+
     let effectiveLicId = licId;
     if (isLic(req.user)) {
       const licScope = await resolveLicScope(req.user);
@@ -613,6 +623,11 @@ export const createModuleAssignment = async (req, res) => {
     }
 
     if (!effectiveLicId) return res.status(400).json({ error: 'licId is required' });
+
+    const licResult = await pool.query('SELECT id FROM lics WHERE id = $1', [effectiveLicId]);
+    if (licResult.rows.length === 0) {
+      return res.status(404).json({ error: 'LIC not found' });
+    }
 
     const id = `asg_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
     const { rows } = await pool.query(

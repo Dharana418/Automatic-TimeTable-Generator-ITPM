@@ -93,6 +93,8 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   
   // UI states
   const [message, setMessage] = useState({ text: '', type: '' });
+  const [toast, setToast] = useState({ text: '', type: '' });
+  const [assigning, setAssigning] = useState(false);
   const [loading, setLoading] = useState(false);
   const [penaltyLoading, setPenaltyLoading] = useState(false);
   const [penaltyBreakdown, setPenaltyBreakdown] = useState(null);
@@ -102,8 +104,14 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   const [view3d, setView3d] = useState({ rotateX: 10, rotateZ: -18, zoom: 1 });
   const [showCalendarForm, setShowCalendarForm] = useState(false);
 
+  const showToast = (text, type = 'success') => {
+    setToast({ text, type });
+    setTimeout(() => setToast({ text: '', type: '' }), 4000);
+  };
+
   const showMessage = (text, type = 'success') => {
     setMessage({ text, type });
+    showToast(text, type);
     setTimeout(() => setMessage({ text: '', type: '' }), 5000);
   };
 
@@ -285,13 +293,23 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
       showMessage('Please fill all required fields', 'error');
       return;
     }
+
+    setAssigning(true);
+
     try {
-      await schedulerApi.createAssignment(assignmentForm);
-      showMessage('Module assignment created');
+      const response = await schedulerApi.createAssignment(assignmentForm);
+      if (response && response.success) {
+        showMessage('Module assignment created successfully', 'success');
+      } else {
+        showMessage(response.error || 'Assignment may not have been saved', 'error');
+      }
+
       setAssignmentForm({ moduleId: '', lecturerId: '', licId: '', academicYear: '1', semester: '1' });
       await loadAssignments();
     } catch (err) {
       showMessage(err.message || 'Failed to create assignment', 'error');
+    } finally {
+      setAssigning(false);
     }
   };
 
@@ -552,6 +570,12 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
             : 'bg-green-100 text-green-700 border border-green-200'
         }`}>
           {message.text}
+        </div>
+      )}
+
+      {toast.text && (
+        <div className={`ac-toast ${toast.type === 'error' ? 'ac-toast-error' : 'ac-toast-success'}`} role="status" aria-live="polite">
+          {toast.text}
         </div>
       )}
 

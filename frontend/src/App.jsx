@@ -4,6 +4,7 @@ import Home from "../Home/home.jsx";
 import Login from "../LoginandRegistration/Login.jsx";
 import ResetPassword from "../LoginandRegistration/ResetPassword.jsx";
 import Navigation from "./components/Navigation.jsx";
+import Footer from "./components/Footer.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import FacultyCoordinatorDashboard from "./pages/FacultyCoordinatorDashboard.jsx";
 import FacultyBatchesPage from "./pages/FacultyBatchesPage.jsx";
@@ -81,15 +82,17 @@ function App() {
 
   return (
     <Router>
-      <Navigation
-        isAuthenticated={isAuthenticated}
-        user={user}
-        apiBase={API_BASE}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-      />
+      <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
+        <Navigation
+          isAuthenticated={isAuthenticated}
+          user={user}
+          apiBase={API_BASE}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+        />
 
-      <Routes>
+        <main className="flex-1 relative flex flex-col">
+          <Routes>
         <Route path="/" element={<Home />} />
 
         <Route
@@ -221,8 +224,12 @@ function App() {
           </ProtectedRoute>
         } />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+        </main>
+        
+        <Footer />
+      </div>
     </Router>
   );
 }

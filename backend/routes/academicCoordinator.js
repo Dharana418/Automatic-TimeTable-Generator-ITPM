@@ -186,4 +186,69 @@ router.post('/calendar', async (req, res) => {
   }
 });
 
+router.put('/calendar/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      event_name,
+      event_type,
+      start_date,
+      end_date,
+      academic_year,
+      semester,
+    } = req.body || {};
+
+    if (!event_name || !event_type || !start_date || !academic_year || !semester) {
+      return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
+
+    const { rows, rowCount } = await pool.query(
+      `UPDATE academic_calendar
+       SET event_name = $1,
+           event_type = $2,
+           start_date = $3,
+           end_date = $4,
+           academic_year = $5,
+           semester = $6
+       WHERE id = $7
+       RETURNING *`,
+      [
+        event_name,
+        event_type,
+        start_date,
+        end_date || start_date,
+        academic_year,
+        semester,
+        id
+      ]
+    );
+
+    if (!rowCount) {
+      return res.status(404).json({ success: false, error: 'Calendar event not found' });
+    }
+
+    return res.json({ success: true, data: rows[0] });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.delete('/calendar/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rowCount } = await pool.query(
+      'DELETE FROM academic_calendar WHERE id = $1',
+      [id]
+    );
+
+    if (!rowCount) {
+      return res.status(404).json({ success: false, error: 'Calendar event not found' });
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;
