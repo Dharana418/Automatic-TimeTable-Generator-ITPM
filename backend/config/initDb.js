@@ -1,5 +1,404 @@
 import pool from './db.js';
 
+const DEMO_SPECIALIZATION_BLUEPRINTS = [
+    {
+        specialization: 'IT',
+        department: 'Information Technology',
+        year: 1,
+        semester: 1,
+        building: 'New Building',
+        floor: '1',
+        weekdayModule: { code: 'IT1010', name: 'Information Technology Foundations' },
+        weekendModule: { code: 'IT1020', name: 'IT Systems Lab' },
+    },
+    {
+        specialization: 'SE',
+        department: 'Software Engineering',
+        year: 1,
+        semester: 2,
+        building: 'New Building',
+        floor: '2',
+        weekdayModule: { code: 'SE1110', name: 'Software Engineering Principles' },
+        weekendModule: { code: 'SE1120', name: 'Software Engineering Studio' },
+    },
+    {
+        specialization: 'CYBER SECURITY',
+        department: 'Cyber Security',
+        year: 2,
+        semester: 1,
+        building: 'Main Building',
+        floor: '2',
+        weekdayModule: { code: 'CYB1210', name: 'Cyber Security Foundations' },
+        weekendModule: { code: 'CYB1220', name: 'Cyber Security Lab' },
+    },
+    {
+        specialization: 'CS',
+        department: 'Computer Science',
+        year: 2,
+        semester: 1,
+        building: 'Main Building',
+        floor: '1',
+        weekdayModule: { code: 'CS1210', name: 'Computer Science Foundations' },
+        weekendModule: { code: 'CS1220', name: 'Computer Science Lab' },
+    },
+    {
+        specialization: 'ISE',
+        department: 'Information Systems Engineering',
+        year: 2,
+        semester: 2,
+        building: 'Main Building',
+        floor: '2',
+        weekdayModule: { code: 'ISE1310', name: 'Information Systems Engineering' },
+        weekendModule: { code: 'ISE1320', name: 'Information Systems Workshop' },
+    },
+    {
+        specialization: 'CSNE',
+        department: 'Computer Systems Network Engineering',
+        year: 3,
+        semester: 1,
+        building: 'Main Building',
+        floor: '3',
+        weekdayModule: { code: 'CSNE1410', name: 'Network Engineering Fundamentals' },
+        weekendModule: { code: 'CSNE1420', name: 'Network Engineering Lab' },
+    },
+    {
+        specialization: 'IME',
+        department: 'Interactive Media',
+        year: 3,
+        semester: 2,
+        building: 'Main Building',
+        floor: '4',
+        weekdayModule: { code: 'IME1510', name: 'Interactive Media Systems' },
+        weekendModule: { code: 'IME1520', name: 'Interactive Media Studio' },
+    },
+    {
+        specialization: 'DS',
+        department: 'Data Science',
+        year: 4,
+        semester: 1,
+        building: 'Main Building',
+        floor: '5',
+        weekdayModule: { code: 'DS1610', name: 'Data Science Foundations' },
+        weekendModule: { code: 'DS1620', name: 'Data Science Lab' },
+    },
+    {
+        specialization: 'AI',
+        department: 'Artificial Intelligence',
+        year: 4,
+        semester: 2,
+        building: 'Main Building',
+        floor: '6',
+        weekdayModule: { code: 'AI1710', name: 'Artificial Intelligence Foundations' },
+        weekendModule: { code: 'AI1720', name: 'Artificial Intelligence Lab' },
+    },
+];
+
+const toSpecializationKey = (value = '') => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+const MODULE_SPECIALIZATIONS = ['IT', 'SE', 'CS', 'ISE', 'CSNE', 'IME', 'DS', 'AI', 'CYBER SECURITY'];
+const MODULES_PER_SPECIALIZATION_PER_SEMESTER = 5;
+
+const SPECIALIZATION_CODE_PREFIX = {
+    IT: 'IT',
+    SE: 'SE',
+    CS: 'CS',
+    ISE: 'IS',
+    CSNE: 'CN',
+    IME: 'IE',
+    DS: 'DS',
+    AI: 'AI',
+    'CYBER SECURITY': 'CYB',
+};
+
+const buildHallFeatures = ({ building, floor, hallType }) => ({
+    building,
+    floor,
+    hallType,
+    roomType: hallType,
+    amenities: {
+        projector: true,
+        wifi: true,
+        ac: hallType === 'lecture_hall',
+        lab_equipment: hallType === 'lab',
+        accessibility: true,
+        whiteboard: true,
+        sound_system: hallType === 'lecture_hall',
+    },
+});
+
+const buildDemoHalls = () => {
+    const hallRows = [];
+    const buildingBlueprints = [
+        { building: 'Main Building', prefix: 'MB', floors: [1, 2, 3, 4, 5, 6, 7, 8] },
+        { building: 'New Building', prefix: 'NB', floors: [1, 2, 3, 4] },
+    ];
+
+    for (const buildingBlueprint of buildingBlueprints) {
+        for (const floor of buildingBlueprint.floors) {
+            hallRows.push({
+                id: `${buildingBlueprint.prefix}-F${String(floor).padStart(2, '0')}-LH-01`,
+                name: `${buildingBlueprint.prefix} Floor ${floor} Lecture Hall 01`,
+                capacity: floor <= 2 ? 120 : 100,
+                features: buildHallFeatures({ building: buildingBlueprint.building, floor: String(floor), hallType: 'lecture_hall' }),
+                status: 'available',
+                maintenance_start: null,
+                maintenance_end: null,
+            });
+
+            hallRows.push({
+                id: `${buildingBlueprint.prefix}-F${String(floor).padStart(2, '0')}-LAB-01`,
+                name: `${buildingBlueprint.prefix} Floor ${floor} Lab 01`,
+                capacity: 60,
+                features: buildHallFeatures({ building: buildingBlueprint.building, floor: String(floor), hallType: 'lab' }),
+                status: 'available',
+                maintenance_start: null,
+                maintenance_end: null,
+            });
+        }
+    }
+
+    return hallRows;
+};
+
+const buildDemoDepartments = () => DEMO_SPECIALIZATION_BLUEPRINTS.map((blueprint) => ({
+    id: `dept_${toSpecializationKey(blueprint.specialization)}`,
+    code: blueprint.specialization,
+    name: `Department of ${blueprint.department}`,
+}));
+
+const buildDemoLics = () => DEMO_SPECIALIZATION_BLUEPRINTS.map((blueprint) => ({
+    id: `lic_${toSpecializationKey(blueprint.specialization)}`,
+    name: `${blueprint.specialization} LIC`,
+    department: blueprint.department,
+    details: JSON.stringify({ specialization: blueprint.specialization, building: blueprint.building, floor: blueprint.floor }),
+}));
+
+const buildDemoInstructors = () => DEMO_SPECIALIZATION_BLUEPRINTS.map((blueprint) => ({
+    id: `inst_${toSpecializationKey(blueprint.specialization)}`,
+    name: `${blueprint.specialization} Instructor`,
+    email: `${toSpecializationKey(blueprint.specialization)}@example.com`,
+    department: blueprint.department,
+    availabilities: JSON.stringify([
+        { day: 'Mon', slots: ['09:00-10:00', '10:00-11:00', '11:00-12:00'] },
+        { day: 'Sat', slots: ['09:00-10:00', '10:00-11:00'] },
+    ]),
+    details: JSON.stringify({ specialization: blueprint.specialization, building: blueprint.building, floor: blueprint.floor }),
+    lic_id: `lic_${toSpecializationKey(blueprint.specialization)}`,
+}));
+
+const buildDemoModules = () => {
+    const rows = [];
+
+    const specializationMeta = new Map(
+        DEMO_SPECIALIZATION_BLUEPRINTS.map((blueprint) => [
+            blueprint.specialization,
+            {
+                building: blueprint.building,
+                floor: blueprint.floor,
+                department: blueprint.department,
+            },
+        ]),
+    );
+
+    for (let year = 1; year <= 4; year += 1) {
+        for (const semester of [1, 2]) {
+            for (const specialization of MODULE_SPECIALIZATIONS) {
+                const meta = specializationMeta.get(specialization) || {
+                    building: 'Main Building',
+                    floor: String(Math.min(8, Math.max(1, year + semester))),
+                    department: specialization,
+                };
+
+                const prefix = SPECIALIZATION_CODE_PREFIX[specialization] || 'GEN';
+
+                for (let index = 1; index <= MODULES_PER_SPECIALIZATION_PER_SEMESTER; index += 1) {
+                    const isWeekendLab = index === MODULES_PER_SPECIALIZATION_PER_SEMESTER;
+                    const code = `${prefix}${year}${semester}${index}0`;
+                    const moduleName = `${specialization} Year ${year} Semester ${semester} Module ${index}`;
+
+                    rows.push({
+                        id: `module_${toSpecializationKey(specialization)}_${year}_${semester}_${index}`,
+                        code,
+                        name: moduleName,
+                        batch_size: isWeekendLab ? 100 : 120,
+                        day_type: isWeekendLab ? 'weekend' : 'weekday',
+                        credits: isWeekendLab ? 2 : 3,
+                        lectures_per_week: isWeekendLab ? 2 : 3,
+                        details: JSON.stringify({
+                            specialization,
+                            academic_year: year,
+                            semester,
+                            day_type: isWeekendLab ? 'weekend' : 'weekday',
+                            expected_students: isWeekendLab ? 100 : 120,
+                            requiredHallType: isWeekendLab ? 'lab' : 'lecture_hall',
+                            preferredBuilding: meta.building,
+                            preferredFloor: meta.floor,
+                        }),
+                        lic_id: `lic_${toSpecializationKey(specialization)}`,
+                        academic_year: String(year),
+                        semester: String(semester),
+                        created_by: null,
+                    });
+                }
+            }
+        }
+    }
+
+    return rows;
+};
+
+const createBatchRow = ({ year, semester, mode, specialization, capacity }) => ({
+    id: `Y${year}.S${semester}.${String(mode || 'WD').trim().toUpperCase()}.${specialization}.01.01`,
+    name: `Y${year}.S${semester}.${String(mode || 'WD').trim().toUpperCase()}.${specialization}.01.01`,
+    department_id: `dept_${toSpecializationKey(specialization)}`,
+    capacity,
+});
+
+const buildDemoBatches = () => {
+    const rows = [];
+
+    const yearlyPlan = {
+        1: [
+            { specialization: 'IT', capacity: 1000 },
+            { specialization: 'SE', capacity: 300 },
+            { specialization: 'DS', capacity: 300 },
+            { specialization: 'ISE', capacity: 200 },
+            { specialization: 'IM', capacity: 50 },
+            { specialization: 'CYBER SECURITY', capacity: 150 },
+        ],
+        2: [
+            { specialization: 'IT', capacity: 1000 },
+            { specialization: 'SE', capacity: 300 },
+            { specialization: 'DS', capacity: 300 },
+            { specialization: 'ISE', capacity: 200 },
+            { specialization: 'IM', capacity: 50 },
+            { specialization: 'CYBER SECURITY', capacity: 150 },
+        ],
+        3: [
+            { specialization: 'IT', capacity: 1000 },
+            { specialization: 'SE', capacity: 300 },
+            { specialization: 'DS', capacity: 300 },
+            { specialization: 'ISE', capacity: 200 },
+            { specialization: 'IM', capacity: 50 },
+            { specialization: 'CYBER SECURITY', capacity: 200 },
+        ],
+        4: [
+            { specialization: 'IT', capacity: 1000 },
+            { specialization: 'SE', capacity: 300 },
+            { specialization: 'DS', capacity: 300 },
+            { specialization: 'ISE', capacity: 200 },
+            { specialization: 'IM', capacity: 50 },
+            { specialization: 'CYBER SECURITY', capacity: 200 },
+        ],
+    };
+
+    for (const year of [1, 2, 3, 4]) {
+        for (const semester of [1, 2]) {
+            const mode = semester === 1 ? 'WD' : 'WE';
+            for (const plan of yearlyPlan[year]) {
+                rows.push(createBatchRow({
+                    year,
+                    semester,
+                    mode,
+                    specialization: plan.specialization,
+                    capacity: plan.capacity,
+                }));
+            }
+        }
+    }
+
+    return rows;
+};
+
+const insertSeedRows = async (table, columns, rows) => {
+    if (!rows.length) return;
+
+    const values = [];
+    const placeholders = rows
+        .map((row, rowIndex) => {
+            columns.forEach((column) => values.push(row[column] ?? null));
+            const offset = rowIndex * columns.length;
+            return `(${columns.map((_, columnIndex) => `$${offset + columnIndex + 1}`).join(', ')})`;
+        })
+        .join(', ');
+
+    await pool.query(
+        `INSERT INTO ${table} (${columns.join(', ')}) VALUES ${placeholders} ON CONFLICT (id) DO NOTHING`,
+        values,
+    );
+};
+
+const upsertSeedRows = async (table, columns, rows) => {
+    if (!rows.length) return;
+
+    const values = [];
+    const placeholders = rows
+        .map((row, rowIndex) => {
+            columns.forEach((column) => values.push(row[column] ?? null));
+            const offset = rowIndex * columns.length;
+            return `(${columns.map((_, columnIndex) => `$${offset + columnIndex + 1}`).join(', ')})`;
+        })
+        .join(', ');
+
+    const updatableColumns = columns.filter((column) => column !== 'id');
+    const updateAssignments = updatableColumns
+        .map((column) => `${column} = EXCLUDED.${column}`)
+        .join(', ');
+
+    await pool.query(
+        `INSERT INTO ${table} (${columns.join(', ')})
+         VALUES ${placeholders}
+         ON CONFLICT (id)
+         DO UPDATE SET ${updateAssignments}`,
+        values,
+    );
+};
+
+const upsertModulesByCode = async (rows = []) => {
+    if (!rows.length) return;
+
+    const columns = ['id', 'code', 'name', 'batch_size', 'day_type', 'credits', 'lectures_per_week', 'details', 'lic_id', 'academic_year', 'semester', 'created_by'];
+    const values = [];
+
+    const placeholders = rows
+        .map((row, rowIndex) => {
+            columns.forEach((column) => values.push(row[column] ?? null));
+            const offset = rowIndex * columns.length;
+            return `(${columns.map((_, columnIndex) => `$${offset + columnIndex + 1}`).join(', ')})`;
+        })
+        .join(', ');
+
+    await pool.query(
+        `INSERT INTO modules (${columns.join(', ')})
+         VALUES ${placeholders}
+         ON CONFLICT (code)
+         DO UPDATE SET
+            name = EXCLUDED.name,
+            batch_size = EXCLUDED.batch_size,
+            day_type = EXCLUDED.day_type,
+            credits = EXCLUDED.credits,
+            lectures_per_week = EXCLUDED.lectures_per_week,
+            details = EXCLUDED.details,
+            lic_id = EXCLUDED.lic_id,
+            academic_year = EXCLUDED.academic_year,
+            semester = EXCLUDED.semester,
+            created_by = EXCLUDED.created_by`,
+        values,
+    );
+};
+
+const seedDemoData = async () => {
+    await insertSeedRows('departments', ['id', 'code', 'name'], buildDemoDepartments());
+    await insertSeedRows('lics', ['id', 'name', 'department', 'details'], buildDemoLics());
+    await insertSeedRows('instructors', ['id', 'name', 'email', 'department', 'availabilities', 'details', 'lic_id'], buildDemoInstructors());
+    await insertSeedRows('halls', ['id', 'name', 'capacity', 'features', 'status', 'maintenance_start', 'maintenance_end'], buildDemoHalls().map((hall) => ({
+        ...hall,
+        features: JSON.stringify(hall.features),
+    })));
+    await upsertModulesByCode(buildDemoModules());
+    await upsertSeedRows('batches', ['id', 'name', 'department_id', 'capacity'], buildDemoBatches());
+};
+
 export async function initDb() {
     try {
         // Check if pool is valid
@@ -20,6 +419,9 @@ export async function initDb() {
                 created_at TIMESTAMP DEFAULT NOW()
             )
         `);
+        await pool.query(`ALTER TABLE halls ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'available'`);
+        await pool.query(`ALTER TABLE halls ADD COLUMN IF NOT EXISTS maintenance_start DATE`);
+        await pool.query(`ALTER TABLE halls ADD COLUMN IF NOT EXISTS maintenance_end DATE`);
         console.log('✓ halls table ready');
 
         // Create modules table
@@ -65,8 +467,12 @@ export async function initDb() {
         console.log('✓ instructors table ready');
 
         await pool.query(`ALTER TABLE modules ADD COLUMN IF NOT EXISTS lic_id TEXT REFERENCES lics(id) ON DELETE SET NULL`);
+        await pool.query(`ALTER TABLE modules ADD COLUMN IF NOT EXISTS academic_year VARCHAR(20)`);
+        await pool.query(`ALTER TABLE modules ADD COLUMN IF NOT EXISTS semester VARCHAR(20)`);
+        await pool.query(`ALTER TABLE modules ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id) ON DELETE SET NULL`);
         await pool.query(`ALTER TABLE instructors ADD COLUMN IF NOT EXISTS lic_id TEXT REFERENCES lics(id) ON DELETE SET NULL`);
         console.log('✓ LIC ownership columns ensured');
+        console.log('✓ Module academic year and semester columns ensured');
 
         // Create departments table
         await pool.query(`
@@ -155,11 +561,6 @@ export async function initDb() {
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role_assigned_by UUID REFERENCES users(id) ON DELETE SET NULL`);
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role_assigned_at TIMESTAMP DEFAULT NOW()`);
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role_assignment_note TEXT`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_token_hash TEXT`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_expires_at TIMESTAMP`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_requested_at TIMESTAMP`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_consumed_at TIMESTAMP`);
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_url TEXT`);
         console.log('✓ users role assignment metadata ensured');
 
         await pool.query(`
@@ -322,6 +723,9 @@ export async function initDb() {
             CREATE INDEX IF NOT EXISTS idx_module_assignments_lecturer_id ON module_assignments(lecturer_id);
             CREATE INDEX IF NOT EXISTS idx_module_assignments_lic_id ON module_assignments(lic_id);
             CREATE INDEX IF NOT EXISTS idx_modules_lic_id ON modules(lic_id);
+            CREATE INDEX IF NOT EXISTS idx_modules_academic_year ON modules(academic_year);
+            CREATE INDEX IF NOT EXISTS idx_modules_semester ON modules(semester);
+            CREATE INDEX IF NOT EXISTS idx_modules_year_semester ON modules(academic_year, semester);
             CREATE INDEX IF NOT EXISTS idx_instructors_lic_id ON instructors(lic_id);
             CREATE INDEX IF NOT EXISTS idx_faculty_soft_constraints_coordinator ON faculty_soft_constraints(coordinator_id);
             CREATE INDEX IF NOT EXISTS idx_batches_department_id ON batches(department_id);
@@ -343,6 +747,9 @@ export async function initDb() {
             CREATE INDEX IF NOT EXISTS idx_hall_recommendations_hall_id ON hall_recommendations(recommended_hall_id)
         `);
         console.log('✓ indexes created');
+
+        await seedDemoData();
+        console.log('✓ demo timetable data seeded');
 
         console.log('✅ All database tables initialized successfully');
         return true;

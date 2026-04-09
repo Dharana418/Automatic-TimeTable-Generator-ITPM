@@ -11,7 +11,22 @@ function parseJSONField(value) {
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const WEEKEND = ['Sat', 'Sun'];
-const SLOTS = ['09:00-10:00', '10:00-11:00', '11:00-12:00', '13:00-14:00', '14:00-15:00'];
+const WEEKDAY_SLOTS = [
+  '09:00-10:00',
+  '10:00-11:00',
+  '11:00-12:00',
+  '13:30-14:30',
+  '14:30-15:30',
+  '15:30-16:30',
+  '16:30-17:30',
+];
+const WEEKEND_SLOTS = [
+  ...WEEKDAY_SLOTS,
+  '17:30-18:30',
+  '18:30-19:30',
+  '19:30-20:30',
+];
+const SLOTS = [...WEEKEND_SLOTS];
 
 const DEFAULT_WEIGHTS = {
   w1: 100,
@@ -39,7 +54,21 @@ function isLabModule(module) {
 function getLabSpan(module) {
   const details = module?.details || {};
   const span = Number(details.h_l || details.lab_hours || details.labSpan || module.h_l || module.labSpan || 1);
-  return Number.isFinite(span) ? Math.max(1, Math.round(span)) : 1;
+  const normalizedSpan = Number.isFinite(span) ? Math.max(1, Math.round(span)) : 1;
+
+  const code = String(module?.code || '').toLowerCase();
+  const moduleName = String(module?.name || '').toLowerCase();
+  const isSoftwareEngineering =
+    code.startsWith('se') ||
+    moduleName.includes('software engineering') ||
+    moduleName.includes('software eng');
+
+  // Domain rule: Software Engineering lab sessions must run for at least 2 hourly slots.
+  if (isLabModule(module) && isSoftwareEngineering) {
+    return Math.max(2, normalizedSpan);
+  }
+
+  return normalizedSpan;
 }
 
 function getModuleExpectedSize(module) {
@@ -52,7 +81,123 @@ function getModuleExpectedSize(module) {
   );
 }
 
+function normalizeText(value = '') {
+  return String(value || '').trim().toLowerCase();
+}
+
+function normalizeAmenities(amenities = null) {
+  if (!amenities || typeof amenities !== 'object' || Array.isArray(amenities)) return new Set();
+  return new Set(
+    Object.entries(amenities)
+      .filter(([, enabled]) => enabled === true)
+      .map(([name]) => normalizeText(name))
+      .filter(Boolean)
+  );
+}
+
+function getEffectiveHallCapacity(hall = {}) {
+  const rawCapacity = Number(hall?.capacity || 0);
+  const normalizedCapacity = Number.isFinite(rawCapacity) && rawCapacity > 0 ? rawCapacity : 0;
+
+  const hallType = normalizeText(
+    hall?.features?.hallType || hall?.features?.roomType || hall?.roomType || hall?.hallType
+  );
+
+  const isLectureOrLab =
+    hallType.includes('lecture') ||
+    hallType.includes('hall') ||
+    hallType.includes('lab');
+
+  if (isLectureOrLab) {
+    // Domain rule: one lecture hall or one lab can host at most 120 students.
+    return normalizedCapacity ? Math.min(normalizedCapacity, 120) : 120;
+  }
+
+  return normalizedCapacity;
+}
+
+function getModuleStructureRequirements(module = {}) {
+  const details = module?.details || {};
+
+  const requiredHallType =
+    normalizeText(details.requiredHallType || details.hallType || details.roomType || module.requiredHallType || module.roomType);
+  const preferredBuilding = normalizeText(details.preferredBuilding || details.building || module.preferredBuilding);
+  const preferredFloor = normalizeText(details.preferredFloor || details.floor || module.preferredFloor);
+
+  const requiredAmenities = new Set();
+  const amenitiesFromObject = normalizeAmenities(details.requiredAmenities || details.amenities || module.requiredAmenities || null);
+  amenitiesFromObject.forEach((item) => requiredAmenities.add(item));
+
+  const amenitiesFromList = [
+    ...(Array.isArray(details.requiredAmenityList) ? details.requiredAmenityList : []),
+    ...(Array.isArray(module.requiredAmenityList) ? module.requiredAmenityList : []),
+  ]
+    .map((item) => normalizeText(item))
+    .filter(Boolean);
+  amenitiesFromList.forEach((item) => requiredAmenities.add(item));
+
+  return {
+    requiredHallType,
+    preferredBuilding,
+    preferredFloor,
+    requiredAmenities,
+  };
+}
+
 function hallMatchesModule(hall, module) {
+  const details = module?.details || {};
+  const preferredHallIdsRaw = [
+    ...(Array.isArray(details.preferredHallIds) ? details.preferredHallIds : []),
+    ...(Array.isArray(module?.preferredHallIds) ? module.preferredHallIds : []),
+    details.preferredHallId,
+    details.allocatedHallId,
+    module?.preferred_hall_id,
+  ];
+
+  const preferredHallIds = new Set(
+    preferredHallIdsRaw
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+  );
+
+  if (preferredHallIds.size > 0 && !preferredHallIds.has(String(hall?.id || '').trim())) {
+    return false;
+  }
+
+  const expectedSize = getModuleExpectedSize(module);
+  const hallCapacity = getEffectiveHallCapacity(hall);
+  if (Number.isFinite(expectedSize) && expectedSize > 0 && Number.isFinite(hallCapacity) && hallCapacity > 0 && hallCapacity < expectedSize) {
+    return false;
+  }
+
+  const requirements = getModuleStructureRequirements(module);
+  const hallFeatures = hall?.features || {};
+  const hallType = normalizeText(hallFeatures.hallType || hallFeatures.roomType || hall.roomType);
+  const hallBuilding = normalizeText(hallFeatures.building || hall.building);
+  const hallFloor = normalizeText(hallFeatures.floor || hall.floor);
+  const hallAmenities = normalizeAmenities(hallFeatures.amenities);
+
+  if (requirements.requiredHallType) {
+    const typeMatch =
+      hallType &&
+      (hallType.includes(requirements.requiredHallType) || requirements.requiredHallType.includes(hallType));
+    if (!typeMatch) return false;
+  }
+
+  if (requirements.preferredBuilding && hallBuilding && hallBuilding !== requirements.preferredBuilding) {
+    return false;
+  }
+
+  if (requirements.preferredFloor && hallFloor && hallFloor !== requirements.preferredFloor) {
+    return false;
+  }
+
+  for (const requiredAmenity of requirements.requiredAmenities) {
+    if (!hallAmenities.has(requiredAmenity)) {
+      return false;
+    }
+  }
+
   const moduleRoomType = String(module?.details?.roomType || module?.details?.room_type || module?.roomType || '').toLowerCase();
   const hallRoomType = String(hall?.features?.roomType || hall?.features?.room_type || '').toLowerCase();
   if (!moduleRoomType || !hallRoomType) return true;
@@ -70,11 +215,44 @@ function instructorAvailable(instructor, day, slotIndexes) {
   return slotIndexes.every((idx) => dayAvail.slots.includes(SLOTS[idx]));
 }
 
-function getAllowedDays(module) {
+function resolveWeekdayFreeDay(options = {}) {
+  const configuredDay = getNormalizedDay(
+    options.weekdayFreeDay || options?.softConstraints?.weekdayFreeDay || 'Fri'
+  );
+  if (!configuredDay || !WEEKDAYS.includes(configuredDay)) return 'Fri';
+  return configuredDay;
+}
+
+function getAllowedDays(module, options = {}) {
   const dt = String(module.day_type || module?.details?.day_type || 'weekday').toLowerCase();
+  const weekdayFreeDay = resolveWeekdayFreeDay(options);
+
+  const weekdayDays = WEEKDAYS.filter((day) => day !== weekdayFreeDay);
+  const safeWeekdayDays = weekdayDays.length ? weekdayDays : [...WEEKDAYS];
+
   if (dt === 'weekend') return WEEKEND;
-  if (dt === 'any' || dt === 'both') return [...WEEKDAYS, ...WEEKEND];
-  return WEEKDAYS;
+  if (dt === 'any' || dt === 'both') return [...safeWeekdayDays, ...WEEKEND];
+  return safeWeekdayDays;
+}
+
+function getAllowedSlotIndexes(module, allSlots = SLOTS) {
+  const dt = String(module.day_type || module?.details?.day_type || 'weekday').toLowerCase();
+
+  const allowedLabels =
+    dt === 'weekend'
+      ? WEEKEND_SLOTS
+      : dt === 'any' || dt === 'both'
+        ? allSlots
+        : WEEKDAY_SLOTS;
+
+  const allowedSet = new Set();
+  allSlots.forEach((label, idx) => {
+    if (allowedLabels.includes(label)) {
+      allowedSet.add(idx);
+    }
+  });
+
+  return allowedSet;
 }
 
 function getModuleBatchKeys(module, batches = []) {
@@ -141,12 +319,15 @@ export function buildProblem(constraints = {}, options = {}) {
 
   const placements = sessions.map((session) => {
     const possible = [];
-    const allowedDays = getAllowedDays(session.module);
+    const allowedDays = getAllowedDays(session.module, options);
+    const allowedSlotIndexes = getAllowedSlotIndexes(session.module, SLOTS);
     const maxStart = SLOTS.length - session.durationSlots;
 
     for (const day of allowedDays) {
       for (let start = 0; start <= maxStart; start += 1) {
+        if (!allowedSlotIndexes.has(start)) continue;
         const slotIndexes = Array.from({ length: session.durationSlots }, (_, i) => start + i);
+        if (!slotIndexes.every((idx) => allowedSlotIndexes.has(idx))) continue;
 
         for (let hallIndex = 0; hallIndex < halls.length; hallIndex += 1) {
           const hall = halls[hallIndex];
@@ -167,11 +348,13 @@ export function buildProblem(constraints = {}, options = {}) {
     }
 
     if (!possible.length && halls.length) {
-      const fallbackDays = [...WEEKDAYS, ...WEEKEND];
+      const fallbackDays = getAllowedDays(session.module, options);
       const maxStartFallback = Math.max(0, SLOTS.length - session.durationSlots);
       for (const day of fallbackDays) {
         for (let start = 0; start <= maxStartFallback; start += 1) {
+          if (!allowedSlotIndexes.has(start)) continue;
           const slotIndexes = Array.from({ length: session.durationSlots }, (_, i) => start + i);
+          if (!slotIndexes.every((idx) => allowedSlotIndexes.has(idx))) continue;
           for (let hallIndex = 0; hallIndex < halls.length; hallIndex += 1) {
             possible.push({ day, slotIndexes, hallIndex, instructorIndex: null });
           }
@@ -232,14 +415,15 @@ export function evaluateSolution(solution, problem, options = {}) {
     const slotLabels = placement.slotIndexes.map((slotIdx) => problem.slots[slotIdx]);
     const startSlot = slotLabels[0];
 
-    if (!hall || (session.expectedStudents && hall.capacity && Number(hall.capacity) < Number(session.expectedStudents))) {
+    const effectiveHallCapacity = getEffectiveHallCapacity(hall);
+    if (!hall || (session.expectedStudents && effectiveHallCapacity && Number(effectiveHallCapacity) < Number(session.expectedStudents))) {
       capacityViolations += 1;
       hardConflicts.push({
         type: 'capacity_violation',
         moduleId: session.module.id || session.module.code || session.module.name,
         hallId: hall?.id || hall?.name || null,
         expected: session.expectedStudents,
-        capacity: hall?.capacity || null,
+        capacity: effectiveHallCapacity || null,
       });
     }
 

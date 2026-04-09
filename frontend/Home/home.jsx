@@ -28,11 +28,19 @@ export default function Home() {
 
         <div className="mt-8">
           <button
-            className="group rounded-full border border-white/40 bg-white/15 px-12 py-4 text-base font-bold text-white shadow-lg backdrop-blur-md transition duration-200 hover:-translate-y-0.5 hover:bg-white/25"
+            className="group relative overflow-hidden rounded-full border border-cyan-200/55 bg-gradient-to-r from-cyan-600/90 via-blue-700/95 to-slate-900/95 px-12 py-4 text-base font-bold tracking-[0.08em] text-white shadow-[0_18px_36px_rgba(8,47,73,0.5)] ring-1 ring-white/25 backdrop-blur-md transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_44px_rgba(8,47,73,0.62)]"
             onClick={() => navigate("/login")}
           >
-            Get Started
-            <span className="ml-2 inline-block transition group-hover:translate-x-1">→</span>
+            <span className="absolute -inset-1 rounded-full bg-gradient-to-r from-cyan-300/25 via-blue-300/20 to-indigo-300/15 blur-md" aria-hidden />
+            <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition duration-700 group-hover:translate-x-full" aria-hidden />
+            <span className="relative inline-flex items-center gap-2">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-200/70 opacity-70" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-cyan-100" />
+              </span>
+              Login Now
+              <span className="ml-2 inline-block transition group-hover:translate-x-1">→</span>
+            </span>
           </button>
         </div>
       </div>

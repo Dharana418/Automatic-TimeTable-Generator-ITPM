@@ -6,6 +6,7 @@ import {
     deleteItem,
     getLicDailyTimetable,
     getLicsWithInstructors,
+    getCoordinatorHallAllocations,
     getSoftConstraints,
     listItems,
     listModuleAssignments,
@@ -13,6 +14,7 @@ import {
     runScheduler,
     updateItem,
     runSchedulerBySegments,
+    runSchedulerForYearSemester,
     upsertSoftConstraints,
     updateModuleAssignment,
 } from '../controllers/schedulerController.js';
@@ -39,7 +41,6 @@ router.use(
         'Faculty Coordinator',
         'Academic Coordinator',
         'LIC',
-        'LIC Coordinator',
         'Instructor',
         'Professor',
         'Lecturer',
@@ -51,22 +52,24 @@ router.use(
 
 // Specific helpers
 router.get('/lics-with-instructors', getLicsWithInstructors);
+router.get('/hall-allocations/coordinator', getCoordinatorHallAllocations);
 router.get('/lic/daily-timetable', getLicDailyTimetable);
 router.get('/soft-constraints', getSoftConstraints);
 router.post('/soft-constraints', upsertSoftConstraints);
 router.get('/assignments', listModuleAssignments);
-router.post('/assignments', authorize('admin', 'academiccoordinator', 'facultycoordinator', 'lic', 'Admin', 'Academic Coordinator', 'Faculty Coordinator', 'LIC', 'LIC Coordinator'), createModuleAssignment);
-router.put('/assignments/:id', authorize('admin', 'academiccoordinator', 'facultycoordinator', 'lic', 'Admin', 'Academic Coordinator', 'Faculty Coordinator', 'LIC', 'LIC Coordinator'), updateModuleAssignment);
-router.delete('/assignments/:id', authorize('admin', 'academiccoordinator', 'facultycoordinator', 'lic', 'Admin', 'Academic Coordinator', 'Faculty Coordinator', 'LIC', 'LIC Coordinator'), deleteModuleAssignment);
+router.post('/assignments', authorize('admin', 'academiccoordinator', 'facultycoordinator', 'lic', 'Admin', 'Academic Coordinator', 'Faculty Coordinator', 'LIC'), createModuleAssignment);
+router.put('/assignments/:id', authorize('admin', 'academiccoordinator', 'facultycoordinator', 'lic', 'Admin', 'Academic Coordinator', 'Faculty Coordinator', 'LIC'), updateModuleAssignment);
+router.delete('/assignments/:id', authorize('admin', 'academiccoordinator', 'facultycoordinator', 'lic', 'Admin', 'Academic Coordinator', 'Faculty Coordinator', 'LIC'), deleteModuleAssignment);
 
 router.post('/run', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), runScheduler);
 router.post('/run-by-segments', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), runSchedulerBySegments);
+router.post('/run-for-year-semester', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), runSchedulerForYearSemester);
 router.post('/reset', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), resetData);
 
 // CRUD operations
-router.post('/:type', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'lic', 'Admin', 'Faculty Coordinator', 'Academic Coordinator', 'LIC', 'LIC Coordinator'), addItem);
+router.post('/:type', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), addItem);
 router.get('/:type', listItems);
-router.put('/:type/:id', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'lic', 'Admin', 'Faculty Coordinator', 'Academic Coordinator', 'LIC', 'LIC Coordinator'), updateItem);
+router.put('/:type/:id', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), updateItem);
 router.delete('/:type/:id', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), deleteItem);
 
 export default router;

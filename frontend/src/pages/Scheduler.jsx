@@ -1,10 +1,20 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import schedulerApi from '../api/scheduler.js';
 import { showError, showSuccess, showWarning } from '../utils/alerts.js';
 
 const types = ['halls','modules','instructors','lics'];
-const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-const timeSlots = ['08:00 - 10:00', '10:00 - 12:00', '12:00 - 14:00', '14:00 - 16:00', '16:00 - 18:00'];
+const algorithmOptions = ['pso', 'anticolony', 'genetic', 'tabu', 'hybrid'];
+const dayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const dayLabel = {
+  Mon: 'Monday',
+  Tue: 'Tuesday',
+  Wed: 'Wednesday',
+  Thu: 'Thursday',
+  Fri: 'Friday',
+  Sat: 'Saturday',
+  Sun: 'Sunday',
+};
+const defaultSlots = ['09:00-10:00', '10:00-11:00', '11:00-12:00', '13:00-14:00', '14:00-15:00'];
 
 const departmentColors = {
   Computing: { bg: 'rgba(56, 189, 248, 0.18)', border: 'rgba(56, 189, 248, 0.55)' },
@@ -37,6 +47,115 @@ function toCourse(item = {}, index = 0) {
   };
 }
 
+function normalizeDay(value = '') {
+  const key = String(value).trim().toLowerCase().slice(0, 3);
+  const map = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
+  return map[key] || null;
+}
+
+function slotToMinutes(slot = '') {
+  const [start = '00:00'] = String(slot).split('-');
+  const [hours = '0', mins = '0'] = start.trim().split(':');
+  const hh = Number(hours);
+  const mm = Number(mins);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return 0;
+  return hh * 60 + mm;
+}
+
+function pickPreferredAlgorithm(results = {}) {
+  const priority = ['hybrid', 'tabu', 'genetic', 'ant', 'pso'];
+  for (const key of priority) {
+    if (results?.[key]) return { key, data: results[key] };
+  }
+
+  const fallbackKey = Object.keys(results || {})[0];
+  if (!fallbackKey) return { key: null, data: null };
+  return { key: fallbackKey, data: results[fallbackKey] };
+}
+
+function toGeneratedEntry(entry = {}, index = 0, segmentKey = '') {
+  const sourceTitle = entry.moduleName || entry.moduleId || `Session ${index + 1}`;
+  const department = guessDepartment({
+    department: entry.department,
+    code: entry.moduleId,
+    name: sourceTitle,
+  });
+
+  return {
+    id: `${entry.moduleId || sourceTitle}-${entry.day || 'day'}-${entry.slot || index}-${index}-${segmentKey || 'main'}`,
+    moduleId: String(entry.moduleId || sourceTitle),
+    title: sourceTitle,
+    department,
+    lecturer: entry.instructorName || entry.instructorId || 'TBD',
+    room: entry.hallName || entry.hallId || 'TBD',
+    day: normalizeDay(entry.day) || 'Mon',
+    slot: String(entry.slot || '').trim(),
+    slots: Array.isArray(entry.slots) && entry.slots.length ? entry.slots.map((slot) => String(slot)) : [String(entry.slot || '')],
+    batchKeys: Array.isArray(entry.batchKeys) ? entry.batchKeys : [],
+    color: departmentColors[department] || departmentColors.General,
+    segmentKey,
+  };
+}
+
+function toCapitalized(value = '') {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function toReadableLabel(value = '') {
+  return toCapitalized(String(value || '').replace(/_/g, ' '));
+}
+
+function normalizeSpecialization(value = '') {
+  return String(value || '').trim().toUpperCase();
+}
+
+function inferModuleYear(module = {}) {
+  const fromField = Number(module.academic_year || module.academicYear || 0);
+  if ([1, 2, 3, 4].includes(fromField)) return fromField;
+
+  const code = String(module.code || '').toUpperCase();
+  const match = code.match(/^[A-Z]+(\d)/);
+  return match ? Number(match[1]) : null;
+}
+
+function inferModuleSemester(module = {}) {
+  const value = Number(module.semester || module.details?.semester || 0);
+  return [1, 2].includes(value) ? value : null;
+}
+
+function inferModuleSpecialization(module = {}) {
+  const details = module.details || {};
+  const explicit = normalizeSpecialization(
+    details.specialization || details.spec || details.stream || details.department || module.specialization
+  );
+  if (explicit) return explicit;
+
+  const code = String(module.code || '').toUpperCase();
+  if (code.startsWith('IT')) return 'IT';
+  if (code.startsWith('SE')) return 'SE';
+  if (code.startsWith('CS') || code.startsWith('IS') || code.startsWith('IE')) return 'ENGINEERING';
+  return 'GENERAL';
+}
+
+function parseBatchSegment(batch = {}) {
+  const target = String(batch?.name || batch?.id || '');
+  const match = target.match(/^Y(\d+)\.S(\d+)\.(WE|WD)\.([A-Z0-9]+)\./i);
+  if (!match) return null;
+  return {
+    year: Number(match[1]),
+    semester: Number(match[2]),
+    specialization: normalizeSpecialization(match[4]),
+  };
+}
+
+function toDataSourceLabel(type = '') {
+  const normalizedType = String(type || '').trim().toLowerCase();
+  if (normalizedType === 'lics') return 'LICs';
+  return toCapitalized(normalizedType);
+}
+
 export default function Scheduler() {
   const [activeType, setActiveType] = useState('modules');
   const [items, setItems] = useState([]);
@@ -44,18 +163,125 @@ export default function Scheduler() {
   const [result, setResult] = useState(null);
   const [segmentedResult, setSegmentedResult] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [calendarMap, setCalendarMap] = useState({});
-  const [dragPayload, setDragPayload] = useState(null);
+  const [generatedEntries, setGeneratedEntries] = useState([]);
+  const [executionSnapshot, setExecutionSnapshot] = useState({
+    coverage: null,
+    scheduled: 0,
+    totalRequired: 0,
+    conflicts: 0,
+    source: '-',
+  });
   const [selectedBlock, setSelectedBlock] = useState(null);
-  const [activeNav, setActiveNav] = useState('weekly');
+  const [activeNav, setActiveNav] = useState('overview');
+  const [iterations, setIterations] = useState(80);
+  const [segmentYear, setSegmentYear] = useState('');
+  const [segmentSemester, setSegmentSemester] = useState('');
+  const [segmentSpecialization, setSegmentSpecialization] = useState('');
+  const [selectedAlgorithms, setSelectedAlgorithms] = useState(['pso', 'anticolony', 'genetic', 'tabu', 'hybrid']);
+  const [hallStructures3D, setHallStructures3D] = useState([]);
+  const [view3d, setView3d] = useState({ rotateX: 10, rotateZ: -18, zoom: 1 });
+  const [selectedHallId, setSelectedHallId] = useState('');
+  const hallBlockRefs = useRef({});
+  const [coordinatorHallAllocations, setCoordinatorHallAllocations] = useState([]);
+  const [allocationSummary, setAllocationSummary] = useState({
+    total: 0,
+    fromApprovedTimetable: 0,
+    fromRecommendationFallback: 0,
+  });
+  const [allocationLoading, setAllocationLoading] = useState(false);
 
-  useEffect(()=>{ fetchList(activeType); }, [activeType]);
+  useEffect(() => {
+    let cancelled = false;
 
-  async function fetchList(t){
-    try{
-      const res = await schedulerApi.listItems(t);
-      setItems(res.items || []);
-    }catch(e){ console.error(e); setItems([]); }
+    const loadItems = async () => {
+      try {
+        const moduleFilters =
+          activeType === 'modules'
+            ? {
+                year: segmentYear ? Number(segmentYear) : undefined,
+                semester: segmentSemester ? Number(segmentSemester) : undefined,
+                specialization: segmentSpecialization ? String(segmentSpecialization).trim().toUpperCase() : undefined,
+              }
+            : {};
+
+        const res = await schedulerApi.listItems(activeType, moduleFilters);
+        if (!cancelled) setItems(res.items || []);
+      } catch (e) {
+        console.error(e);
+        if (!cancelled) setItems([]);
+      }
+    };
+
+    loadItems();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeType, segmentYear, segmentSemester, segmentSpecialization]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadHalls = async () => {
+      try {
+        const response = await schedulerApi.listItems('halls');
+        if (!cancelled) {
+          setHallStructures3D(response?.items || []);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setHallStructures3D([]);
+        }
+        console.error('Failed to load 3D halls:', err);
+      }
+    };
+
+    loadHalls();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedHallId) return;
+    const target = hallBlockRefs.current[selectedHallId];
+    if (!target || typeof target.scrollIntoView !== 'function') return;
+
+    target.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+      inline: 'center',
+    });
+  }, [selectedHallId, hallStructures3D]);
+
+  async function loadCoordinatorHallAllocations() {
+    setAllocationLoading(true);
+    try {
+      const response = await schedulerApi.getCoordinatorHallAllocations();
+      setCoordinatorHallAllocations(response?.data || []);
+      setAllocationSummary(
+        response?.summary || {
+          total: 0,
+          fromApprovedTimetable: 0,
+          fromRecommendationFallback: 0,
+        }
+      );
+    } catch (err) {
+      setCoordinatorHallAllocations([]);
+      setAllocationSummary({
+        total: 0,
+        fromApprovedTimetable: 0,
+        fromRecommendationFallback: 0,
+      });
+      showError('Load failed', err.message || 'Unable to fetch hall allocations from Academic Coordinator.');
+    }
+    setAllocationLoading(false);
+  }
+
+  function handleNavChange(view) {
+    setActiveNav(view);
+    if ((view === 'overview' || view === 'resources') && coordinatorHallAllocations.length === 0) {
+      loadCoordinatorHallAllocations();
+    }
   }
 
   async function handleAdd(e){
@@ -68,16 +294,103 @@ export default function Scheduler() {
       await schedulerApi.addItem(activeType, form);
       setForm({});
       showSuccess('Entry created', `${activeType.slice(0, -1)} added successfully.`);
-      fetchList(activeType);
+      const refreshed = await schedulerApi.listItems(activeType);
+      setItems(refreshed.items || []);
     }catch(err){ showError('Create failed', err.message); }
   }
 
   async function handleRun(){
+    const hasSegmentFilters = Boolean(segmentYear || segmentSemester || segmentSpecialization);
+
+    if (hasSegmentFilters) {
+      const moduleFilters = {
+        year: segmentYear ? Number(segmentYear) : undefined,
+        semester: segmentSemester ? Number(segmentSemester) : undefined,
+        specialization: segmentSpecialization ? String(segmentSpecialization).trim().toUpperCase() : undefined,
+      };
+
+      try {
+        const modulesPreview = await schedulerApi.listItems('modules', moduleFilters);
+        const filteredModuleCount = Array.isArray(modulesPreview?.items) ? modulesPreview.items.length : 0;
+        if (filteredModuleCount === 0) {
+          showWarning(
+            'No modules for selected filters',
+            'No modules found for the selected Year/Semester/Specialization. Please adjust filters and try again.'
+          );
+          return;
+        }
+      } catch (previewErr) {
+        showError('Module filter check failed', previewErr.message || 'Unable to validate filtered modules before running scheduler.');
+        return;
+      }
+    }
+
     setLoading(true); setResult(null); setSegmentedResult(null);
     try{
-      const res = await schedulerApi.runScheduler(['pso','anticolony','genetic','tabu','hybrid'], { iterations: 80 });
-      setResult(res.results);
-      showSuccess('Scheduler completed', 'Algorithm run completed successfully.');
+      const algorithms = selectedAlgorithms.length ? selectedAlgorithms : ['hybrid'];
+
+      if (hasSegmentFilters) {
+        const segmentedOptions = {
+          iterations,
+          year: segmentYear ? Number(segmentYear) : undefined,
+          semester: segmentSemester ? Number(segmentSemester) : undefined,
+          specialization: segmentSpecialization ? String(segmentSpecialization).trim().toUpperCase() : undefined,
+        };
+
+        const res = await schedulerApi.runSchedulerBySegments(algorithms, segmentedOptions);
+        setSegmentedResult(res);
+
+        const segmentRows = Array.isArray(res?.segmentedResults) ? res.segmentedResults : [];
+        let totalScheduled = 0;
+        let totalRequired = 0;
+        let totalConflicts = 0;
+        const mergedEntries = [];
+
+        segmentRows.forEach((segmentRow, segmentIndex) => {
+          const selected = pickPreferredAlgorithm(segmentRow?.results || {});
+          const schedule = Array.isArray(selected?.data?.schedule) ? selected.data.schedule : [];
+          schedule.forEach((entry, entryIndex) => {
+            mergedEntries.push(toGeneratedEntry(entry, entryIndex, segmentRow?.segment?.key || `segment-${segmentIndex + 1}`));
+          });
+
+          totalScheduled += Number(selected?.data?.stats?.scheduled || 0);
+          totalRequired += Number(selected?.data?.stats?.totalRequired || 0);
+          totalConflicts += Array.isArray(selected?.data?.conflicts) ? selected.data.conflicts.length : 0;
+        });
+
+        setGeneratedEntries(mergedEntries);
+        setExecutionSnapshot({
+          coverage: totalRequired > 0 ? totalScheduled / totalRequired : null,
+          scheduled: totalScheduled,
+          totalRequired,
+          conflicts: totalConflicts,
+          source: `Filtered Segments (${segmentRows.length})`,
+        });
+
+        showSuccess('Scheduler completed', 'Filtered timetable generated with selected year/semester/specialization.');
+      } else {
+        const res = await schedulerApi.runScheduler(algorithms, { iterations });
+        setResult(res.results);
+
+        const selected = pickPreferredAlgorithm(res.results || {});
+        const schedule = Array.isArray(selected?.data?.schedule) ? selected.data.schedule : [];
+        const entries = schedule.map((entry, index) => toGeneratedEntry(entry, index));
+        const conflicts = Array.isArray(selected?.data?.conflicts) ? selected.data.conflicts.length : 0;
+        const scheduled = Number(selected?.data?.stats?.scheduled || 0);
+        const totalRequired = Number(selected?.data?.stats?.totalRequired || 0);
+        const coverage = selected?.data?.stats?.coverage;
+
+        setGeneratedEntries(entries);
+        setExecutionSnapshot({
+          coverage: typeof coverage === 'number' ? coverage : null,
+          scheduled,
+          totalRequired,
+          conflicts,
+          source: selected?.key ? `${toReadableLabel(selected.key)} (primary)` : '-',
+        });
+
+        showSuccess('Scheduler completed', 'Algorithm run completed successfully.');
+      }
     }catch(err){ showError('Scheduler failed', err.message); }
     setLoading(false);
   }
@@ -85,87 +398,68 @@ export default function Scheduler() {
   async function handleRunBySegments(){
     setLoading(true); setResult(null); setSegmentedResult(null);
     try{
-      const res = await schedulerApi.runSchedulerBySegments(['hybrid'], { iterations: 80 });
+      const algorithms = selectedAlgorithms.length ? selectedAlgorithms : ['hybrid'];
+      const segmentedOptions = {
+        iterations,
+        year: segmentYear ? Number(segmentYear) : undefined,
+        semester: segmentSemester ? Number(segmentSemester) : undefined,
+        specialization: segmentSpecialization ? String(segmentSpecialization).trim().toUpperCase() : undefined,
+      };
+      const res = await schedulerApi.runSchedulerBySegments(algorithms, segmentedOptions);
       setSegmentedResult(res);
+
+      const segmentRows = Array.isArray(res?.segmentedResults) ? res.segmentedResults : [];
+      let totalScheduled = 0;
+      let totalRequired = 0;
+      let totalConflicts = 0;
+      const mergedEntries = [];
+
+      segmentRows.forEach((segmentRow, segmentIndex) => {
+        const selected = pickPreferredAlgorithm(segmentRow?.results || {});
+        const schedule = Array.isArray(selected?.data?.schedule) ? selected.data.schedule : [];
+        schedule.forEach((entry, entryIndex) => {
+          mergedEntries.push(toGeneratedEntry(entry, entryIndex, segmentRow?.segment?.key || `segment-${segmentIndex + 1}`));
+        });
+
+        totalScheduled += Number(selected?.data?.stats?.scheduled || 0);
+        totalRequired += Number(selected?.data?.stats?.totalRequired || 0);
+        totalConflicts += Array.isArray(selected?.data?.conflicts) ? selected.data.conflicts.length : 0;
+      });
+
+      setGeneratedEntries(mergedEntries);
+      setExecutionSnapshot({
+        coverage: totalRequired > 0 ? totalScheduled / totalRequired : null,
+        scheduled: totalScheduled,
+        totalRequired,
+        conflicts: totalConflicts,
+        source: `Segmented (${segmentRows.length} segments)`,
+      });
+
       showSuccess('Segmented run completed', 'Scheduler run by segments finished.');
     }catch(err){ showError('Segmented run failed', err.message); }
     setLoading(false);
   }
 
-  const courses = useMemo(() => {
-    if (activeType !== 'modules') return [];
-    return (items || []).map((item, index) => toCourse(item, index));
-  }, [items, activeType]);
-
-  const assignedCourseIds = useMemo(() => new Set(Object.values(calendarMap)), [calendarMap]);
-
-  const unassignedCourses = useMemo(
-    () => courses.filter((course) => !assignedCourseIds.has(course.id)),
-    [courses, assignedCourseIds]
+  const modulesCatalog = useMemo(
+    () => (activeType === 'modules' ? (items || []).map((item, index) => toCourse(item, index)) : []),
+    [items, activeType]
   );
 
-  const coverage = courses.length
-    ? Math.round(((courses.length - unassignedCourses.length) / courses.length) * 100)
-    : 0;
+  const coverageLabel = executionSnapshot.coverage == null
+    ? '-'
+    : `${Math.round(executionSnapshot.coverage * 100)}%`;
+
+  const uniqueScheduledModules = useMemo(
+    () => new Set(generatedEntries.map((entry) => entry.moduleId)).size,
+    [generatedEntries]
+  );
 
   const statsCards = [
-    { label: 'Total Modules', value: courses.length || 0 },
-    { label: 'Assigned Blocks', value: Object.keys(calendarMap).length },
-    { label: 'Unscheduled', value: unassignedCourses.length },
-    { label: 'Coverage', value: `${coverage}%` },
+    { label: 'Catalog Modules', value: modulesCatalog.length || 0 },
+    { label: 'Generated Sessions', value: generatedEntries.length },
+    { label: 'Unique Modules', value: uniqueScheduledModules },
+    { label: 'Coverage', value: coverageLabel },
   ];
-
-  function findCourse(courseId) {
-    return courses.find((course) => course.id === courseId);
-  }
-
-  function handleDragStartFromPool(courseId) {
-    setDragPayload({ source: 'pool', courseId, fromCell: null });
-  }
-
-  function handleDragStartFromCell(courseId, fromCell) {
-    setDragPayload({ source: 'grid', courseId, fromCell });
-  }
-
-  function allowDrop(event) {
-    event.preventDefault();
-  }
-
-  function assignToCell(day, slot) {
-    if (!dragPayload?.courseId) return;
-
-    const cellKey = `${day}__${slot}`;
-
-    setCalendarMap((previous) => {
-      const next = { ...previous };
-
-      Object.keys(next).forEach((key) => {
-        if (next[key] === dragPayload.courseId) {
-          delete next[key];
-        }
-      });
-
-      if (dragPayload.source === 'grid' && dragPayload.fromCell && dragPayload.fromCell !== cellKey) {
-        delete next[dragPayload.fromCell];
-      }
-
-      next[cellKey] = dragPayload.courseId;
-      return next;
-    });
-
-    setDragPayload(null);
-  }
-
-  function unassignCourse(courseId) {
-    setCalendarMap((previous) => {
-      const next = { ...previous };
-      Object.keys(next).forEach((key) => {
-        if (next[key] === courseId) delete next[key];
-      });
-      return next;
-    });
-    setDragPayload(null);
-  }
 
   function handleJsonChange(value) {
     if (!value.trim()) {
@@ -189,6 +483,103 @@ export default function Scheduler() {
       }))
     : [];
 
+  function toggleAlgorithm(algorithm) {
+    setSelectedAlgorithms((previous) => {
+      if (previous.includes(algorithm)) {
+        if (previous.length === 1) return previous;
+        return previous.filter((item) => item !== algorithm);
+      }
+      return [...previous, algorithm];
+    });
+  }
+
+  const activeDays = useMemo(() => {
+    const inSchedule = [...new Set(generatedEntries.map((entry) => entry.day).filter(Boolean))];
+    if (!inSchedule.length) return dayOrder.slice(0, 5);
+    return dayOrder.filter((day) => inSchedule.includes(day));
+  }, [generatedEntries]);
+
+  const activeSlots = useMemo(() => {
+    const slotSet = new Set();
+
+    generatedEntries.forEach((entry) => {
+      if (Array.isArray(entry.slots) && entry.slots.length) {
+        entry.slots.forEach((slot) => slotSet.add(slot));
+      } else if (entry.slot) {
+        slotSet.add(entry.slot);
+      }
+    });
+
+    const list = [...slotSet];
+    if (!list.length) return defaultSlots;
+    return list.sort((left, right) => slotToMinutes(left) - slotToMinutes(right));
+  }, [generatedEntries]);
+
+  const scheduleMap = useMemo(() => {
+    const map = {};
+
+    generatedEntries.forEach((entry) => {
+      const slots = Array.isArray(entry.slots) && entry.slots.length ? entry.slots : [entry.slot];
+      slots.forEach((slot) => {
+        const key = `${entry.day}__${slot}`;
+        if (!map[key]) map[key] = [];
+        map[key].push(entry);
+      });
+    });
+
+    return map;
+  }, [generatedEntries]);
+
+  const filteredItems = useMemo(() => {
+    const requestedYear = segmentYear ? Number(segmentYear) : null;
+    const requestedSemester = segmentSemester ? Number(segmentSemester) : null;
+    const requestedSpecialization = segmentSpecialization ? normalizeSpecialization(segmentSpecialization) : '';
+
+    if (!requestedYear && !requestedSemester && !requestedSpecialization) {
+      return items;
+    }
+
+    return (items || []).filter((item) => {
+      if (activeType === 'modules') {
+        const moduleYear = inferModuleYear(item);
+        const moduleSemester = inferModuleSemester(item);
+        const moduleSpecialization = inferModuleSpecialization(item);
+
+        if (requestedYear && moduleYear && moduleYear !== requestedYear) return false;
+        if (requestedSemester && moduleSemester && moduleSemester !== requestedSemester) return false;
+        if (requestedSpecialization && moduleSpecialization !== requestedSpecialization) return false;
+        return true;
+      }
+
+      if (activeType === 'batches') {
+        const segment = parseBatchSegment(item);
+        if (!segment) return true;
+        if (requestedYear && segment.year !== requestedYear) return false;
+        if (requestedSemester && segment.semester !== requestedSemester) return false;
+        if (requestedSpecialization && segment.specialization !== requestedSpecialization) return false;
+        return true;
+      }
+
+      if (activeType === 'lics' || activeType === 'instructors') {
+        if (!requestedSpecialization) return true;
+        const department = normalizeSpecialization(item.department || item.details?.department || '');
+        return department.includes(requestedSpecialization);
+      }
+
+      return true;
+    });
+  }, [items, activeType, segmentYear, segmentSemester, segmentSpecialization]);
+
+  const sidebarHallsPreview = useMemo(() => {
+    if (activeType !== 'halls') return [];
+    const source = filteredItems.length ? filteredItems : hallStructures3D;
+    return (source || []).slice(0, 8);
+  }, [activeType, filteredItems, hallStructures3D]);
+
+  const activeFilterSummary = useMemo(() => {
+    return `${segmentYear ? `Y${segmentYear}` : 'All Years'} • ${segmentSemester ? `S${segmentSemester}` : 'All Semesters'} • ${segmentSpecialization ? segmentSpecialization.toUpperCase() : 'All Specializations'}`;
+  }, [segmentYear, segmentSemester, segmentSpecialization]);
+
   return (
     <div className="scheduler-shell">
       <aside className="scheduler-sidebar">
@@ -199,10 +590,10 @@ export default function Scheduler() {
         </div>
 
         <nav className="sidebar-nav">
-          <button className={activeNav === 'overview' ? 'active' : ''} onClick={() => setActiveNav('overview')}>Overview</button>
-          <button className={activeNav === 'weekly' ? 'active' : ''} onClick={() => setActiveNav('weekly')}>Weekly Calendar</button>
-          <button className={activeNav === 'resources' ? 'active' : ''} onClick={() => setActiveNav('resources')}>Resource Hub</button>
-          <button className={activeNav === 'algorithms' ? 'active' : ''} onClick={() => setActiveNav('algorithms')}>Algorithms</button>
+          <button className={activeNav === 'overview' ? 'active' : ''} onClick={() => handleNavChange('overview')}>Overview</button>
+          <button className={activeNav === 'weekly' ? 'active' : ''} onClick={() => handleNavChange('weekly')}>Weekly Calendar</button>
+          <button className={activeNav === 'resources' ? 'active' : ''} onClick={() => handleNavChange('resources')}>Resource Hub</button>
+          <button className={activeNav === 'algorithms' ? 'active' : ''} onClick={() => handleNavChange('algorithms')}>Algorithms</button>
         </nav>
 
         <div className="sidebar-section">
@@ -215,10 +606,60 @@ export default function Scheduler() {
                 onClick={() => setActiveType(type)}
                 type="button"
               >
-                {type}
+                {toDataSourceLabel(type)}
               </button>
             ))}
           </div>
+
+          {activeType === 'halls' && (
+            <div style={{ marginTop: 12 }}>
+              <h4 style={{ margin: '0 0 6px', fontSize: 12, letterSpacing: '0.06em', textTransform: 'uppercase', opacity: 0.75 }}>
+                Campus Halls
+              </h4>
+              {sidebarHallsPreview.length === 0 ? (
+                <p style={{ margin: 0, fontSize: 12, opacity: 0.8 }}>No halls found.</p>
+              ) : (
+                <div style={{ display: 'grid', gap: 6 }}>
+                  {sidebarHallsPreview.map((hall, index) => (
+                    <button
+                      key={hall.id || `${hall.name || 'hall'}-${index}`}
+                      type="button"
+                      onClick={() => {
+                        setSelectedHallId(String(hall.id || hall.name || ''));
+                        setActiveNav('resources');
+                      }}
+                      style={{
+                        fontSize: 12,
+                        lineHeight: 1.35,
+                        textAlign: 'left',
+                        borderRadius: 8,
+                        border: selectedHallId === String(hall.id || hall.name || '') ? '1px solid rgba(59,130,246,0.9)' : '1px solid rgba(148,163,184,0.35)',
+                        background: selectedHallId === String(hall.id || hall.name || '') ? 'rgba(59,130,246,0.16)' : 'rgba(15,23,42,0.28)',
+                        color: '#e2e8f0',
+                        padding: '8px 10px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <strong>{hall.name || hall.id || `Hall ${index + 1}`}</strong>
+                      <div style={{ opacity: 0.8 }}>
+                        Capacity: {hall.capacity || '-'}
+                        {hall.features?.building ? ` • ${hall.features.building}` : ''}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeType === 'modules' && (
+            <div style={{ marginTop: 12, fontSize: 12, opacity: 0.85 }}>
+              <strong>Filtered Modules:</strong> {filteredItems.length}
+              <div style={{ marginTop: 4 }}>
+                {segmentYear ? `Y${segmentYear}` : 'All Years'} • {segmentSemester ? `S${segmentSemester}` : 'All Semesters'} • {segmentSpecialization ? segmentSpecialization.toUpperCase() : 'All Specializations'}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="sidebar-footer-note">
@@ -230,72 +671,156 @@ export default function Scheduler() {
         <header className="scheduler-header">
           <div>
             <h1>Automated University Timetable Dashboard</h1>
-            <p>Drag course blocks into weekly slots to compose, compare, and refine institutional schedules.</p>
+            <p>Run scheduling engines using real coordinator allocations, institutional data, and module duration rules.</p>
           </div>
           <div className="header-actions">
             <button className="action primary" onClick={handleRun} disabled={loading}>
               {loading ? 'Running...' : 'Run Scheduler'}
             </button>
             <button className="action" onClick={handleRunBySegments} disabled={loading}>
-              {loading ? 'Running...' : 'Run by Segments'}
+              {loading ? 'Running...' : 'Run by Semester & Specialization'}
             </button>
           </div>
         </header>
 
-        <section className="scheduler-stats">
-          {statsCards.map((stat) => (
-            <article key={stat.label} className="stat-card">
-              <span>{stat.label}</span>
-              <strong>{stat.value}</strong>
-            </article>
-          ))}
-        </section>
+        <div className="result-row" style={{ marginBottom: 14 }}>
+          <strong>Active Filters</strong>
+          <p>{activeFilterSummary}</p>
+        </div>
+
+        {(activeNav === 'overview' || activeNav === 'algorithms') && (
+          <section className="panel-card">
+            <div className="panel-header">
+              <h3>Engine Configuration</h3>
+              <span>Choose algorithms and runtime settings</span>
+            </div>
+
+            <div className="json-form">
+              <label>
+                Iterations
+                <input
+                  className="ac-input"
+                  min={10}
+                  max={500}
+                  type="number"
+                  value={iterations}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    if (!Number.isFinite(value)) return;
+                    setIterations(Math.max(10, Math.min(500, value)));
+                  }}
+                />
+              </label>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+                <label>
+                  Year Filter
+                  <select
+                    className="ac-input"
+                    value={segmentYear}
+                    onChange={(event) => setSegmentYear(event.target.value)}
+                  >
+                    <option value="">All Years</option>
+                    <option value="1">Year 1</option>
+                    <option value="2">Year 2</option>
+                    <option value="3">Year 3</option>
+                    <option value="4">Year 4</option>
+                  </select>
+                </label>
+
+                <label>
+                  Semester Filter
+                  <select
+                    className="ac-input"
+                    value={segmentSemester}
+                    onChange={(event) => setSegmentSemester(event.target.value)}
+                  >
+                    <option value="">All Semesters</option>
+                    <option value="1">Semester 1</option>
+                    <option value="2">Semester 2</option>
+                  </select>
+                </label>
+
+                <label>
+                  Specialization
+                  <input
+                    className="ac-input"
+                    placeholder="IT / SE / CS"
+                    value={segmentSpecialization}
+                    onChange={(event) => setSegmentSpecialization(event.target.value)}
+                  />
+                </label>
+              </div>
+
+              <div className="course-pool">
+                {algorithmOptions.map((algorithm) => (
+                  <label key={algorithm} className="pool-item generated-block" style={{ background: 'rgba(15, 23, 42, 0.45)', borderColor: 'rgba(148, 163, 184, 0.35)' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedAlgorithms.includes(algorithm)}
+                      onChange={() => toggleAlgorithm(algorithm)}
+                    />
+                    <strong>{toReadableLabel(algorithm)}</strong>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+        {(activeNav === 'overview' || activeNav === 'weekly') && (
+          <section className="scheduler-stats">
+            {statsCards.map((stat) => (
+              <article key={stat.label} className="stat-card">
+                <span>{stat.label}</span>
+                <strong>{stat.value}</strong>
+              </article>
+            ))}
+          </section>
+        )}
 
         <section className="scheduler-grid-layout">
+          {(activeNav === 'overview' || activeNav === 'weekly') && (
           <article className="calendar-panel">
             <div className="panel-header">
               <h3>Weekly Schedule Matrix</h3>
-              <span>Drag & drop blocks • 5 day view</span>
+              <span>Backend generated output • Algorithm driven</span>
             </div>
 
             <div className="calendar-grid">
               <div className="grid-corner">Time</div>
-              {weekdays.map((day) => (
-                <div key={day} className="grid-day-header">{day}</div>
+              {activeDays.map((day) => (
+                <div key={day} className="grid-day-header">{dayLabel[day] || day}</div>
               ))}
 
-              {timeSlots.map((slot) => (
+              {activeSlots.map((slot) => (
                 <React.Fragment key={slot}>
                   <div className="grid-time-label">{slot}</div>
-                  {weekdays.map((day) => {
+                  {activeDays.map((day) => {
                     const cellKey = `${day}__${slot}`;
-                    const courseId = calendarMap[cellKey];
-                    const course = courseId ? findCourse(courseId) : null;
+                    const entries = scheduleMap[cellKey] || [];
                     return (
-                      <div
-                        key={cellKey}
-                        className="grid-cell"
-                        onDragOver={allowDrop}
-                        onDrop={() => assignToCell(day, slot)}
-                      >
-                        {course ? (
-                          <button
-                            className="course-block"
-                            draggable
-                            onDragStart={() => handleDragStartFromCell(course.id, cellKey)}
-                            onClick={() => setSelectedBlock({ day, slot, course })}
-                            style={{
-                              background: course.color.bg,
-                              borderColor: course.color.border,
-                            }}
-                            type="button"
-                          >
-                            <strong>{course.title}</strong>
-                            <span>{course.department}</span>
-                            <span>{course.lecturer}</span>
-                          </button>
+                      <div key={cellKey} className="grid-cell">
+                        {entries.length ? (
+                          <div className="schedule-cell-stack">
+                            {entries.map((entry) => (
+                              <button
+                                key={entry.id}
+                                className="course-block generated-block"
+                                onClick={() => setSelectedBlock(entry)}
+                                style={{
+                                  background: entry.color.bg,
+                                  borderColor: entry.color.border,
+                                }}
+                                type="button"
+                              >
+                                <strong>{entry.title}</strong>
+                                <span>{entry.room}</span>
+                                <span>{entry.lecturer}</span>
+                              </button>
+                            ))}
+                          </div>
                         ) : (
-                          <span className="grid-empty">Drop here</span>
+                          <span className="grid-empty">No generated class</span>
                         )}
                       </div>
                     );
@@ -304,48 +829,189 @@ export default function Scheduler() {
               ))}
             </div>
           </article>
+          )}
 
           <aside className="control-panel">
+            {(activeNav === 'overview' || activeNav === 'resources') && (
             <section className="panel-card">
               <div className="panel-header">
-                <h3>Course Pool</h3>
-                <span>{unassignedCourses.length} unscheduled</span>
+                <h3>3D Halls View</h3>
+                <span>{hallStructures3D.length} halls</span>
               </div>
 
-              <div
-                className="course-pool"
-                onDragOver={allowDrop}
-                onDrop={() => {
-                  if (dragPayload?.courseId) {
-                    unassignCourse(dragPayload.courseId);
-                  }
-                }}
-              >
-                {unassignedCourses.length === 0 ? (
-                  <p className="empty-pool">All modules are currently scheduled.</p>
+              <div className="ac-3d-controls">
+                <label>
+                  Rotate X
+                  <input
+                    type="range"
+                    min="-20"
+                    max="35"
+                    step="1"
+                    value={view3d.rotateX}
+                    onChange={(event) => setView3d((previous) => ({ ...previous, rotateX: Number(event.target.value) }))}
+                  />
+                </label>
+                <label>
+                  Rotate Z
+                  <input
+                    type="range"
+                    min="-45"
+                    max="45"
+                    step="1"
+                    value={view3d.rotateZ}
+                    onChange={(event) => setView3d((previous) => ({ ...previous, rotateZ: Number(event.target.value) }))}
+                  />
+                </label>
+                <label>
+                  Zoom
+                  <input
+                    type="range"
+                    min="0.6"
+                    max="1.8"
+                    step="0.05"
+                    value={view3d.zoom}
+                    onChange={(event) => setView3d((previous) => ({ ...previous, zoom: Number(event.target.value) }))}
+                  />
+                </label>
+                <button className="action" type="button" onClick={() => setView3d({ rotateX: 10, rotateZ: -18, zoom: 1 })}>
+                  Reset View
+                </button>
+              </div>
+
+              <div className="ac-3d-scene-wrap">
+                <div className="ac-3d-scene" style={{ '--rx': `${view3d.rotateX}deg`, '--rz': `${view3d.rotateZ}deg`, '--zoom': view3d.zoom }}>
+                  <div className="ac-3d-camera">
+                    {hallStructures3D.length === 0 && (
+                      <div className="ac-3d-empty">No halls available yet. Add halls to render the 3D layout.</div>
+                    )}
+
+                    {hallStructures3D.map((structure, index) => {
+                      const capacity = Number(structure.capacity) || 0;
+                      const height = Math.max(40, Math.min(160, capacity ? 28 + Math.round(capacity / 3) : 56));
+                      const x = (index % 6) * 74;
+                      const z = Math.floor(index / 6) * 66;
+                      const structureKey = String(structure.id || structure.name || '');
+                      const isSelected = Boolean(selectedHallId) && selectedHallId === structureKey;
+
+                      return (
+                        <div
+                          key={structure.id || `${structure.name || 'hall'}-${index}`}
+                          className="ac-3d-block"
+                          ref={(node) => {
+                            if (!structureKey) return;
+                            if (node) {
+                              hallBlockRefs.current[structureKey] = node;
+                            } else {
+                              delete hallBlockRefs.current[structureKey];
+                            }
+                          }}
+                          style={{
+                            '--x': `${x}px`,
+                            '--z': `${z}px`,
+                            '--h': `${height}px`,
+                            '--hue': `${(index * 37) % 360}`,
+                            outline: isSelected ? '3px solid rgba(59, 130, 246, 0.95)' : 'none',
+                            boxShadow: isSelected ? '0 0 0 2px rgba(15, 23, 42, 0.65), 0 14px 24px rgba(37, 99, 235, 0.45)' : undefined,
+                          }}
+                        >
+                          <div className="ac-3d-label">
+                            <strong>{structure.name || structure.id || `Hall ${index + 1}`}</strong>
+                            <span>Cap: {capacity || '-'}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </section>
+            )}
+
+            {(activeNav === 'overview' || activeNav === 'resources') && (
+            <section className="panel-card">
+              <div className="panel-header">
+                <h3>Academic Coordinator Hall Allocations</h3>
+                <button
+                  type="button"
+                  className="action"
+                  onClick={loadCoordinatorHallAllocations}
+                  disabled={allocationLoading}
+                >
+                  {allocationLoading ? 'Refreshing...' : 'Refresh'}
+                </button>
+              </div>
+
+              <div className="result-row">
+                <strong>Total: {allocationSummary.total || 0}</strong>
+                <p>
+                  Approved timetable: {allocationSummary.fromApprovedTimetable || 0} •
+                  {` Fallback recommendations: ${allocationSummary.fromRecommendationFallback || 0}`}
+                </p>
+              </div>
+
+              <div className="course-pool">
+                {allocationLoading ? (
+                  <p className="empty-pool">Loading coordinator allocations...</p>
+                ) : coordinatorHallAllocations.length === 0 ? (
+                  <p className="empty-pool">No hall allocations found from Academic Coordinator.</p>
                 ) : (
-                  unassignedCourses.map((course) => (
-                    <div
-                      key={course.id}
-                      className="pool-item"
-                      draggable
-                      onDragStart={() => handleDragStartFromPool(course.id)}
-                      style={{
-                        background: course.color.bg,
-                        borderColor: course.color.border,
-                      }}
-                    >
-                      <strong>{course.title}</strong>
-                      <span>{course.department}</span>
+                  coordinatorHallAllocations.map((item) => (
+                    <div key={`${item.moduleId}-${item.hallId}`} className="result-row">
+                      <strong>{item.moduleCode || item.moduleId} → {item.hallName || item.hallId}</strong>
+                      <p>
+                        {item.moduleName || 'Module name unavailable'} • Source: {toReadableLabel(item.source || '')}
+                        {item.timetableName ? ` • Timetable: ${item.timetableName}` : ''}
+                      </p>
                     </div>
                   ))
                 )}
               </div>
             </section>
+            )}
 
+            {(activeNav === 'overview' || activeNav === 'resources') && (
             <section className="panel-card">
               <div className="panel-header">
-                <h3>Add {activeType.slice(0, -1)}</h3>
+                <h3>Generated Session Feed</h3>
+                <span>{generatedEntries.length} records</span>
+              </div>
+
+              <div className="course-pool">
+                {generatedEntries.length === 0 ? (
+                  <p className="empty-pool">Run scheduler to populate generated timetable sessions.</p>
+                ) : (
+                  generatedEntries.slice(0, 80).map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="pool-item generated-block"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedBlock(entry)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          setSelectedBlock(entry);
+                        }
+                      }}
+                      style={{
+                        background: entry.color.bg,
+                        borderColor: entry.color.border,
+                      }}
+                    >
+                      <strong>{entry.title}</strong>
+                      <span>{(dayLabel[entry.day] || entry.day)} • {entry.slot}</span>
+                      <span>{entry.room}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+            )}
+
+            {(activeNav === 'overview' || activeNav === 'resources') && (
+            <section className="panel-card">
+              <div className="panel-header">
+                <h3>Add {toCapitalized(activeType.slice(0, -1))}</h3>
                 <span>JSON payload</span>
               </div>
               <form className="json-form" onSubmit={handleAdd}>
@@ -358,16 +1024,17 @@ export default function Scheduler() {
               </form>
 
               <div className="existing-list">
-                <h4>Existing {activeType}</h4>
-                {items.slice(0, 30).map((item, index) => (
+                <h4>Existing {toCapitalized(activeType)}</h4>
+                {filteredItems.slice(0, 30).map((item, index) => (
                   <div key={item.id || item.name || `${activeType}-${index}`}>
                     {item.name || item.code || item.id}
                   </div>
                 ))}
               </div>
             </section>
+            )}
 
-            {(summarizedResults.length > 0 || segmentedResult) && (
+            {(activeNav === 'overview' || activeNav === 'algorithms') && (summarizedResults.length > 0 || segmentedResult) && (
               <section className="panel-card">
                 <div className="panel-header">
                   <h3>Execution Insights</h3>
@@ -376,7 +1043,7 @@ export default function Scheduler() {
 
                 {summarizedResults.map((entry) => (
                   <div className="result-row" key={entry.algorithm}>
-                    <strong>{entry.algorithm.toUpperCase()}</strong>
+                    <strong>{toReadableLabel(entry.algorithm)}</strong>
                     <p>
                       Coverage: {typeof entry.coverage === 'number' ? entry.coverage.toFixed(2) : '-'} •
                       {` ${entry.scheduled ?? '-'} / ${entry.totalRequired ?? '-'} `}
@@ -391,6 +1058,15 @@ export default function Scheduler() {
                     <p>Total Segments: {segmentedResult.totalSegments}</p>
                   </div>
                 )}
+
+                <div className="result-row">
+                  <strong>Active Schedule Source</strong>
+                  <p>{executionSnapshot.source}</p>
+                  <p>
+                    Scheduled: {executionSnapshot.scheduled} / {executionSnapshot.totalRequired} •
+                    {` Conflicts: ${executionSnapshot.conflicts} `}
+                  </p>
+                </div>
               </section>
             )}
           </aside>
@@ -400,38 +1076,28 @@ export default function Scheduler() {
       {selectedBlock && (
         <div className="glass-modal-backdrop" onClick={() => setSelectedBlock(null)}>
           <div className="glass-modal" onClick={(event) => event.stopPropagation()}>
-            <h3>{selectedBlock.course.title}</h3>
-            <p>{selectedBlock.day} • {selectedBlock.slot}</p>
+            <h3>{selectedBlock.title}</h3>
+            <p>{dayLabel[selectedBlock.day] || selectedBlock.day} • {selectedBlock.slot}</p>
             <div className="modal-meta-grid">
               <div>
                 <span>Department</span>
-                <strong>{selectedBlock.course.department}</strong>
+                <strong>{selectedBlock.department}</strong>
               </div>
               <div>
                 <span>Lecturer</span>
-                <strong>{selectedBlock.course.lecturer}</strong>
+                <strong>{selectedBlock.lecturer}</strong>
               </div>
               <div>
                 <span>Room</span>
-                <strong>{selectedBlock.course.room}</strong>
+                <strong>{selectedBlock.room}</strong>
               </div>
               <div>
-                <span>Credits</span>
-                <strong>{selectedBlock.course.credits}</strong>
+                <span>Batches</span>
+                <strong>{selectedBlock.batchKeys.length ? selectedBlock.batchKeys.join(', ') : 'N/A'}</strong>
               </div>
             </div>
             <div className="modal-actions">
               <button className="action" onClick={() => setSelectedBlock(null)} type="button">Close</button>
-              <button
-                className="action danger"
-                onClick={() => {
-                  unassignCourse(selectedBlock.course.id);
-                  setSelectedBlock(null);
-                }}
-                type="button"
-              >
-                Remove From Calendar
-              </button>
             </div>
           </div>
         </div>

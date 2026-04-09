@@ -4,6 +4,7 @@ import HallResourcesPanel from './HallResourcesPanel.jsx';
 import HallRatingsPanel from './HallRatingsPanel.jsx';
 import ActivityLogPanel from './ActivityLogPanel.jsx';
 import SmartRecommendationsPanel from './SmartRecommendationsPanel.jsx';
+import Building2DView from './Building2DView.jsx';
 
 const AMENITIES = [
   { id: 'projector', label: 'Projector', icon: '🎬' },
@@ -15,6 +16,65 @@ const AMENITIES = [
   { id: 'sound_system', label: 'Sound System', icon: '🔊' },
 ];
 
+const HALL_ID_REGEX = /^[A-Za-z0-9][A-Za-z0-9_-]{1,39}$/;
+const HALL_TEXT_REGEX = /^[A-Za-z0-9][A-Za-z0-9 .,&()/-]{1,79}$/;
+const FLOOR_REGEX = /^[A-Za-z0-9][A-Za-z0-9 .,&()/-]{0,28}$/;
+
+const normalizeHallForm = (form) => ({
+  hallId: String(form.hallId || '').trim(),
+  hallType: String(form.hallType || '').trim(),
+  capacity: String(form.capacity || '').trim(),
+  building: String(form.building || '').trim(),
+  floor: String(form.floor || '').trim(),
+  amenities: form.amenities || {},
+  maintenanceStart: String(form.maintenanceStart || '').trim(),
+  maintenanceEnd: String(form.maintenanceEnd || '').trim(),
+});
+
+const validateHallFormPayload = (form, { validateId = true } = {}) => {
+  const normalized = normalizeHallForm(form);
+
+  if (validateId && !HALL_ID_REGEX.test(normalized.hallId)) {
+    return 'Hall ID must be 2-40 characters with letters, numbers, underscore, or hyphen.';
+  }
+
+  if (!normalized.hallType || normalized.hallType.length < 2 || normalized.hallType.length > 60) {
+    return 'Hall type must be between 2 and 60 characters.';
+  }
+
+  if (!normalized.building || normalized.building.length < 2 || normalized.building.length > 80) {
+    return 'Building must be between 2 and 80 characters.';
+  }
+
+  if (!HALL_TEXT_REGEX.test(normalized.hallType) || !HALL_TEXT_REGEX.test(normalized.building)) {
+    return 'Hall type and building can only include letters, numbers, spaces, and . , & ( ) / -';
+  }
+
+  if (normalized.floor) {
+    if (normalized.floor.length > 30) {
+      return 'Floor cannot exceed 30 characters.';
+    }
+    if (!FLOOR_REGEX.test(normalized.floor)) {
+      return 'Floor can only include letters, numbers, spaces, and . , & ( ) / -';
+    }
+  }
+
+  const capacityValue = Number(normalized.capacity);
+  if (!Number.isInteger(capacityValue) || capacityValue < 1 || capacityValue > 2000) {
+    return 'Capacity must be an integer between 1 and 2000.';
+  }
+
+  if ((normalized.maintenanceStart && !normalized.maintenanceEnd) || (!normalized.maintenanceStart && normalized.maintenanceEnd)) {
+    return 'Please provide both maintenance start and end dates.';
+  }
+
+  if (normalized.maintenanceStart && normalized.maintenanceEnd && normalized.maintenanceEnd < normalized.maintenanceStart) {
+    return 'Maintenance end date must be on or after the start date.';
+  }
+
+  return null;
+};
+
 const HallAllocation = ({ apiBase }) => {
   const [halls, setHalls] = useState([]);
   const [timetables, setTimetables] = useState([]);
@@ -24,6 +84,7 @@ const HallAllocation = ({ apiBase }) => {
   const [showEditConfirmModal, setShowEditConfirmModal] = useState(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+  const [editTargetHallId, setEditTargetHallId] = useState('');
   const [maintenanceHallId, setMaintenanceHallId] = useState('');
   const [hallForm, setHallForm] = useState({
     hallId: '',
@@ -52,6 +113,8 @@ const HallAllocation = ({ apiBase }) => {
   const [submittingHall, setSubmittingHall] = useState(false);
   const [submittingEditHall, setSubmittingEditHall] = useState(false);
   const [deletingHallId, setDeletingHallId] = useState('');
+  const [submittingMaintenance, setSubmittingMaintenance] = useState(false);
+  const [updatingStatusHallId, setUpdatingStatusHallId] = useState('');
   const [hallToDelete, setHallToDelete] = useState('');
   const [toast, setToast] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -68,6 +131,7 @@ const HallAllocation = ({ apiBase }) => {
   const [selectedHall, setSelectedHall] = useState(null);
   const [showRecommendationsModal, setShowRecommendationsModal] = useState(false);
   const pageSize = 8;
+  const todayDate = new Date().toISOString().split('T')[0];
 
   const normalizeHall = useCallback((hall) => {
     let features = hall?.features;
@@ -92,12 +156,42 @@ const HallAllocation = ({ apiBase }) => {
   }, []);
 
   const getHallBookingCount = useCallback((hall) => {
-    return timetables.filter((t) => t.hall_id === hall.id || t.data?.includes(hall.id)).length;
+    const hallId = String(hall?.id || '').trim();
+
+    return timetables.filter((t) => {
+      if (String(t?.hall_id || '').trim() === hallId) return true;
+
+      const rawData = t?.data;
+      if (typeof rawData === 'string') {
+        return rawData.includes(hallId);
+      }
+
+      if (rawData && typeof rawData === 'object') {
+        try {
+          return JSON.stringify(rawData).includes(hallId);
+        } catch {
+          return false;
+        }
+      }
+
+      return false;
+    }).length;
   }, [timetables]);
 
   const getHallAvailability = useCallback((hall) => {
-    if (hall.status === 'maintenance') {
+    const today = new Date().toISOString().split('T')[0];
+    const maintenanceStart = String(hall.maintenanceStart || '').trim();
+    const maintenanceEnd = String(hall.maintenanceEnd || '').trim();
+    const inMaintenanceRange = Boolean(
+      maintenanceStart && maintenanceEnd && today >= maintenanceStart && today <= maintenanceEnd
+    );
+
+    if (hall.status === 'maintenance' || inMaintenanceRange) {
       return { status: 'maintenance', label: 'Under Maintenance', color: 'bg-red-100 text-red-800' };
+    }
+
+    if (hall.status === 'unavailable') {
+      return { status: 'unavailable', label: 'Unavailable', color: 'bg-slate-200 text-slate-800' };
     }
 
     const bookingCount = getHallBookingCount(hall);
@@ -137,14 +231,22 @@ const HallAllocation = ({ apiBase }) => {
       const hallsData = await hallRes.json();
       const timetableData = await timetableRes.json();
 
-      if (hallsData.success) {
-        const dbHalls = hallsData.items || hallsData.data || [];
-        setHalls(dbHalls.map(normalizeHall));
+      if (!hallRes.ok) {
+        throw new Error(hallsData?.error || hallsData?.message || `Failed to load halls (${hallRes.status})`);
       }
-      if (timetableData.success) setTimetables(timetableData.data || []);
+
+      if (!timetableRes.ok) {
+        throw new Error(timetableData?.error || timetableData?.message || `Failed to load timetables (${timetableRes.status})`);
+      }
+
+      const dbHalls = hallsData.items || hallsData.data || [];
+      setHalls(Array.isArray(dbHalls) ? dbHalls.map(normalizeHall) : []);
+
+      const rows = timetableData.data || timetableData.items || [];
+      setTimetables(Array.isArray(rows) ? rows : []);
     } catch (err) {
       console.error('Hall allocation load error:', err);
-      setToast({ message: 'Failed to load hall allocation data.', type: 'error' });
+      setToast({ message: err?.message || 'Failed to load hall allocation data.', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -188,14 +290,23 @@ const HallAllocation = ({ apiBase }) => {
     e.preventDefault();
     setHallError('');
 
-    if (!hallForm.hallId || !hallForm.hallType || !hallForm.capacity || !hallForm.building) {
-      setHallError('Please fill all hall fields.');
+    const validationError = validateHallFormPayload(hallForm, { validateId: true });
+    if (validationError) {
+      setHallError(validationError);
       return;
     }
 
-    const capacityValue = Number(hallForm.capacity);
-    if (!Number.isFinite(capacityValue) || capacityValue <= 0) {
-      setHallError('Capacity must be a positive number.');
+    const normalizedForm = normalizeHallForm(hallForm);
+    const capacityValue = Number(normalizedForm.capacity);
+
+    const normalizedHallName = normalizedForm.hallId.toLowerCase();
+    const duplicateHallExists = halls.some((hall) => {
+      const existingName = String(hall?.name || hall?.id || '').trim().toLowerCase();
+      return existingName === normalizedHallName;
+    });
+
+    if (duplicateHallExists) {
+      setHallError('A hall with this name already exists. Please use a different hall name.');
       return;
     }
 
@@ -206,14 +317,14 @@ const HallAllocation = ({ apiBase }) => {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: hallForm.hallId,
-          name: hallForm.hallId,
+          id: normalizedForm.hallId,
+          name: normalizedForm.hallId,
           capacity: capacityValue,
           features: {
-            hallType: hallForm.hallType,
-            building: hallForm.building,
-            floor: hallForm.floor,
-            amenities: hallForm.amenities,
+            hallType: normalizedForm.hallType,
+            building: normalizedForm.building,
+            floor: normalizedForm.floor,
+            amenities: normalizedForm.amenities,
           },
           status: hallForm.status,
         }),
@@ -238,7 +349,7 @@ const HallAllocation = ({ apiBase }) => {
       });
       setShowAddHallModal(false);
       setToast({ message: 'Hall added successfully.', type: 'success' });
-      await notifyUser('Hall Added', `Hall ${hallForm.hallId} was added successfully.`);
+      await notifyUser('Hall Added', `Hall ${normalizedForm.hallId} was added successfully.`);
     } catch (err) {
       console.error('Add hall error:', err);
       const errorMessage = err.message || 'Failed to add hall';
@@ -251,13 +362,19 @@ const HallAllocation = ({ apiBase }) => {
   };
 
   const executeEditHall = async () => {
+    if (!editTargetHallId) {
+      setEditHallError('Unable to update hall. Please close and reopen the edit form.');
+      return;
+    }
+
     setSubmittingEditHall(true);
     try {
-      const response = await fetch(`${apiBase}/api/scheduler/halls/${editHallForm.hallId}`, {
+      const response = await fetch(`${apiBase}/api/scheduler/halls/${editTargetHallId}`, {
         method: 'PUT',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          id: editHallForm.hallId,
           name: editHallForm.hallId,
           capacity: Number(editHallForm.capacity),
           features: {
@@ -280,6 +397,7 @@ const HallAllocation = ({ apiBase }) => {
       await loadData();
       setShowEditConfirmModal(false);
       setShowEditHallModal(false);
+      setEditTargetHallId('');
       setToast({ message: 'Hall updated successfully.', type: 'success' });
       await notifyUser('Hall Updated', `Hall ${editHallForm.hallId} was updated successfully.`);
     } catch (err) {
@@ -297,14 +415,25 @@ const HallAllocation = ({ apiBase }) => {
     e.preventDefault();
     setEditHallError('');
 
-    if (!editHallForm.hallId || !editHallForm.hallType || !editHallForm.capacity || !editHallForm.building) {
-      setEditHallError('Please fill all hall fields.');
+    if (!editTargetHallId) {
+      setEditHallError('Unable to update hall. Please close and reopen the edit form.');
       return;
     }
 
-    const capacityValue = Number(editHallForm.capacity);
-    if (!Number.isFinite(capacityValue) || capacityValue <= 0) {
-      setEditHallError('Capacity must be a positive number.');
+    const validationError = validateHallFormPayload(editHallForm, { validateId: true });
+    if (validationError) {
+      setEditHallError(validationError);
+      return;
+    }
+
+    const normalizedHallId = String(editHallForm.hallId || '').trim().toLowerCase();
+    const duplicateHallExists = halls.some((hall) => {
+      const existingId = String(hall?.id || '').trim().toLowerCase();
+      return existingId === normalizedHallId && String(hall?.id || '') !== String(editTargetHallId);
+    });
+
+    if (duplicateHallExists) {
+      setEditHallError('A hall with this ID already exists. Please use a different hall ID.');
       return;
     }
 
@@ -312,6 +441,7 @@ const HallAllocation = ({ apiBase }) => {
   };
 
   const openEditHallModal = (hall) => {
+    setEditTargetHallId(hall.id);
     setEditHallForm({
       hallId: hall.id,
       hallType: hall.features?.hallType || '',
@@ -327,9 +457,74 @@ const HallAllocation = ({ apiBase }) => {
     setShowEditHallModal(true);
   };
 
+  const openMaintenanceModal = (hall) => {
+    setMaintenanceHallId(hall.id);
+    setEditHallForm({
+      hallId: hall.id,
+      hallType: hall.features?.hallType || '',
+      capacity: hall.capacity?.toString() || '',
+      building: hall.features?.building || '',
+      floor: hall.features?.floor || hall.floor || '',
+      amenities: hall.features?.amenities || {},
+      status: hall.status || 'available',
+      maintenanceStart: '',
+      maintenanceEnd: '',
+    });
+    setShowMaintenanceModal(true);
+  };
+
   const requestDeleteHall = (hallId) => {
     setHallToDelete(hallId);
     setShowDeleteConfirmModal(true);
+  };
+
+  const updateHallStatus = async (hall, nextStatus) => {
+    setUpdatingStatusHallId(hall.id);
+    try {
+      const response = await fetch(`${apiBase}/api/scheduler/halls/${hall.id}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: hall.name || hall.id,
+          capacity: Number(hall.capacity),
+          features: {
+            hallType: hall.features?.hallType || '',
+            building: hall.features?.building || '',
+            floor: hall.features?.floor || hall.floor || '',
+            amenities: hall.features?.amenities || {},
+          },
+          status: nextStatus,
+          maintenanceStart: nextStatus === 'maintenance' ? hall.maintenanceStart : '',
+          maintenanceEnd: nextStatus === 'maintenance' ? hall.maintenanceEnd : '',
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to update hall status');
+      }
+
+      setHalls((previous) =>
+        previous.map((item) =>
+          item.id === hall.id
+            ? {
+                ...item,
+                status: nextStatus,
+                maintenanceStart: nextStatus === 'maintenance' ? item.maintenanceStart : '',
+                maintenanceEnd: nextStatus === 'maintenance' ? item.maintenanceEnd : '',
+              }
+            : item
+        )
+      );
+
+      setToast({ message: `Hall ${hall.id} status changed to ${nextStatus}.`, type: 'success' });
+    } catch (error) {
+      console.error('Update status error:', error);
+      setToast({ message: error.message || 'Failed to update hall status', type: 'error' });
+    } finally {
+      setUpdatingStatusHallId('');
+    }
   };
 
   const executeDeleteHall = async (hallId) => {
@@ -412,6 +607,16 @@ const HallAllocation = ({ apiBase }) => {
     }
   }, [currentPage, totalPages]);
 
+  useEffect(() => {
+    if (selectedHall && !halls.some((hall) => hall.id === selectedHall.id)) {
+      setSelectedHall(null);
+    }
+  }, [halls, selectedHall]);
+
+  useEffect(() => {
+    setCompareSelection((previous) => previous.filter((hallId) => halls.some((hall) => hall.id === hallId)).slice(0, 2));
+  }, [halls]);
+
   const paginatedHalls = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredHalls.slice(start, start + pageSize);
@@ -481,7 +686,7 @@ const HallAllocation = ({ apiBase }) => {
       const availability = getHallAvailability(hall);
       acc[availability.status] = (acc[availability.status] || 0) + 1;
       return acc;
-    }, { available: 0, occupied: 0, maintenance: 0 });
+    }, { available: 0, occupied: 0, maintenance: 0, unavailable: 0 });
   }, [halls, getHallAvailability]);
 
   const totalCapacity = useMemo(() => {
@@ -544,20 +749,24 @@ const HallAllocation = ({ apiBase }) => {
   if (loading) return <div className="p-4">Loading Hall Allocation...</div>;
 
   return (
-    <div className="hall-allocation-container p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold">🏛️ Hall Allocation</h2>
-        <div className="flex gap-2">
+    <div className="hall-allocation-container p-4 sm:p-5">
+      <div className="mb-5 rounded-2xl border border-teal-100 bg-gradient-to-r from-teal-50 via-cyan-50 to-sky-50 p-4 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">Hall Allocation</h2>
+            <p className="mt-1 text-sm font-medium text-slate-700">Manage halls with clearer controls, better visibility, and quick insights.</p>
+          </div>
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
           <button
             type="button"
-            className="dashboard-btn hall-primary-btn"
+            className="dashboard-btn hall-primary-btn flex-1 sm:flex-none"
             onClick={() => setShowRecommendationsModal(true)}
           >
-            🎯 Get Recommendations
+             Get Recommendations
           </button>
           <button
             type="button"
-            className="dashboard-btn hall-primary-btn"
+            className="dashboard-btn hall-primary-btn flex-1 sm:flex-none"
             onClick={() => {
               setHallForm({
                 hallId: '',
@@ -576,6 +785,7 @@ const HallAllocation = ({ apiBase }) => {
           >
             + Add Hall
           </button>
+          </div>
         </div>
       </div>
 
@@ -584,103 +794,112 @@ const HallAllocation = ({ apiBase }) => {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         {/* Halls */}
         <div className="panel xl:col-span-2">
-          <div className="mb-4">
-            <h3 className="mb-3">Available Halls</h3>
-
-            {/* Search Input */}
-            <div className="mb-3">
-              <input
-                type="text"
-                placeholder="Search by ID, name, type, or building..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-              />
-            </div>
-
-            {/* Filter and Sort Row */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+          <div className="hall-control-panel mx-auto mb-6 mt-3 max-w-6xl rounded-3xl border border-cyan-100 bg-gradient-to-br from-white via-slate-50 to-cyan-50 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+            <div className="mb-4 flex flex-col gap-1 text-center sm:flex-row sm:items-end sm:justify-between sm:text-left">
               <div>
-                <label className="block text-xs font-medium mb-1">Min Capacity</label>
-                <input
-                  type="number"
-                  placeholder="Min"
-                  value={minCapacity}
-                  onChange={(e) => setMinCapacity(e.target.value)}
-                  className="w-full border rounded-lg px-2 py-1 text-sm"
-                />
+                <h3 className="text-lg font-semibold text-slate-900">Available Halls</h3>
+                <p className="text-sm text-slate-600">Search, filter, and switch between card, table, or campus views.</p>
               </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Max Capacity</label>
-                <input
-                  type="number"
-                  placeholder="Max"
-                  value={maxCapacity}
-                  onChange={(e) => setMaxCapacity(e.target.value)}
-                  className="w-full border rounded-lg px-2 py-1 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Sort By</label>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="w-full border rounded-lg px-2 py-1 text-sm"
-                >
-                  <option value="name">Name</option>
-                  <option value="capacity">Capacity</option>
-                  <option value="building">Building</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Results</label>
-                <div className="flex items-center justify-center h-8 text-sm font-semibold text-slate-700">
-                  {filteredHalls.length} hall(s)
-                </div>
+              <div className="rounded-full border border-cyan-100 bg-cyan-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-800">
+                {filteredHalls.length} hall(s)
               </div>
             </div>
 
-            <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-2">
-              <div>
-                <label className="block text-xs font-medium mb-1">Group By</label>
-                <select
-                  value={groupBy}
-                  onChange={(e) => setGroupBy(e.target.value)}
-                  className="w-full border rounded-lg px-2 py-1 text-sm"
-                >
-                  <option value="building">Building</option>
-                  <option value="floor">Floor</option>
-                </select>
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+              <div className="xl:col-span-12">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-700">Search</label>
+                <input
+                  type="text"
+                  placeholder="Search by ID, name, type, or building..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                />
               </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">View Mode</label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    className={`px-3 py-1 rounded-lg text-sm border ${viewMode === 'card' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-700 border-slate-200'}`}
-                    onClick={() => setViewMode('card')}
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:col-span-8 xl:grid-cols-4">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-700">Min Capacity</label>
+                  <input
+                    type="number"
+                    placeholder="Min"
+                    value={minCapacity}
+                    onChange={(e) => setMinCapacity(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-700">Max Capacity</label>
+                  <input
+                    type="number"
+                    placeholder="Max"
+                    value={maxCapacity}
+                    onChange={(e) => setMaxCapacity(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-700">Sort By</label>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200"
                   >
-                    Card
-                  </button>
-                  <button
-                    type="button"
-                    className={`px-3 py-1 rounded-lg text-sm border ${viewMode === 'table' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-700 border-slate-200'}`}
-                    onClick={() => setViewMode('table')}
+                    <option value="name">Name</option>
+                    <option value="capacity">Capacity</option>
+                    <option value="building">Building</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-700">Group By</label>
+                  <select
+                    value={groupBy}
+                    onChange={(e) => setGroupBy(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200"
                   >
-                    Table
-                  </button>
+                    <option value="building">Building</option>
+                    <option value="floor">Floor</option>
+                  </select>
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Compare</label>
-                <div className="h-8 px-2 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-700 flex items-center">
-                  {compareSelection.length}/2 selected
+
+              <div className="grid grid-cols-1 gap-3 xl:col-span-4">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="lg:max-w-[180px]">
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-700">View Mode</label>
+                      <p className="text-xs text-slate-500">Choose how the hall list should be displayed.</p>
+                    </div>
+                    <div className="lg:min-w-[260px]">
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-700 lg:sr-only">Select View</label>
+                      <select
+                        value={viewMode}
+                        onChange={(e) => setViewMode(e.target.value)}
+                        className="hall-view-select w-full max-w-[220px] text-black"
+                        aria-label="Select view mode"
+                      >
+                        <option value="card" className="text-black">Card</option>
+                        <option value="table" className="text-black">Table</option>
+                        <option value="campus" className="text-black">Campus 2D</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Page</label>
-                <div className="h-8 px-2 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-700 flex items-center justify-center">
-                  {currentPage}/{totalPages}
+
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-2">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-700">Compare</label>
+                    <div className="flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800">
+                      {compareSelection.length}/2 selected
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-700">Page</label>
+                    <div className="flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-900">
+                      {currentPage}/{totalPages}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -723,7 +942,34 @@ const HallAllocation = ({ apiBase }) => {
           {filteredHalls.length === 0 && halls.length > 0 && (
             <div className="p-2 text-sm text-gray-500">No halls match your search or filter criteria.</div>
           )}
-          {groupKeys.map((groupKey) => {
+          {viewMode === 'campus' && (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-slate-200 bg-gradient-to-b from-sky-100 via-sky-50 to-white p-4">
+                <h4 className="text-base font-semibold text-slate-800">Campus 2D View</h4>
+                <p className="text-xs text-slate-600 mt-1">
+                  Halls are arranged floor-by-floor for quick 2D hall allocation review.
+                </p>
+              </div>
+
+              {filteredHalls.length === 0 && (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-600">
+                  No hall records available for campus view.
+                </div>
+              )}
+
+              {filteredHalls.length > 0 && (
+                <div className="rounded-xl border border-slate-200 bg-gradient-to-b from-white to-slate-100 p-4">
+                  <Building2DView
+                    halls={filteredHalls}
+                    selectedHallId={selectedHall?.id}
+                    onSelectHall={setSelectedHall}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {viewMode !== 'campus' && groupKeys.map((groupKey) => {
             const hallsInGroup = groupedHalls[groupKey] || [];
             const isCollapsed = collapsedSections[groupKey];
 
@@ -750,10 +996,10 @@ const HallAllocation = ({ apiBase }) => {
                         {compareSelection.includes(hall.id) ? 'Selected' : 'Compare'}
                       </button>
                     </div>
-                    <div className="text-sm text-gray-600 mt-1">Capacity: {hall.capacity || '-'}</div>
-                    <div className="text-sm text-gray-600">Type: {hall.features?.hallType || '-'}</div>
-                    <div className="text-sm text-gray-600">Building: {hall.features?.building || '-'}</div>
-                    <div className="text-sm text-gray-600">Floor: {getHallFloor(hall)}</div>
+                    <div className="mt-1 text-sm font-medium text-slate-700">Capacity: {hall.capacity || '-'}</div>
+                    <div className="text-sm font-medium text-slate-700">Type: {hall.features?.hallType || '-'}</div>
+                    <div className="text-sm font-medium text-slate-700">Building: {hall.features?.building || '-'}</div>
+                    <div className="text-sm font-medium text-slate-700">Floor: {getHallFloor(hall)}</div>
 
                     <div className="mt-2 p-2 bg-gray-50 rounded border border-gray-200">
                       <div className="text-xs font-semibold text-gray-700 mb-2">Amenities:</div>
@@ -781,8 +1027,26 @@ const HallAllocation = ({ apiBase }) => {
                     {(() => {
                       const availability = getHallAvailability(hall);
                       return (
-                        <div className={`mt-2 px-3 py-1 rounded-lg text-sm font-semibold inline-block ${availability.color}`}>
-                          {availability.label}
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <div className={`px-3 py-1 rounded-lg text-sm font-semibold inline-block ${availability.color}`}>
+                            {availability.label}
+                          </div>
+                          <button
+                            type="button"
+                            className="hall-action-btn"
+                            disabled={updatingStatusHallId === hall.id || hall.status === 'available'}
+                            onClick={() => updateHallStatus(hall, 'available')}
+                          >
+                            {updatingStatusHallId === hall.id ? 'Saving...' : 'Set Available'}
+                          </button>
+                          <button
+                            type="button"
+                            className="hall-action-btn hall-action-btn--warning"
+                            disabled={updatingStatusHallId === hall.id || hall.status === 'unavailable'}
+                            onClick={() => updateHallStatus(hall, 'unavailable')}
+                          >
+                            {updatingStatusHallId === hall.id ? 'Saving...' : 'Set Unavailable'}
+                          </button>
                         </div>
                       );
                     })()}
@@ -806,26 +1070,16 @@ const HallAllocation = ({ apiBase }) => {
                       <button
                         type="button"
                         className="hall-action-btn hall-action-btn--warning"
-                        onClick={() => {
-                          setMaintenanceHallId(hall.id);
-                          setEditHallForm({
-                            ...editHallForm,
-                            hallId: hall.id,
-                            maintenanceStart: '',
-                            maintenanceEnd: '',
-                          });
-                          setShowMaintenanceModal(true);
-                        }}
+                        onClick={() => openMaintenanceModal(hall)}
                       >
                         Set Maintenance
                       </button>
                       <button
                         type="button"
-                        className="hall-action-btn"
-                        style={{ backgroundColor: '#8b5cf6', color: 'white' }}
+                        className="hall-action-btn hall-action-btn--info"
                         onClick={() => setSelectedHall(hall)}
                       >
-                        📋 Details
+                        Details
                       </button>
                     </div>
                   </div>
@@ -854,9 +1108,27 @@ const HallAllocation = ({ apiBase }) => {
                               <td className="px-3 py-2">{hall.features?.hallType || '-'}</td>
                               <td className="px-3 py-2">{getHallFloor(hall)}</td>
                               <td className="px-3 py-2">
-                                <span className={`px-2 py-1 rounded-md text-xs font-semibold ${availability.color}`}>
-                                  {availability.label}
-                                </span>
+                                <div className="flex flex-wrap items-center gap-1">
+                                  <span className={`px-2 py-1 rounded-md text-xs font-semibold ${availability.color}`}>
+                                    {availability.label}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="hall-action-btn"
+                                    disabled={updatingStatusHallId === hall.id || hall.status === 'available'}
+                                    onClick={() => updateHallStatus(hall, 'available')}
+                                  >
+                                    {updatingStatusHallId === hall.id ? 'Saving...' : 'Available'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="hall-action-btn hall-action-btn--warning"
+                                    disabled={updatingStatusHallId === hall.id || hall.status === 'unavailable'}
+                                    onClick={() => updateHallStatus(hall, 'unavailable')}
+                                  >
+                                    {updatingStatusHallId === hall.id ? 'Saving...' : 'Unavailable'}
+                                  </button>
+                                </div>
                               </td>
                               <td className="px-3 py-2">
                                 <div className="flex flex-wrap gap-1">
@@ -890,26 +1162,29 @@ const HallAllocation = ({ apiBase }) => {
           })}
 
           {filteredHalls.length > pageSize && (
-            <div className="mt-4 flex items-center justify-between border-t pt-3">
-              <div className="text-xs text-slate-600">
+            <div className="mt-5 flex flex-col gap-3 rounded-xl border border-slate-200 bg-gradient-to-r from-slate-50 to-cyan-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm font-semibold text-slate-700">
                 Showing {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, filteredHalls.length)} of {filteredHalls.length}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 self-end sm:self-auto">
                 <button
                   type="button"
-                  className="px-3 py-1 rounded border border-slate-300 text-sm disabled:opacity-50"
+                  className="hall-pagination-btn"
                   onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                   disabled={currentPage === 1}
                 >
-                  Previous
+                  ← Previous
                 </button>
+                <div className="rounded-lg border border-cyan-200 bg-cyan-100 px-3 py-1 text-sm font-bold text-cyan-900">
+                  Page {currentPage} / {totalPages}
+                </div>
                 <button
                   type="button"
-                  className="px-3 py-1 rounded border border-slate-300 text-sm disabled:opacity-50"
+                  className="hall-pagination-btn"
                   onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
                   disabled={currentPage === totalPages}
                 >
-                  Next
+                  Next →
                 </button>
               </div>
             </div>
@@ -937,6 +1212,10 @@ const HallAllocation = ({ apiBase }) => {
               <div className="rounded-lg border border-red-200 bg-red-50 p-3">
                 <div className="text-xs text-red-700">Maintenance</div>
                 <div className="text-xl font-bold text-red-800">{statusBreakdown.maintenance}</div>
+              </div>
+              <div className="rounded-lg border border-slate-300 bg-slate-100 p-3">
+                <div className="text-xs text-slate-700">Unavailable</div>
+                <div className="text-xl font-bold text-slate-800">{statusBreakdown.unavailable}</div>
               </div>
             </div>
 
@@ -1046,105 +1325,136 @@ const HallAllocation = ({ apiBase }) => {
             setHallError('');
           }}
         >
-          <div className="bg-white w-full max-w-md rounded-xl shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Add Hall</h3>
-              <button
-                type="button"
-                className="text-gray-500 hover:text-gray-800"
-                onClick={() => {
-                  setShowAddHallModal(false);
-                  setHallError('');
-                }}
-              >
-                ✕
-              </button>
+          <div className="w-full max-w-2xl overflow-hidden rounded-3xl border border-cyan-100 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-cyan-700 via-teal-700 to-sky-700 px-6 py-5 text-white">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="inline-flex rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-50">
+                    Hall Form
+                  </div>
+                  <h3 className="mt-3 text-2xl font-bold">Add a New Hall</h3>
+                  <p className="mt-1 max-w-xl text-sm text-cyan-50/90">
+                    Create a new hall record with clearly labeled details, amenities, and status information.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-white/20"
+                  onClick={() => {
+                    setShowAddHallModal(false);
+                    setHallError('');
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
-            <form onSubmit={handleAddHall} className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">Hall ID</label>
-                <input
-                  type="text"
-                  name="hallId"
-                  value={hallForm.hallId}
-                  onChange={handleHallInputChange}
-                  className="w-full border rounded-lg px-3 py-2"
-                  placeholder="e.g. H101"
-                />
+            <form onSubmit={handleAddHall} className="space-y-5 p-6">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-slate-800">
+                    <span className="text-cyan-700">Hall</span> ID
+                  </label>
+                  <input
+                    type="text"
+                    name="hallId"
+                    value={hallForm.hallId}
+                    onChange={handleHallInputChange}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:border-cyan-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                    placeholder="e.g. H101"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-slate-800">
+                    <span className="text-cyan-700">Capacity</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="capacity"
+                    value={hallForm.capacity}
+                    onChange={handleHallInputChange}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:border-cyan-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                    placeholder="e.g. 100"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-slate-800">
+                    <span className="text-cyan-700">Hall</span> Type
+                  </label>
+                  <input
+                    type="text"
+                    name="hallType"
+                    value={hallForm.hallType}
+                    onChange={handleHallInputChange}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:border-cyan-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                    placeholder="e.g. Lecture Theatre"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-slate-800">
+                    <span className="text-cyan-700">Floor</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="floor"
+                    value={hallForm.floor}
+                    onChange={handleHallInputChange}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:border-cyan-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                    placeholder="e.g. 1st Floor"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-sm font-semibold text-slate-800">
+                    <span className="text-cyan-700">Building</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="building"
+                    value={hallForm.building}
+                    onChange={handleHallInputChange}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:border-cyan-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                    placeholder="e.g. Main Building"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Hall Type</label>
-                <input
-                  type="text"
-                  name="hallType"
-                  value={hallForm.hallType}
-                  onChange={handleHallInputChange}
-                  className="w-full border rounded-lg px-3 py-2"
-                  placeholder="e.g. Lecture Theatre"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Capacity</label>
-                <input
-                  type="number"
-                  name="capacity"
-                  value={hallForm.capacity}
-                  onChange={handleHallInputChange}
-                  className="w-full border rounded-lg px-3 py-2"
-                  placeholder="e.g. 100"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Building</label>
-                <input
-                  type="text"
-                  name="building"
-                  value={hallForm.building}
-                  onChange={handleHallInputChange}
-                  className="w-full border rounded-lg px-3 py-2"
-                  placeholder="e.g. Main Building"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Floor</label>
-                <input
-                  type="text"
-                  name="floor"
-                  value={hallForm.floor}
-                  onChange={handleHallInputChange}
-                  className="w-full border rounded-lg px-3 py-2"
-                  placeholder="e.g. 1st Floor"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Amenities</label>
-                <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-800">Amenities</div>
+                    <div className="text-xs text-slate-600">Highlight the facilities this hall supports.</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {AMENITIES.map((amenity) => (
-                    <label key={amenity.id} className="flex items-center text-sm">
+                    <label
+                      key={amenity.id}
+                      className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-cyan-200 hover:bg-cyan-50"
+                    >
                       <input
                         type="checkbox"
                         checked={hallForm.amenities[amenity.id] || false}
                         onChange={() => handleAmenityToggle(amenity.id)}
-                        className="mr-2 rounded border-gray-300"
+                        className="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-200"
                       />
-                      <span>{amenity.icon} {amenity.label}</span>
+                      <span className="text-base">{amenity.icon}</span>
+                      <span className="font-medium text-slate-800">{amenity.label}</span>
                     </label>
                   ))}
                 </div>
               </div>
 
-              {hallError && <p className="text-sm text-red-600">{hallError}</p>}
+              {hallError && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{hallError}</p>}
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
                 <button
                   type="button"
-                  className="px-4 py-2 rounded-lg border"
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
                   onClick={() => {
                     setShowAddHallModal(false);
                     setHallError('');
@@ -1152,7 +1462,7 @@ const HallAllocation = ({ apiBase }) => {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="dashboard-btn" disabled={submittingHall}>
+                <button type="submit" className="dashboard-btn hall-primary-btn px-5 py-2.5" disabled={submittingHall}>
                   {submittingHall ? 'Saving...' : 'Save Hall'}
                 </button>
               </div>
@@ -1167,110 +1477,144 @@ const HallAllocation = ({ apiBase }) => {
           onClick={() => {
             setShowEditHallModal(false);
             setEditHallError('');
+            setEditTargetHallId('');
           }}
         >
-          <div className="bg-white w-full max-w-md rounded-xl shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Edit Hall</h3>
-              <button
-                type="button"
-                className="text-gray-500 hover:text-gray-800"
-                onClick={() => {
-                  setShowEditHallModal(false);
-                  setEditHallError('');
-                }}
-              >
-                ✕
-              </button>
+          <div className="w-full max-w-2xl overflow-hidden rounded-3xl border border-cyan-100 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-slate-800 via-cyan-800 to-teal-800 px-6 py-5 text-white">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="inline-flex rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-50">
+                    Hall Form
+                  </div>
+                  <h3 className="mt-3 text-2xl font-bold">Edit Hall Details</h3>
+                  <p className="mt-1 max-w-xl text-sm text-cyan-50/90">
+                    Update hall information, capacity, and available amenities with clear, editable fields.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-white/20"
+                  onClick={() => {
+                    setShowEditHallModal(false);
+                    setEditHallError('');
+                    setEditTargetHallId('');
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
-            <form onSubmit={handleEditHall} className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">Hall ID</label>
-                <input
-                  type="text"
-                  name="hallId"
-                  value={editHallForm.hallId}
-                  className="w-full border rounded-lg px-3 py-2 bg-gray-100"
-                  readOnly
-                />
+            <form onSubmit={handleEditHall} className="space-y-5 p-6">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-slate-800">
+                    <span className="text-cyan-700">Hall</span> ID
+                  </label>
+                  <input
+                    type="text"
+                    name="hallId"
+                    value={editHallForm.hallId}
+                    onChange={handleEditHallInputChange}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-slate-800">
+                    <span className="text-cyan-700">Capacity</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="capacity"
+                    value={editHallForm.capacity}
+                    onChange={handleEditHallInputChange}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-slate-800">
+                    <span className="text-cyan-700">Hall</span> Type
+                  </label>
+                  <input
+                    type="text"
+                    name="hallType"
+                    value={editHallForm.hallType}
+                    onChange={handleEditHallInputChange}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-slate-800">
+                    <span className="text-cyan-700">Floor</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="floor"
+                    value={editHallForm.floor}
+                    onChange={handleEditHallInputChange}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-sm font-semibold text-slate-800">
+                    <span className="text-cyan-700">Building</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="building"
+                    value={editHallForm.building}
+                    onChange={handleEditHallInputChange}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Hall Type</label>
-                <input
-                  type="text"
-                  name="hallType"
-                  value={editHallForm.hallType}
-                  onChange={handleEditHallInputChange}
-                  className="w-full border rounded-lg px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Capacity</label>
-                <input
-                  type="number"
-                  name="capacity"
-                  value={editHallForm.capacity}
-                  onChange={handleEditHallInputChange}
-                  className="w-full border rounded-lg px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Building</label>
-                <input
-                  type="text"
-                  name="building"
-                  value={editHallForm.building}
-                  onChange={handleEditHallInputChange}
-                  className="w-full border rounded-lg px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Floor</label>
-                <input
-                  type="text"
-                  name="floor"
-                  value={editHallForm.floor}
-                  onChange={handleEditHallInputChange}
-                  className="w-full border rounded-lg px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Amenities</label>
-                <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-800">Amenities</div>
+                    <div className="text-xs text-slate-600">Keep the facility flags accurate for allocation decisions.</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {AMENITIES.map((amenity) => (
-                    <label key={amenity.id} className="flex items-center text-sm">
+                    <label
+                      key={amenity.id}
+                      className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-cyan-200 hover:bg-cyan-50"
+                    >
                       <input
                         type="checkbox"
                         checked={editHallForm.amenities[amenity.id] || false}
                         onChange={() => handleEditAmenityToggle(amenity.id)}
-                        className="mr-2 rounded border-gray-300"
+                        className="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-200"
                       />
-                      <span>{amenity.icon} {amenity.label}</span>
+                      <span className="text-base">{amenity.icon}</span>
+                      <span className="font-medium text-slate-800">{amenity.label}</span>
                     </label>
                   ))}
                 </div>
               </div>
 
-              {editHallError && <p className="text-sm text-red-600">{editHallError}</p>}
+              {editHallError && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{editHallError}</p>}
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
                 <button
                   type="button"
-                  className="px-4 py-2 rounded-lg border"
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
                   onClick={() => {
                     setShowEditHallModal(false);
                     setEditHallError('');
+                    setEditTargetHallId('');
                   }}
                 >
                   Cancel
                 </button>
-                <button type="submit" className="dashboard-btn" disabled={submittingEditHall}>
+                <button type="submit" className="dashboard-btn hall-primary-btn px-5 py-2.5" disabled={submittingEditHall}>
                   {submittingEditHall ? 'Updating...' : 'Update Hall'}
                 </button>
               </div>
@@ -1371,20 +1715,65 @@ const HallAllocation = ({ apiBase }) => {
             </div>
 
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
-                const hallIndex = halls.findIndex(h => h.id === maintenanceHallId);
-                if (hallIndex >= 0) {
-                  const updatedHalls = [...halls];
-                  updatedHalls[hallIndex] = {
-                    ...updatedHalls[hallIndex],
-                    status: 'maintenance',
-                    maintenanceStart: editHallForm.maintenanceStart,
-                    maintenanceEnd: editHallForm.maintenanceEnd,
-                  };
-                  setHalls(updatedHalls);
+                const maintenanceValidationError = validateHallFormPayload(editHallForm, { validateId: false });
+                if (maintenanceValidationError) {
+                  setToast({ message: maintenanceValidationError, type: 'error' });
+                  return;
+                }
+                if (editHallForm.maintenanceStart && editHallForm.maintenanceStart < todayDate) {
+                  setToast({ message: 'Maintenance start date must be today or later.', type: 'error' });
+                  return;
+                }
+                setSubmittingMaintenance(true);
+                try {
+                  const response = await fetch(`${apiBase}/api/scheduler/halls/${maintenanceHallId}`, {
+                    method: 'PUT',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      name: editHallForm.hallId,
+                      capacity: Number(editHallForm.capacity),
+                      features: {
+                        hallType: editHallForm.hallType,
+                        building: editHallForm.building,
+                        floor: editHallForm.floor,
+                        amenities: editHallForm.amenities,
+                      },
+                      status: 'maintenance',
+                      maintenanceStart: editHallForm.maintenanceStart,
+                      maintenanceEnd: editHallForm.maintenanceEnd,
+                    }),
+                  });
+
+                  const data = await response.json();
+                  if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Failed to set maintenance period');
+                  }
+
+                  setHalls((previous) =>
+                    previous.map((hall) =>
+                      hall.id === maintenanceHallId
+                        ? {
+                            ...hall,
+                            status: 'maintenance',
+                            maintenanceStart: editHallForm.maintenanceStart,
+                            maintenanceEnd: editHallForm.maintenanceEnd,
+                          }
+                        : hall
+                    )
+                  );
                   setToast({ message: `Hall ${maintenanceHallId} set to maintenance.`, type: 'success' });
-                  notifyUser('Maintenance Scheduled', `Hall ${maintenanceHallId} is now under maintenance.`);
+                  await notifyUser('Maintenance Scheduled', `Hall ${maintenanceHallId} is now under maintenance.`);
+                } catch (error) {
+                  console.error('Set maintenance error:', error);
+                  const errorMessage = error.message || 'Failed to set maintenance period';
+                  setToast({ message: errorMessage, type: 'error' });
+                  await notifyUser('Maintenance Update Failed', errorMessage);
+                  return;
+                } finally {
+                  setSubmittingMaintenance(false);
                 }
                 setShowMaintenanceModal(false);
                 setMaintenanceHallId('');
@@ -1396,6 +1785,7 @@ const HallAllocation = ({ apiBase }) => {
                 <input
                   type="date"
                   value={editHallForm.maintenanceStart}
+                  min={todayDate}
                   onChange={(e) => {
                     const updatedForm = { ...editHallForm, maintenanceStart: e.target.value };
                     setEditHallForm(updatedForm);
@@ -1409,6 +1799,7 @@ const HallAllocation = ({ apiBase }) => {
                 <input
                   type="date"
                   value={editHallForm.maintenanceEnd}
+                  min={editHallForm.maintenanceStart || todayDate}
                   onChange={(e) => {
                     const updatedForm = { ...editHallForm, maintenanceEnd: e.target.value };
                     setEditHallForm(updatedForm);
@@ -1428,8 +1819,8 @@ const HallAllocation = ({ apiBase }) => {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="dashboard-btn">
-                  Set Maintenance
+                <button type="submit" className="dashboard-btn" disabled={submittingMaintenance}>
+                  {submittingMaintenance ? 'Saving...' : 'Set Maintenance'}
                 </button>
               </div>
             </form>

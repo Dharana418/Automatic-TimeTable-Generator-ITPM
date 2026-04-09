@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
+    "replace:modules": "node scripts/replaceModulesFromCatalog.js",
+    "generate:logical": "node scripts/generateLogicalTimetables.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -22,7 +24,6 @@
     "express": "^5.2.1",
     "express-validator": "^7.3.1",
     "jsonwebtoken": "^9.0.3",
-    "lucide-react": "^1.7.0",
     "pg": "^8.20.0",
     "validator": "^13.11.0"
   },

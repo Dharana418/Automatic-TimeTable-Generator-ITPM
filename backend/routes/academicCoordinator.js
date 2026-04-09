@@ -5,6 +5,60 @@ import authorize from '../middlewares/authorize.js';
 
 const router = express.Router();
 
+const normalizeSpecializationCode = (value = '') => {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (!normalized) return '';
+
+  const aliases = {
+    SOFTWAREENGINEERING: 'SE',
+    SOFTWARE_ENG: 'SE',
+    INFORMATIONTECHNOLOGY: 'IT',
+    INTERACTIVEMEDIA: 'IME',
+    COMPUTERSCIENCE: 'CS',
+    INFORMATIONSYSTEMSENGINEERING: 'ISE',
+    COMPUTER_SYSTEMS_NETWORK_ENGINEERING: 'CSNE',
+    INFORMATICS: 'IM',
+    CYBERSECURITY: 'CYBER SECURITY',
+    CYBER: 'CYBER SECURITY',
+  };
+
+  const compact = normalized.replace(/[^A-Z0-9]/g, '');
+  return aliases[compact] || normalized;
+};
+
+const parseJsonSafe = (value, fallback = {}) => {
+  if (!value) return fallback;
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+};
+
+const inferModuleSpecialization = (module = {}) => {
+  const details = parseJsonSafe(module.details, {});
+  const explicit =
+    details.specialization ||
+    details.spec ||
+    details.stream ||
+    details.department ||
+    module.specialization;
+
+  if (explicit) {
+    return normalizeSpecializationCode(explicit);
+  }
+
+  const code = String(module.code || '').toUpperCase();
+  if (code.startsWith('IT')) return 'IT';
+  if (code.startsWith('SE')) return 'SE';
+  if (code.startsWith('IE') || code.startsWith('IM')) return 'IME';
+  if (code.startsWith('CS')) return 'CS';
+  if (code.startsWith('IS')) return 'ISE';
+  if (code.startsWith('CN')) return 'CSNE';
+  return 'GENERAL';
+};
+
 router.use(protect);
 router.use(
   authorize(
