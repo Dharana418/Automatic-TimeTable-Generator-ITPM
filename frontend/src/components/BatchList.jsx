@@ -3,7 +3,9 @@ import api from '../api/scheduler.js';
 import seedBatches from '../data/batches.js';
 import { confirmDelete, showError, showSuccess, showWarning } from '../utils/alerts.js';
 
-const DEFAULT_CAPACITY = 120;
+const GROUP_CAPACITY = 120;
+const SUBGROUP_CAPACITY = 60;
+const DEFAULT_CAPACITY = SUBGROUP_CAPACITY;
 
 const SPECIALIZATIONS = [
   { key: 'IT', label: 'IT' },
@@ -13,6 +15,7 @@ const SPECIALIZATIONS = [
   { key: 'CS', label: 'CS' },
   { key: 'IM', label: 'IM' },
   { key: 'CN', label: 'CN' },
+  { key: 'CYBER SECURITY', label: 'Cyber Security' },
 ];
 
 const SPECIALIZATION_CLOUD_TAGS = [
@@ -33,6 +36,7 @@ const SEMESTER_OPTIONS = ['1', '2'];
 
 const toUpper = (value = '') => String(value).trim().toUpperCase();
 const SUBGROUP_INPUT_PATTERN = /^(0?[1-2])?$/;
+const cleanTwoDigitGroupValue = (value = '') => String(value || '').replace(/[^0-9]/g, '').slice(0, 2);
 
 const getBatchMeta = (batchId = '') => {
   const normalized = String(batchId).trim();
@@ -50,6 +54,7 @@ const inferSpecializationFromId = (batchId = '') => {
 
 const normalizeSpecialization = (raw = '') => {
   const key = toUpper(raw);
+  if (key === 'IY') return 'ISE';
   return SPECIALIZATIONS.some((item) => item.key === key) ? key : 'IT';
 };
 
@@ -64,6 +69,7 @@ const normalizeBatch = (item) => {
     semester: meta.semester || '1',
     group: tokens[4] || '',
     subgroup: tokens[5] || '',
+    capacity: Number(item?.capacity || 0),
   };
 };
 
@@ -75,6 +81,7 @@ const formDefaults = {
   mode: 'WD',
   group: '',
   subgroup: '',
+  studentCount: '',
 };
 
 const buildBatchId = ({ year, semester, mode, specialization, group, subgroup }) => {
@@ -103,6 +110,72 @@ const parseBatchIdentity = (batchId = '') => {
     scopeKey: [yearToken, semesterToken, toUpper(modeToken), toUpper(specializationToken), groupToken].join('.'),
     subgroup: subgroupToken,
   };
+};
+
+const splitStudentsIntoSubgroupCapacities = (studentCount, maxCapacity = SUBGROUP_CAPACITY) => {
+  const capacities = [];
+  let remaining = Number(studentCount || 0);
+
+  while (remaining > 0) {
+    const next = Math.min(maxCapacity, remaining);
+    capacities.push(next);
+    remaining -= next;
+  }
+
+  return capacities;
+};
+
+const generateBatchRowsFromStudents = ({
+  year,
+  semester,
+  mode,
+  specialization,
+  startGroup,
+  studentCount,
+  existingIds,
+}) => {
+  const capacities = splitStudentsIntoSubgroupCapacities(studentCount);
+  const generatedRows = [];
+  const occupiedIds = new Set(existingIds || []);
+  let nextGroup = Number(startGroup || 1);
+  let subgroupIndexWithinGroup = 0;
+
+  const subgroupTokens = ['01', '02'];
+
+  for (const capacity of capacities) {
+    while (nextGroup <= 9999) {
+      const groupToken = String(nextGroup).padStart(2, '0');
+      const subgroupToken = subgroupTokens[subgroupIndexWithinGroup % subgroupTokens.length];
+      const id = buildBatchId({
+        year,
+        semester,
+        mode,
+        specialization,
+        group: groupToken,
+        subgroup: subgroupToken,
+      });
+
+      if (occupiedIds.has(id)) {
+        subgroupIndexWithinGroup += 1;
+        if (subgroupIndexWithinGroup % subgroupTokens.length === 0) {
+          nextGroup += 1;
+        }
+        continue;
+      }
+
+      occupiedIds.add(id);
+      generatedRows.push({ id, capacity });
+
+      subgroupIndexWithinGroup += 1;
+      if (subgroupIndexWithinGroup % subgroupTokens.length === 0) {
+        nextGroup += 1;
+      }
+
+      break;
+    }
+  }
+
+  return generatedRows;
 };
 
 export default function BatchList({ initialQuery = '' }) {
@@ -162,6 +235,27 @@ export default function BatchList({ initialQuery = '' }) {
     [specializationChartData],
   );
 
+  const generatedBatchPreview = useMemo(() => {
+    if (editingId) return [];
+
+    const studentCount = Number(form.studentCount || 0);
+    if (!Number.isFinite(studentCount) || studentCount <= 0) return [];
+
+    const startGroup = /^\d+$/.test(String(form.group || '').trim())
+      ? Number(String(form.group || '').trim())
+      : 1;
+
+    return generateBatchRowsFromStudents({
+      year: String(form.year || '').trim(),
+      semester: String(form.semester || '').trim(),
+      mode: String(form.mode || 'WD').trim().toUpperCase(),
+      specialization: normalizeSpecialization(form.specialization),
+      startGroup,
+      studentCount,
+      existingIds: batches.map((batch) => batch.id),
+    });
+  }, [batches, editingId, form.group, form.mode, form.semester, form.specialization, form.studentCount, form.year]);
+
   const resetForm = () => {
     setEditingId('');
     setForm(formDefaults);
@@ -180,6 +274,8 @@ export default function BatchList({ initialQuery = '' }) {
     const mode = String(form.mode || '').toUpperCase();
     const group = String(form.group || '').trim();
     const subgroup = String(form.subgroup || '').trim();
+    const studentCount = Number(form.studentCount || 0);
+    const isBulkCreateMode = !editingId && Number.isFinite(studentCount) && studentCount > 0;
 
     if (!YEAR_OPTIONS.includes(year) || !SEMESTER_OPTIONS.includes(semester)) {
       showWarning('Validation required', 'Please select a valid year and semester.');
@@ -196,41 +292,45 @@ export default function BatchList({ initialQuery = '' }) {
       return;
     }
 
-    if (!subgroup) {
-      showWarning('Validation required', 'Subgroup is required.');
-      return;
-    }
-
-    if (!SUBGROUP_INPUT_PATTERN.test(subgroup)) {
-      showWarning('Validation required', 'Subgroup must be 1 or 2 (e.g. 01 or 02).');
-      return;
-    }
-
-    const candidateIdentity = parseBatchIdentity(nextId);
-    if (!candidateIdentity) {
-      showWarning('Validation required', 'Batch ID format is invalid.');
-      return;
-    }
-
-    const peers = batches.filter((batch) => batch.id !== editingId);
-    const siblingSubgroups = new Set();
-
-    for (const batch of peers) {
-      const identity = parseBatchIdentity(batch.id);
-      if (!identity || identity.scopeKey !== candidateIdentity.scopeKey) {
-        continue;
+    if (!isBulkCreateMode) {
+      if (!subgroup) {
+        showWarning('Validation required', 'Subgroup is required.');
+        return;
       }
 
-      siblingSubgroups.add(identity.subgroup);
-      if (identity.subgroup === candidateIdentity.subgroup) {
-        showWarning('Validation required', 'This subgroup already exists for the selected group.');
+      if (!SUBGROUP_INPUT_PATTERN.test(subgroup)) {
+        showWarning('Validation required', 'Subgroup must be 1 or 2 (e.g. 01 or 02).');
         return;
       }
     }
 
-    if (!siblingSubgroups.has(candidateIdentity.subgroup) && siblingSubgroups.size >= 2) {
-      showWarning('Validation required', 'A group cannot have more than 2 subgroups.');
-      return;
+    if (!isBulkCreateMode) {
+      const candidateIdentity = parseBatchIdentity(nextId);
+      if (!candidateIdentity) {
+        showWarning('Validation required', 'Batch ID format is invalid.');
+        return;
+      }
+
+      const peers = batches.filter((batch) => batch.id !== editingId);
+      const siblingSubgroups = new Set();
+
+      for (const batch of peers) {
+        const identity = parseBatchIdentity(batch.id);
+        if (!identity || identity.scopeKey !== candidateIdentity.scopeKey) {
+          continue;
+        }
+
+        siblingSubgroups.add(identity.subgroup);
+        if (identity.subgroup === candidateIdentity.subgroup) {
+          showWarning('Validation required', 'This subgroup already exists for the selected group.');
+          return;
+        }
+      }
+
+      if (!siblingSubgroups.has(candidateIdentity.subgroup) && siblingSubgroups.size >= 2) {
+        showWarning('Validation required', 'A group cannot have more than 2 subgroups.');
+        return;
+      }
     }
 
     const expectedPrefix = `Y${year}.S${semester}.`;
@@ -241,7 +341,6 @@ export default function BatchList({ initialQuery = '' }) {
 
     const specialization = normalizeSpecialization(form.specialization);
     const payload = {
-      // Backend still requires these fields even though UI only asks for four values.
       name: nextId,
       department_id: specialization,
       capacity: DEFAULT_CAPACITY,
@@ -266,6 +365,38 @@ export default function BatchList({ initialQuery = '' }) {
           await api.deleteItem('batches', editingId);
           showSuccess('Batch updated', `Batch ID changed from ${editingId} to ${nextId}.`);
         }
+      } else if (isBulkCreateMode) {
+        const rowsToCreate = generateBatchRowsFromStudents({
+          year,
+          semester,
+          mode,
+          specialization,
+          startGroup: /^\d+$/.test(group) ? Number(group) : 1,
+          studentCount,
+          existingIds: batches.map((batch) => batch.id),
+        });
+
+        if (!rowsToCreate.length) {
+          showWarning('Validation required', 'No group IDs were generated for the provided student count.');
+          return;
+        }
+
+        for (const row of rowsToCreate) {
+          await api.addItem('batches', {
+            id: row.id,
+            name: row.id,
+            department_id: specialization,
+            capacity: row.capacity,
+          });
+        }
+
+        const generatedGroupCount = new Set(
+          rowsToCreate.map((row) => row.id.split('.').slice(0, 5).join('.')),
+        ).size;
+        showSuccess(
+          'Batches created',
+          `${generatedGroupCount} groups (${rowsToCreate.length} subgroups) created from ${studentCount} students.`,
+        );
       } else {
         await api.addItem('batches', { id: nextId, ...payload });
         showSuccess('Batch created', 'New batch was added successfully.');
@@ -291,6 +422,7 @@ export default function BatchList({ initialQuery = '' }) {
       mode: toUpper(mode) || 'WD',
       group,
       subgroup,
+      studentCount: String(batch.capacity || ''),
     });
   };
 
@@ -409,28 +541,58 @@ export default function BatchList({ initialQuery = '' }) {
 
           <input
             className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-mono text-slate-900 outline-none transition-all placeholder:text-slate-500 focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
-            placeholder="Group (e.g. 01)"
+            placeholder="Group start (2 digits)"
             value={form.group}
-            onChange={(e) => setForm((prev) => ({ ...prev, group: e.target.value }))}
+            inputMode="numeric"
+            maxLength={2}
+            onChange={(e) => setForm((prev) => ({ ...prev, group: cleanTwoDigitGroupValue(e.target.value) }))}
           />
 
           <input
             className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-mono text-slate-900 outline-none transition-all placeholder:text-slate-500 focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
-            placeholder="Subgroup (e.g. 01)"
+            placeholder="Subgroup (2 digits)"
             value={form.subgroup}
+            inputMode="numeric"
+            maxLength={2}
+            disabled={!editingId && Number(form.studentCount || 0) > 0}
             onChange={(e) => {
-              const nextValue = String(e.target.value || '').trim();
-              if (!SUBGROUP_INPUT_PATTERN.test(nextValue)) {
-                return;
-              }
+              const nextValue = cleanTwoDigitGroupValue(e.target.value);
               setForm((prev) => ({ ...prev, subgroup: nextValue }));
             }}
           />
         </div>
 
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <input
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-all placeholder:text-slate-500 focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+            type="number"
+            min="0"
+            placeholder="Students to add (auto-generate groups)"
+            value={form.studentCount}
+            onChange={(e) => setForm((prev) => ({ ...prev, studentCount: e.target.value }))}
+          />
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-700">
+            Enter student count to auto-generate groups: each group has 2 subgroups (01, 02) and each subgroup has 60 students.
+          </div>
+        </div>
+
         <p className="mt-3 text-xs font-semibold text-slate-600">
           Batch ID will be generated automatically: {buildBatchId(form) || 'Y?.S?.WD.IT.01.01'}
         </p>
+
+        {!editingId && generatedBatchPreview.length > 0 && (
+          <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 p-3">
+            <p className="text-xs font-semibold text-sky-700">Generated Subgroup IDs ({generatedBatchPreview.length})</p>
+            <div className="mt-2 max-h-32 overflow-y-auto space-y-1">
+              {generatedBatchPreview.slice(0, 20).map((row) => (
+                <p key={row.id} className="font-mono text-xs text-slate-700">{row.id} • {row.capacity} students</p>
+              ))}
+              {generatedBatchPreview.length > 20 && (
+                <p className="text-xs text-slate-500">...and {generatedBatchPreview.length - 20} more</p>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="mt-3 flex flex-wrap items-center justify-start gap-2 sm:justify-end">
           <button
@@ -472,7 +634,7 @@ export default function BatchList({ initialQuery = '' }) {
       </div>
 
       <div className="overflow-x-auto border-b border-slate-200">
-        <table className="w-full min-w-[760px] border-collapse">
+        <table className="w-full min-w-[900px] border-collapse">
           <thead className="sticky top-0 z-10 bg-slate-900 text-white">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Batch ID</th>
@@ -481,6 +643,7 @@ export default function BatchList({ initialQuery = '' }) {
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Semester</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Group</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Subgroup</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Capacity</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Actions</th>
             </tr>
           </thead>
@@ -493,6 +656,7 @@ export default function BatchList({ initialQuery = '' }) {
                 <td className="px-4 py-4 text-sm text-slate-700">S{batch.semester}</td>
                 <td className="px-4 py-4 text-sm text-slate-700">{batch.group || '--'}</td>
                 <td className="px-4 py-4 text-sm text-slate-700">{batch.subgroup || '--'}</td>
+                <td className="px-4 py-4 text-sm text-slate-700">{batch.capacity || '--'}</td>
                 <td className="px-4 py-4">
                   <div className="flex flex-wrap gap-2">
                     <button

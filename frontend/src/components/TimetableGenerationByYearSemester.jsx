@@ -8,6 +8,7 @@ import {
   downloadTimetableAsCSV,
 } from '../api/timetableGeneration.js';
 import { getAcademicYears, getModulesByYear } from '../api/moduleManagement.js';
+import { toast } from 'react-toastify';
 
 const parseJsonSafe = (value, fallback = {}) => {
   if (!value) return fallback;
@@ -30,6 +31,10 @@ const normalizeSpecialization = (value = '') => {
     INFORMATICS: 'IM',
     INFORMATIONSYSTEMSENGINEERING: 'ISE',
     COMPUTER_SYSTEMS_NETWORK_ENGINEERING: 'CSNE',
+    IM: 'IME',
+    IE: 'IME',
+    CYBERSECURITY: 'CYBER SECURITY',
+    CYBER: 'CYBER SECURITY',
   };
 
   const compact = raw.replace(/[^A-Z0-9]/g, '');
@@ -55,10 +60,14 @@ const inferSpecializationFromModule = (module = {}) => {
   if (code.startsWith('SE')) return 'SE';
   if (code.startsWith('CS')) return 'CS';
   if (code.startsWith('IS')) return 'ISE';
-  if (code.startsWith('IM')) return 'IM';
+  if (code.startsWith('IM') || code.startsWith('IE')) return 'IME';
   if (code.startsWith('CN')) return 'CSNE';
   return 'General';
 };
+
+const DEFAULT_SPECIALIZATIONS = ['SE', 'IT', 'CS', 'IME', 'ISE', 'CSNE', 'CYBER SECURITY', 'General'];
+const WEEKDAY_FREE_DAY_OPTIONS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+const MODULE_LIMIT_PER_SPECIALIZATION = 5;
 
 const TimetableGenerationByYearSemester = () => {
   const [academicYears, setAcademicYears] = useState([]);
@@ -69,7 +78,7 @@ const TimetableGenerationByYearSemester = () => {
   const [success, setSuccess] = useState(null);
 
   // Generation options
-  const [algorithms, setAlgorithms] = useState(['hybrid']);
+  const [algorithms, setAlgorithms] = useState(['gemini']);
   const [timetableName, setTimetableName] = useState('');
   const [generatedTimetable, setGeneratedTimetable] = useState(null);
   const [existingTimetables, setExistingTimetables] = useState([]);
@@ -77,6 +86,9 @@ const TimetableGenerationByYearSemester = () => {
   const [modulesFromAcademic, setModulesFromAcademic] = useState([]);
   const [selectedSpecialization, setSelectedSpecialization] = useState('ALL');
   const [loadingModules, setLoadingModules] = useState(false);
+  const [categoryGenerating, setCategoryGenerating] = useState({});
+  const [bulkGenerating, setBulkGenerating] = useState(false);
+  const [weekdayFreeDay, setWeekdayFreeDay] = useState('Fri');
 
   const availableAlgorithms = getAvailableAlgorithms();
   const semesters = ['1', '2'];
@@ -100,19 +112,43 @@ const TimetableGenerationByYearSemester = () => {
   }, []);
 
   const fetchAcademicModules = useCallback(async (year, semester) => {
-    if (!year || !semester) {
+    if (!year) {
       setModulesFromAcademic([]);
       return;
     }
 
     try {
       setLoadingModules(true);
-      const response = await getModulesByYear(year, semester);
+      const response = await getModulesByYear(year, semester || null, 'ALL');
       const mapped = (response.data || []).map((module) => ({
         ...module,
         specialization: inferSpecializationFromModule(module),
       }));
-      setModulesFromAcademic(mapped);
+
+      const ordered = [...mapped].sort((left, right) => {
+        const leftTime = new Date(left?.created_at || 0).getTime();
+        const rightTime = new Date(right?.created_at || 0).getTime();
+        return rightTime - leftTime;
+      });
+
+      const buckets = new Map();
+      ordered.forEach((module) => {
+        const spec = module.specialization || 'General';
+        if (!buckets.has(spec)) {
+          buckets.set(spec, []);
+        }
+        buckets.get(spec).push(module);
+      });
+
+      const limited = [];
+      buckets.forEach((bucket) => {
+        limited.push(...bucket.slice(0, MODULE_LIMIT_PER_SPECIALIZATION));
+      });
+
+      setModulesFromAcademic(limited);
+      toast.success(`Fetched ${limited.length} module(s) (${MODULE_LIMIT_PER_SPECIALIZATION} per specialization)`, {
+        autoClose: 2200,
+      });
     } catch {
       setError('Failed to fetch modules from Academic Coordinator records');
       setModulesFromAcademic([]);
@@ -130,18 +166,26 @@ const TimetableGenerationByYearSemester = () => {
   useEffect(() => {
     if (selectedYear && selectedSemester) {
       fetchExistingTimetables(selectedYear, selectedSemester);
+    }
+
+    if (selectedYear) {
       fetchAcademicModules(selectedYear, selectedSemester);
     } else {
       setModulesFromAcademic([]);
     }
-  }, [selectedYear, selectedSemester, fetchExistingTimetables, fetchAcademicModules]);
+  }, [
+    selectedYear,
+    selectedSemester,
+    fetchExistingTimetables,
+    fetchAcademicModules,
+  ]);
 
   useEffect(() => {
     setSelectedSpecialization('ALL');
-  }, [selectedYear, selectedSemester]);
+  }, [selectedYear]);
 
   const specializationOptions = React.useMemo(() => {
-    const values = [...new Set(modulesFromAcademic.map((m) => m.specialization).filter(Boolean))];
+    const values = [...new Set([...DEFAULT_SPECIALIZATIONS, ...modulesFromAcademic.map((m) => m.specialization).filter(Boolean)])];
     return ['ALL', ...values.sort((a, b) => a.localeCompare(b))];
   }, [modulesFromAcademic]);
 
@@ -149,6 +193,18 @@ const TimetableGenerationByYearSemester = () => {
     if (selectedSpecialization === 'ALL') return modulesFromAcademic;
     return modulesFromAcademic.filter((module) => module.specialization === selectedSpecialization);
   }, [modulesFromAcademic, selectedSpecialization]);
+
+  const specializationCategoryRows = React.useMemo(() => {
+    const counts = new Map();
+    modulesFromAcademic.forEach((module) => {
+      const spec = module.specialization || 'General';
+      counts.set(spec, (counts.get(spec) || 0) + 1);
+    });
+
+    return Array.from(counts.entries())
+      .map(([specialization, moduleCount]) => ({ specialization, moduleCount }))
+      .sort((a, b) => a.specialization.localeCompare(b.specialization));
+  }, [modulesFromAcademic]);
 
   const handleAlgorithmChange = (algo) => {
     setAlgorithms((prev) =>
@@ -179,15 +235,24 @@ const TimetableGenerationByYearSemester = () => {
       return;
     }
 
+    if (!String(timetableName || '').trim()) {
+      setError('Timetable name is required');
+      return;
+    }
+
     try {
       setLoading(true);
+      const resolvedTimetableName = String(timetableName).trim();
+
       const response = await generateTimetableForYearSemester(
         selectedYear,
         selectedSemester,
         {
           algorithms,
-          timetableName: timetableName || `Timetable_${selectedYear}_Sem${selectedSemester}`,
+          timetableName: resolvedTimetableName,
           specialization: selectedSpecialization !== 'ALL' ? selectedSpecialization : undefined,
+          weekdayFreeDay,
+          moduleLimitPerSpecialization: MODULE_LIMIT_PER_SPECIALIZATION,
         }
       );
 
@@ -244,6 +309,83 @@ const TimetableGenerationByYearSemester = () => {
       return;
     }
     downloadTimetableAsCSV(schedule, selectedYear, selectedSemester);
+  };
+
+  const handleGenerateByCategory = async (specialization) => {
+    if (!selectedYear || !selectedSemester || !specialization) {
+      setError('Please select year and semester first.');
+      return;
+    }
+
+    if (!String(timetableName || '').trim()) {
+      setError('Timetable name is required');
+      return;
+    }
+
+    const key = `${selectedYear}-${selectedSemester}-${specialization}`;
+    try {
+      setCategoryGenerating((prev) => ({ ...prev, [key]: true }));
+      setError(null);
+
+      const response = await generateTimetableForYearSemester(selectedYear, selectedSemester, {
+        algorithms,
+        timetableName: String(timetableName).trim(),
+        specialization,
+        weekdayFreeDay,
+        moduleLimitPerSpecialization: MODULE_LIMIT_PER_SPECIALIZATION,
+      });
+
+      setGeneratedTimetable(response);
+      setSuccess(
+        `Generated timetable for Year ${selectedYear}, Semester ${selectedSemester}, ${specialization}. ID: ${response.timetableId}`,
+      );
+      fetchExistingTimetables(selectedYear, selectedSemester);
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || `Failed to generate for ${specialization}`);
+    } finally {
+      setCategoryGenerating((prev) => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const handleGenerateAllCategories = async () => {
+    if (!selectedYear || !selectedSemester) {
+      setError('Please select year and semester first.');
+      return;
+    }
+
+    if (!specializationCategoryRows.length) {
+      setError('No specialization categories with modules are available for this year and semester.');
+      return;
+    }
+
+    if (!String(timetableName || '').trim()) {
+      setError('Timetable name is required');
+      return;
+    }
+
+    try {
+      setBulkGenerating(true);
+      setError(null);
+
+      for (const row of specializationCategoryRows) {
+        await generateTimetableForYearSemester(selectedYear, selectedSemester, {
+          algorithms,
+          timetableName: `${String(timetableName).trim()}_${row.specialization.replace(/\s+/g, '_')}`,
+          specialization: row.specialization,
+          weekdayFreeDay,
+          moduleLimitPerSpecialization: MODULE_LIMIT_PER_SPECIALIZATION,
+        });
+      }
+
+      setSuccess(
+        `Generated all categories for Year ${selectedYear}, Semester ${selectedSemester} (${specializationCategoryRows.length} specializations).`,
+      );
+      fetchExistingTimetables(selectedYear, selectedSemester);
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || 'Failed while generating all categories');
+    } finally {
+      setBulkGenerating(false);
+    }
   };
 
   return (
@@ -316,7 +458,7 @@ const TimetableGenerationByYearSemester = () => {
                   value={selectedSpecialization}
                   onChange={(e) => setSelectedSpecialization(e.target.value)}
                   className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={!selectedYear || !selectedSemester || loadingModules}
+                  disabled={!selectedYear || loadingModules}
                 >
                   {specializationOptions.map((spec) => (
                     <option key={spec} value={spec}>
@@ -325,21 +467,43 @@ const TimetableGenerationByYearSemester = () => {
                   ))}
                 </select>
                 <p className="mt-1 text-xs text-gray-500">
-                  Modules are fetched from Academic Coordinator records for the selected year and semester.
+                  Modules are fetched from Academic Coordinator records with a cap of {MODULE_LIMIT_PER_SPECIALIZATION} modules per specialization for the selected year and semester.
+                </p>
+              </div>
+
+              {/* Weekday Free Day */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Weekday Free Day
+                </label>
+                <select
+                  value={weekdayFreeDay}
+                  onChange={(e) => setWeekdayFreeDay(e.target.value)}
+                  className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {WEEKDAY_FREE_DAY_OPTIONS.map((day) => (
+                    <option key={day} value={day}>
+                      {day}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  Weekday batches will not be scheduled on this day.
                 </p>
               </div>
 
               {/* Timetable Name */}
               <div>
                 <label className="block text-sm font-medium mb-2">
-                  Timetable Name (Optional)
+                  Timetable Name *
                 </label>
                 <input
                   type="text"
                   value={timetableName}
                   onChange={(e) => setTimetableName(e.target.value)}
+                  required
                   className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., Spring 2025 Final Schedule"
+                  placeholder="Required: e.g., Semester1_Weekday_Final"
                 />
               </div>
 
@@ -425,6 +589,65 @@ const TimetableGenerationByYearSemester = () => {
                 )}
               </div>
             )}
+
+            <div className="mt-6 rounded border border-blue-200 bg-blue-50 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="text-base font-semibold text-blue-900">
+                  Categorized Generation (Year + Semester + Specialization)
+                </h3>
+                <button
+                  type="button"
+                  onClick={handleGenerateAllCategories}
+                  disabled={bulkGenerating || !selectedYear || !selectedSemester || !specializationCategoryRows.length}
+                  className="rounded bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:bg-gray-400"
+                >
+                  {bulkGenerating ? 'Generating all...' : 'Generate All Categories'}
+                </button>
+              </div>
+
+              {!selectedYear || !selectedSemester ? (
+                <p className="text-sm text-blue-800">Select year and semester to show specialization categories.</p>
+              ) : specializationCategoryRows.length === 0 ? (
+                <p className="text-sm text-blue-800">No specialization categories found for this selection.</p>
+              ) : (
+                <div className="overflow-x-auto rounded border bg-white">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-blue-100">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold text-blue-900">Year</th>
+                        <th className="px-3 py-2 text-left font-semibold text-blue-900">Semester</th>
+                        <th className="px-3 py-2 text-left font-semibold text-blue-900">Specialization</th>
+                        <th className="px-3 py-2 text-left font-semibold text-blue-900">Modules</th>
+                        <th className="px-3 py-2 text-left font-semibold text-blue-900">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {specializationCategoryRows.map((row) => {
+                        const key = `${selectedYear}-${selectedSemester}-${row.specialization}`;
+                        return (
+                          <tr key={key} className="border-t">
+                            <td className="px-3 py-2">{selectedYear}</td>
+                            <td className="px-3 py-2">{selectedSemester}</td>
+                            <td className="px-3 py-2 font-medium">{row.specialization}</td>
+                            <td className="px-3 py-2">{row.moduleCount}</td>
+                            <td className="px-3 py-2">
+                              <button
+                                type="button"
+                                onClick={() => handleGenerateByCategory(row.specialization)}
+                                disabled={Boolean(categoryGenerating[key]) || bulkGenerating}
+                                className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:bg-gray-400"
+                              >
+                                {categoryGenerating[key] ? 'Generating...' : 'Generate'}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -438,8 +661,8 @@ const TimetableGenerationByYearSemester = () => {
               </span>
             </div>
 
-            {!selectedYear || !selectedSemester ? (
-              <p className="text-gray-500 text-sm">Select year and semester to load modules.</p>
+            {!selectedYear ? (
+              <p className="text-gray-500 text-sm">Select year to load modules.</p>
             ) : loadingModules ? (
               <p className="text-gray-500 text-sm">Fetching modules from Academic Coordinator...</p>
             ) : filteredAcademicModules.length === 0 ? (

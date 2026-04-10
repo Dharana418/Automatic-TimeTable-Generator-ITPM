@@ -1,4 +1,5 @@
 import BatchList from '../components/BatchList.jsx';
+import BatchStatisticsPieCharts from '../components/BatchStatisticsPieCharts.jsx';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 import { useState } from 'react';
 
@@ -90,6 +91,16 @@ const FacultyBatchesPage = ({ user }) => {
             <InfoChip label="Coordinator" value="You" accent="#34d399" />
             <InfoChip label="Status" value="Ready" accent="#f59e0b" />
           </div>
+        </section>
+
+        {/* ── Batch Statistics Pie Charts ── */}
+        <section className="fc-section-card" style={{ padding: '26px' }}>
+          <div style={{ marginBottom: 18 }}>
+            <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#38bdf8' }}>Analytics & Insights</p>
+            <h3 style={{ margin: '6px 0 0', fontSize: 16, fontWeight: 800, color: '#f1f5f9' }}>Student Distribution by Batch Composition</h3>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'rgba(148,163,184,0.6)' }}>Visualize total student enrollment across different grouping dimensions</p>
+          </div>
+          <BatchStatisticsPieCharts />
         </section>
 
         {/* ── Specialization cloud ── */}

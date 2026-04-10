@@ -363,6 +363,13 @@ const FacultyCoordinatorDashboard = ({ user }) => {
       subtitle="Operational overview for scheduling, batches & faculty alignment"
       badge="FC Dashboard"
       backgroundImage={facultyDashboardBg}
+      sidebarSections={[
+        { id: 'fcOverview', label: 'Overview' },
+        { id: 'fcOperations', label: 'Operations Center' },
+        { id: 'fcActivity', label: 'Recent Activity' },
+        { id: 'fcTimetables', label: 'Saved Timetables' },
+        { id: 'fcSoftConstraints', label: 'Soft Constraints' },
+      ]}
       headerActions={
         <button
           type="button"
@@ -387,7 +394,7 @@ const FacultyCoordinatorDashboard = ({ user }) => {
       `}</style>
 
       {/* ── Welcome banner ── */}
-      <div style={{
+      <div id="fcOverview" style={{
         borderRadius: 18, padding: '24px 28px', marginBottom: 24,
         background: 'linear-gradient(130deg, #0f5d99 0%, #2f80c3 52%, #5ea4da 100%)',
         border: '1px solid rgba(255,255,255,0.35)',
@@ -440,7 +447,7 @@ const FacultyCoordinatorDashboard = ({ user }) => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
           {/* Action tiles */}
-          <section style={{
+          <section id="fcOperations" style={{
             borderRadius: 16, padding: '22px',
             background: 'linear-gradient(180deg, #ffffff 0%, #f5f9fd 100%)',
             border: '1px solid #d8e3ee',
@@ -491,7 +498,7 @@ const FacultyCoordinatorDashboard = ({ user }) => {
           </section>
 
           {/* Activity feed placeholder */}
-          <section style={{
+          <section id="fcActivity" style={{
             borderRadius: 16, padding: '22px',
             background: 'linear-gradient(180deg, #ffffff 0%, #f5f9fd 100%)',
             border: '1px solid #d8e3ee',
@@ -515,7 +522,7 @@ const FacultyCoordinatorDashboard = ({ user }) => {
             </div>
           </section>
 
-          <section style={{
+          <section id="fcTimetables" style={{
             borderRadius: 16, padding: '22px',
             background: 'linear-gradient(180deg, #ffffff 0%, #f5f9fd 100%)',
             border: '1px solid #d8e3ee',
@@ -570,7 +577,7 @@ const FacultyCoordinatorDashboard = ({ user }) => {
         </div>
 
         {/* Right – Soft Constraints Panel */}
-        <section style={{
+        <section id="fcSoftConstraints" style={{
           borderRadius: 16, padding: '22px',
           background: 'linear-gradient(180deg, #ffffff 0%, #f5f9fd 100%)',
           border: '1px solid #d8e3ee',

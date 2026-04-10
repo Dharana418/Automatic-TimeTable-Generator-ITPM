@@ -1,4 +1,4 @@
-import Swal from 'sweetalert2';
+﻿import Swal from 'sweetalert2';
 import { toast } from 'react-toastify';
 
 const base = {
@@ -60,6 +60,25 @@ export const showWarning = (title, text = '') => {
     bodyClassName: 'validation-toast__body',
     progressClassName: 'validation-toast__progress',
   });
+};
+
+export const showValidationErrors = (errors = [], heading = 'Validation required') => {
+  const normalized = Array.isArray(errors)
+    ? errors
+        .map((entry) => String(entry || '').trim())
+        .filter(Boolean)
+    : [];
+
+  if (!normalized.length) {
+    showWarning(heading, 'Please review your input and try again.');
+    return;
+  }
+
+  const details = normalized.length === 1
+    ? normalized[0]
+    : `${normalized[0]} (+${normalized.length - 1} more)`;
+
+  showWarning(heading, details);
 };
 
 export const confirmDelete = async ({
@@ -208,3 +227,4 @@ export const editBatchPrompt = async ({
 
   return result.value;
 };
+

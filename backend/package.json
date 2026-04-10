@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
+    "replace:modules": "node scripts/replaceModulesFromCatalog.js",
+    "generate:logical": "node scripts/generateLogicalTimetables.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -13,6 +15,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.99.3",
     "bcryptjs": "^3.0.3",
     "body-parser": "^1.20.2",

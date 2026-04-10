@@ -3,11 +3,12 @@ import psoScheduler from '../scheduler/psoScheduler.js';
 import hybridScheduler from '../scheduler/hybridScheduler.js';
 import geneticScheduler from '../scheduler/geneticScheduler.js';
 import tabuScheduler from '../scheduler/tabuScheduler.js';
+import { generateTimetableWithGemini } from '../engine/geminiScheduler.js';
 import pool from '../config/db.js';
 
 const allowedTypes = ['halls', 'modules', 'lics', 'instructors', 'departments', 'batches'];
 
-const ENGINEERING_SPECIALIZATIONS = new Set(['CS', 'ISE', 'CSNE', 'IM']);
+const ENGINEERING_SPECIALIZATIONS = new Set(['CS', 'ISE', 'CSNE', 'IME']);
 
 const normalizeAlgorithmKey = (value) => String(value || '').trim().toLowerCase();
 const normalizeRole = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -131,6 +132,50 @@ const parseBatchLabel = (name) => {
   };
 };
 
+const parseHallStructure = (hall = {}) => {
+  const features = parseJsonSafe(hall.features, {});
+  const building = String(features.building || hall.building || '').trim();
+  const floorValue = String(features.floor || hall.floor || '').trim();
+  const hallType = String(features.hallType || features.roomType || hall.hallType || hall.roomType || '').trim();
+  const floorNumber = Number(floorValue.replace(/[^0-9]/g, ''));
+
+  return {
+    building,
+    floorValue,
+    hallType,
+    floorNumber: Number.isFinite(floorNumber) && floorNumber > 0 ? floorNumber : Number.MAX_SAFE_INTEGER,
+  };
+};
+
+const sortHallsByStructure = (halls = []) => {
+  const buildingOrder = new Map([
+    ['MAIN BUILDING', 0],
+    ['NEW BUILDING', 1],
+  ]);
+
+  return [...halls].sort((left, right) => {
+    const leftStructure = parseHallStructure(left);
+    const rightStructure = parseHallStructure(right);
+
+    const leftBuildingRank = buildingOrder.has(leftStructure.building.toUpperCase())
+      ? buildingOrder.get(leftStructure.building.toUpperCase())
+      : 99;
+    const rightBuildingRank = buildingOrder.has(rightStructure.building.toUpperCase())
+      ? buildingOrder.get(rightStructure.building.toUpperCase())
+      : 99;
+
+    if (leftBuildingRank !== rightBuildingRank) return leftBuildingRank - rightBuildingRank;
+    if (leftStructure.floorNumber !== rightStructure.floorNumber) return leftStructure.floorNumber - rightStructure.floorNumber;
+    if (leftStructure.hallType !== rightStructure.hallType) return leftStructure.hallType.localeCompare(rightStructure.hallType);
+
+    const leftCapacity = Number(left.capacity || 0);
+    const rightCapacity = Number(right.capacity || 0);
+    if (leftCapacity !== rightCapacity) return leftCapacity - rightCapacity;
+
+    return String(left.name || left.id || '').localeCompare(String(right.name || right.id || ''));
+  });
+};
+
 const parseJsonSafe = (value, fallback = {}) => {
   if (!value) return fallback;
   if (typeof value === 'object') return value;
@@ -153,6 +198,11 @@ const normalizeSpecializationCode = (value = '') => {
     INFORMATIONSYSTEMSENGINEERING: 'ISE',
     COMPUTER_SYSTEMS_NETWORK_ENGINEERING: 'CSNE',
     INFORMATICS: 'IM',
+    INTERACTIVEMEDIA: 'IME',
+    IM: 'IME',
+    IE: 'IME',
+    CYBERSECURITY: 'CYBER SECURITY',
+    CYBER: 'CYBER SECURITY',
     ENGINEERING: 'ENGINEERING',
   };
 
@@ -172,15 +222,16 @@ const inferModuleSpecialization = (module) => {
 
   const normalizedExplicit = normalizeSpecializationCode(explicitSpecialization);
   if (normalizedExplicit) {
-    return ENGINEERING_SPECIALIZATIONS.has(normalizedExplicit) ? 'Engineering' : normalizedExplicit;
+    return normalizedExplicit;
   }
 
   const code = String(module?.code || '').toUpperCase();
   if (code.startsWith('IT')) return 'IT';
   if (code.startsWith('SE')) return 'SE';
-  if (code.startsWith('CS')) return 'Engineering';
-  if (code.startsWith('IS')) return 'Engineering';
-  if (code.startsWith('IE')) return 'Engineering';
+  if (code.startsWith('CS')) return 'CS';
+  if (code.startsWith('IS')) return 'ISE';
+  if (code.startsWith('IE') || code.startsWith('IM')) return 'IME';
+  if (code.startsWith('CN')) return 'CSNE';
   return 'General';
 };
 
@@ -286,9 +337,31 @@ const validateBatchSubgroupRules = async ({ batchId, ignoreId = null }) => {
   return null;
 };
 
-const runSelectedAlgorithms = (constraints, algorithms, options) => {
+const runSelectedAlgorithms = async (constraints, algorithms, options) => {
   const normalizedAlgorithms = (algorithms || []).map(normalizeAlgorithmKey);
   const results = {};
+
+  if (normalizedAlgorithms.includes('gemini')) {
+    try {
+      const assignmentsDb = await pool.query('SELECT * FROM module_assignments');
+      const geminiInput = { ...constraints, assignments: assignmentsDb.rows };
+      const geminiOutput = await generateTimetableWithGemini(geminiInput);
+      results.gemini = { schedule: geminiOutput.timetable || [], score: 100 };
+      
+      // Route constraint bottlenecks directly to the Mission Control Conflict Dashboard
+      if (geminiOutput.conflicts && geminiOutput.conflicts.length > 0) {
+        for (const conflict of geminiOutput.conflicts) {
+           await pool.query(
+            `INSERT INTO scheduling_conflicts (conflict_type, description, resolved) VALUES ($1, $2, false)`,
+            [conflict.conflict_type || 'AI Generator Halt', conflict.description || JSON.stringify(conflict)]
+           );
+        }
+      }
+    } catch (err) {
+       console.error("Gemini Failure:", err);
+       results.gemini = { schedule: [], score: 0, error: err.message };
+    }
+  }
 
   if (normalizedAlgorithms.includes('pso')) {
     results.pso = psoScheduler(constraints, options);
@@ -346,8 +419,8 @@ const buildSemesterSpecializationSegments = ({ batches = [], modules = [], lics 
         const moduleSemester = inferModuleSemester(module);
         const specializationMatch =
           segment.departmentGroup === 'Engineering'
-            ? moduleSpec === 'Engineering'
-            : moduleSpec === segment.specialization;
+            ? ENGINEERING_SPECIALIZATIONS.has(normalizeSpecializationCode(moduleSpec))
+            : normalizeSpecializationCode(moduleSpec) === normalizeSpecializationCode(segment.specialization);
         const yearMatch = moduleYear ? moduleYear === segment.year : true;
         const semesterMatch = moduleSemester ? moduleSemester === segment.semester : true;
         const capacityMatch = moduleFitsBatchCapacity(module, segment.batches);
@@ -364,7 +437,7 @@ const buildSemesterSpecializationSegments = ({ batches = [], modules = [], lics 
     const licsForSegment = lics.filter((lic) => {
       const department = String(lic.department || '').toUpperCase();
       if (segment.departmentGroup === 'Engineering') {
-        return ['ENGINEERING', 'CS', 'ISE', 'CSNE', 'IM'].some((value) => department.includes(value));
+        return ['ENGINEERING', 'CS', 'ISE', 'CSNE', 'IME'].some((value) => department.includes(value));
       }
       return department.includes(segment.specialization);
     });
@@ -372,7 +445,7 @@ const buildSemesterSpecializationSegments = ({ batches = [], modules = [], lics 
     const instructorsForSegment = instructors.filter((instructor) => {
       const department = String(instructor.department || '').toUpperCase();
       if (segment.departmentGroup === 'Engineering') {
-        return ['ENGINEERING', 'CS', 'ISE', 'CSNE', 'IM'].some((value) => department.includes(value));
+        return ['ENGINEERING', 'CS', 'ISE', 'CSNE', 'IME'].some((value) => department.includes(value));
       }
       return department.includes(segment.specialization);
     });
@@ -640,6 +713,7 @@ export const addItem = async (req, res) => {
         credits = null,
         lectures_per_week = null,
         details = null,
+        specialization = null,
         batch_size = null,
         day_type = null,
         academic_year = null,
@@ -665,6 +739,13 @@ export const addItem = async (req, res) => {
 
       const derivedAcademicYear = inferAcademicYearFromModuleCode(code);
       const effectiveAcademicYear = academic_year || derivedAcademicYear;
+      const baseDetails = details && typeof details === 'object' ? details : {};
+      const mergedDetails = {
+        ...baseDetails,
+        ...(specialization ? { specialization } : {}),
+        ...(effectiveAcademicYear ? { academic_year: Number(effectiveAcademicYear) } : {}),
+        ...(semester ? { semester: Number(semester) } : {}),
+      };
 
       const { rows } = await pool.query(
         `INSERT INTO modules(id, code, name, batch_size, day_type, credits, lectures_per_week, details, lic_id, academic_year, semester)
@@ -678,7 +759,7 @@ export const addItem = async (req, res) => {
           day_type || null,
           credits || null,
           lectures_per_week || null,
-          details ? JSON.stringify(details) : null,
+          Object.keys(mergedDetails).length ? JSON.stringify(mergedDetails) : null,
           licId,
           effectiveAcademicYear,
           semester || null,
@@ -953,10 +1034,66 @@ export const updateItem = async (req, res) => {
     }
 
     if (type === 'modules') {
-      const { code = null, name = null, credits = null, lectures_per_week = null, details = null, batch_size = null, day_type = null, lic_id = null } = payload;
+      const {
+        code = null,
+        name = null,
+        credits = null,
+        lectures_per_week = null,
+        details = null,
+        specialization = null,
+        batch_size = null,
+        day_type = null,
+        lic_id = null,
+        academic_year = null,
+        semester = null,
+      } = payload;
+
+      const existingModuleResult = await pool.query('SELECT details, academic_year, semester FROM modules WHERE id = $1', [id]);
+      if (!existingModuleResult.rowCount) return res.status(404).json({ error: 'Item not found' });
+
+      const existingModule = existingModuleResult.rows[0];
+      const existingDetails = parseJsonSafe(existingModule.details, {});
+      const mergedDetails = {
+        ...existingDetails,
+        ...(details && typeof details === 'object' ? details : {}),
+      };
+
+      if (specialization !== null && specialization !== undefined && String(specialization).trim()) {
+        mergedDetails.specialization = specialization;
+      }
+
+      const nextAcademicYear = academic_year || existingModule.academic_year || null;
+      const nextSemester = semester || existingModule.semester || null;
+      if (nextAcademicYear) mergedDetails.academic_year = Number(nextAcademicYear);
+      if (nextSemester) mergedDetails.semester = Number(nextSemester);
+
       const { rows, rowCount } = await pool.query(
-        `UPDATE modules SET code=$1, name=$2, batch_size=$3, day_type=$4, credits=$5, lectures_per_week=$6, details=$7, lic_id=$8 WHERE id=$9 RETURNING *`,
-        [code, name, batch_size, day_type, credits, lectures_per_week, details ? JSON.stringify(details) : null, lic_id, id]
+        `UPDATE modules
+         SET code = COALESCE($1, code),
+             name = COALESCE($2, name),
+             batch_size = $3,
+             day_type = $4,
+             credits = $5,
+             lectures_per_week = $6,
+             details = $7,
+             lic_id = $8,
+             academic_year = $9,
+             semester = $10
+         WHERE id = $11
+         RETURNING *`,
+        [
+          code,
+          name,
+          batch_size,
+          day_type,
+          credits,
+          lectures_per_week,
+          Object.keys(mergedDetails).length ? JSON.stringify(mergedDetails) : null,
+          lic_id,
+          nextAcademicYear,
+          nextSemester,
+          id,
+        ]
       );
       if (!rowCount) return res.status(404).json({ error: 'Item not found' });
       return res.json({ success: true, item: rows[0] });
@@ -1038,6 +1175,16 @@ export const createModuleAssignment = async (req, res) => {
       return res.status(400).json({ error: 'moduleId, lecturerId and academicYear are required' });
     }
 
+    const moduleResult = await pool.query('SELECT id FROM modules WHERE id = $1', [moduleId]);
+    if (moduleResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Module not found' });
+    }
+
+    const lecturerResult = await pool.query('SELECT id FROM instructors WHERE id = $1', [lecturerId]);
+    if (lecturerResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Lecturer not found' });
+    }
+
     let effectiveLicId = licId;
     if (isLic(req.user)) {
       const licScope = await resolveLicScope(req.user);
@@ -1046,6 +1193,11 @@ export const createModuleAssignment = async (req, res) => {
     }
 
     if (!effectiveLicId) return res.status(400).json({ error: 'licId is required' });
+
+    const licResult = await pool.query('SELECT id FROM lics WHERE id = $1', [effectiveLicId]);
+    if (licResult.rows.length === 0) {
+      return res.status(404).json({ error: 'LIC not found' });
+    }
 
     const id = `asg_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
     const { rows } = await pool.query(
@@ -1494,7 +1646,7 @@ export const runScheduler = async (req, res) => {
       pool.query('SELECT * FROM batches'),
     ]);
 
-    const halls = hallsRes.rows;
+    const halls = sortHallsByStructure(hallsRes.rows);
     const hallAllocationMap = await loadCoordinatorHallAllocationMap();
     const modules = applyCoordinatorHallAllocations(modulesRes.rows, hallAllocationMap);
     const lics = licsRes.rows;
@@ -1507,7 +1659,7 @@ export const runScheduler = async (req, res) => {
 
     const mergedOptions = await withFacultySoftConstraints(req.user, options);
     const constraints = { halls, modules, lics, instructors, batches, options: mergedOptions };
-    const results = runSelectedAlgorithms(constraints, algorithms, mergedOptions);
+    const results = await runSelectedAlgorithms(constraints, algorithms, mergedOptions);
 
     return res.json({ success: true, results });
   } catch (err) {
@@ -1530,7 +1682,7 @@ export const runSchedulerBySegments = async (req, res) => {
       pool.query('SELECT * FROM batches'),
     ]);
 
-    const halls = hallsRes.rows;
+    const halls = sortHallsByStructure(hallsRes.rows);
     const hallAllocationMap = await loadCoordinatorHallAllocationMap();
     const lics = licsRes.rows;
     const instructors = instructorsRes.rows;
@@ -1611,7 +1763,7 @@ export const runSchedulerBySegments = async (req, res) => {
         },
       };
 
-      const results = runSelectedAlgorithms(constraints, algorithms, constraints.options);
+      const results = await runSelectedAlgorithms(constraints, algorithms, constraints.options);
       segmentedResults.push({
         segment: {
           key: segment.key,
@@ -1677,11 +1829,38 @@ export const runSchedulerForYearSemester = async (req, res) => {
       pool.query('SELECT * FROM batches'),
     ]);
 
-    const halls = hallsRes.rows;
+    const halls = sortHallsByStructure(hallsRes.rows);
     const modules = modulesRes.rows;
     const lics = licsRes.rows;
     const instructors = instructorsRes.rows;
     const batches = batchesRes.rows;
+
+    const requestedSpecialization = normalizeSpecializationCode(options.specialization || '');
+    const moduleLimitPerSpecialization = Number(options.moduleLimitPerSpecialization || 5);
+
+    const specializationFilteredModules = requestedSpecialization
+      ? modules.filter((module) => normalizeSpecializationCode(inferModuleSpecialization(module)) === requestedSpecialization)
+      : modules;
+
+    const orderedModules = [...specializationFilteredModules].sort((left, right) => {
+      const leftTime = new Date(left?.created_at || 0).getTime();
+      const rightTime = new Date(right?.created_at || 0).getTime();
+      return rightTime - leftTime;
+    });
+
+    const specializationBuckets = new Map();
+    orderedModules.forEach((module) => {
+      const specialization = normalizeSpecializationCode(inferModuleSpecialization(module)) || 'General';
+      if (!specializationBuckets.has(specialization)) {
+        specializationBuckets.set(specialization, []);
+      }
+      specializationBuckets.get(specialization).push(module);
+    });
+
+    const filteredModules = [];
+    specializationBuckets.forEach((bucketModules) => {
+      filteredModules.push(...bucketModules.slice(0, Math.max(1, moduleLimitPerSpecialization)));
+    });
 
     // Validation
     if (!halls.length) {
@@ -1690,15 +1869,17 @@ export const runSchedulerForYearSemester = async (req, res) => {
       });
     }
 
-    if (!modules.length) {
+    if (!filteredModules.length) {
       return res.status(400).json({
-        error: `No modules found for academic year ${academicYear}, semester ${semester}. Please add modules first.`,
+        error: requestedSpecialization
+          ? `No modules found for academic year ${academicYear}, semester ${semester}, specialization ${requestedSpecialization}. Please add modules first.`
+          : `No modules found for academic year ${academicYear}, semester ${semester}. Please add modules first.`,
       });
     }
 
     // Load and apply hall allocations
     const hallAllocationMap = await loadCoordinatorHallAllocationMap();
-    const modulesWithAllocations = applyCoordinatorHallAllocations(modules, hallAllocationMap);
+    const modulesWithAllocations = applyCoordinatorHallAllocations(filteredModules, hallAllocationMap);
 
     // Load faculty soft constraints if user is faculty coordinator
     const mergedOptions = await withFacultySoftConstraints(req.user, options);
@@ -1714,7 +1895,7 @@ export const runSchedulerForYearSemester = async (req, res) => {
     };
 
     // Run selected algorithms
-    const results = runSelectedAlgorithms(constraints, algorithms, mergedOptions);
+    const results = await runSelectedAlgorithms(constraints, algorithms, mergedOptions);
 
     // Prepare timetable metadata
     const generatedTimetable = {
@@ -1729,9 +1910,9 @@ export const runSchedulerForYearSemester = async (req, res) => {
         generatedAt: new Date().toISOString(),
         algorithms: Array.isArray(algorithms) ? algorithms : [algorithms],
         hallAllocations: Object.fromEntries(hallAllocationMap),
-        modulesCount: modules.length,
+        modulesCount: filteredModules.length,
         hallsCount: halls.length,
-        schedule: results.hybrid?.schedule || results.pso?.schedule || results.genetic?.schedule || results.ant?.schedule || results.tabu?.schedule || [],
+        schedule: results.gemini?.schedule || results.hybrid?.schedule || results.pso?.schedule || results.genetic?.schedule || results.ant?.schedule || results.tabu?.schedule || [],
         allResults: results,
       },
     };

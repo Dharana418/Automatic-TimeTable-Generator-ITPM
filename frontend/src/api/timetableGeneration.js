@@ -161,7 +161,8 @@ export const formatTimetable = (timetable) => {
  */
 export const getAvailableAlgorithms = () => {
   return [
-    { value: 'hybrid', label: 'Hybrid (Recommended)', description: 'Combines multiple algorithms' },
+    { value: 'gemini', label: 'Gemini AI Engine (Advanced)', description: 'LIVE dynamic JSON timetable mapping engine (Recommended)' },
+    { value: 'hybrid', label: 'Hybrid (Legacy)', description: 'Combines multiple algorithms' },
     { value: 'pso', label: 'Particle Swarm Optimization', description: 'PSO algorithm' },
     { value: 'genetic', label: 'Genetic Algorithm', description: 'GA approach' },
     { value: 'ant', label: 'Ant Colony', description: 'Ant colony optimization' },
@@ -190,6 +191,62 @@ export const exportTimetableToCSV = (schedule) => {
   return csv;
 };
 
+const escapeCsv = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+
+const parseGroupIdentity = (batchKey = '') => {
+  const tokens = String(batchKey || '').trim().split('.');
+  if (tokens.length >= 6) {
+    return {
+      groupKey: tokens.slice(0, 5).join('.'),
+      subgroup: tokens[5],
+    };
+  }
+
+  if (tokens.length >= 5) {
+    return {
+      groupKey: tokens.slice(0, 5).join('.'),
+      subgroup: '',
+    };
+  }
+
+  return {
+    groupKey: String(batchKey || 'UNASSIGNED'),
+    subgroup: '',
+  };
+};
+
+const extractEntryGroupRecords = (entry = {}) => {
+  const rawBatchKeys = [];
+
+  if (Array.isArray(entry.batchKeys) && entry.batchKeys.length) {
+    rawBatchKeys.push(...entry.batchKeys);
+  } else if (entry.batchKey) {
+    rawBatchKeys.push(entry.batchKey);
+  } else if (entry.batch) {
+    rawBatchKeys.push(entry.batch);
+  }
+
+  if (!rawBatchKeys.length) {
+    return [{ groupKey: 'UNASSIGNED', subgroup: '' }];
+  }
+
+  const deduped = new Map();
+  rawBatchKeys.forEach((key) => {
+    const identity = parseGroupIdentity(key);
+    if (!deduped.has(identity.groupKey)) {
+      deduped.set(identity.groupKey, new Set());
+    }
+    if (identity.subgroup) {
+      deduped.get(identity.groupKey).add(identity.subgroup);
+    }
+  });
+
+  return Array.from(deduped.entries()).map(([groupKey, subgroupSet]) => ({
+    groupKey,
+    subgroups: Array.from(subgroupSet).sort((a, b) => a.localeCompare(b)),
+  }));
+};
+
 /**
  * Download timetable as CSV
  * @param {array} schedule - Schedule array
@@ -197,16 +254,75 @@ export const exportTimetableToCSV = (schedule) => {
  * @param {string} semester - Semester
  */
 export const downloadTimetableAsCSV = (schedule, year, semester) => {
-  const csv = exportTimetableToCSV(schedule);
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
+  if (!Array.isArray(schedule) || schedule.length === 0) {
+    const csv = exportTimetableToCSV(schedule);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
 
-  link.setAttribute('href', url);
-  link.setAttribute('download', `timetable_${year}_sem${semester}.csv`);
-  link.style.visibility = 'hidden';
+    link.setAttribute('href', url);
+    link.setAttribute('download', `timetable_${year}_sem${semester}.csv`);
+    link.style.visibility = 'hidden';
 
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    return;
+  }
+
+  const groupedEntries = new Map();
+
+  schedule.forEach((entry) => {
+    const groupRecords = extractEntryGroupRecords(entry);
+    groupRecords.forEach((record) => {
+      if (!groupedEntries.has(record.groupKey)) {
+        groupedEntries.set(record.groupKey, {
+          rows: [],
+          subgroupSet: new Set(),
+        });
+      }
+
+      record.subgroups.forEach((subgroup) => groupedEntries.get(record.groupKey).subgroupSet.add(subgroup));
+      groupedEntries.get(record.groupKey).rows.push(entry);
+    });
+  });
+
+  groupedEntries.forEach((groupData, groupKey) => {
+    let csv = 'Module,Hall,Day,Start Time,End Time,Lecturer,Group,Subgroups,Duration\n';
+
+    const subgroupLabel = Array.from(groupData.subgroupSet).sort((a, b) => a.localeCompare(b)).join('|');
+
+    groupData.rows.forEach((entry) => {
+      const startTime = entry.startTime || String(entry.slot || '').split('-')[0] || '';
+      const endTime = entry.endTime || String(entry.slot || '').split('-')[1] || '';
+      const duration = entry.duration || entry.durationSlots || '';
+
+      csv += [
+        escapeCsv(entry.moduleName || entry.moduleId || ''),
+        escapeCsv(entry.hallName || entry.hallId || ''),
+        escapeCsv(entry.day || ''),
+        escapeCsv(startTime),
+        escapeCsv(endTime),
+        escapeCsv(entry.instructorName || entry.lecturer || entry.instructorId || ''),
+        escapeCsv(groupKey),
+        escapeCsv(subgroupLabel),
+        escapeCsv(duration),
+      ].join(',') + '\n';
+    });
+
+    const safeGroupKey = String(groupKey || 'UNASSIGNED').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', `timetable_${year}_sem${semester}_${safeGroupKey}.csv`);
+    link.style.visibility = 'hidden';
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  });
 };
