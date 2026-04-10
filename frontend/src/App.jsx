@@ -44,11 +44,6 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [theme] = useState('light');
-
-  const toggleTheme = () => {
-    // Theme locked to light mode only
-  };
 
   const handleAuthSuccess = (nextUser) => {
     setUser(nextUser);
@@ -125,8 +120,6 @@ function App() {
           isAuthenticated={isAuthenticated}
           user={user}
           apiBase={API_BASE}
-          theme={theme}
-          onToggleTheme={toggleTheme}
           hasFixedSidebarOffset={hasFixedSidebarOffset}
         />
 

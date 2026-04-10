@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import autoschedule from '../assets/SLIIT_LOGO.png';
-import { Sun, Moon, LogOut, LayoutDashboard, User, Calendar, LogIn, Home } from 'lucide-react';
+import { LogOut, LayoutDashboard, User, Calendar, LogIn, Home } from 'lucide-react';
 
-const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", theme, onToggleTheme, hasFixedSidebarOffset = false }) => {
+const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", hasFixedSidebarOffset = false }) => {
     const location = useLocation();
     const [logoHighlighted, setLogoHighlighted] = useState(false);
     const [showTagline, setShowTagline] = useState(false);
@@ -122,7 +122,7 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
     );
 
     return (
-        <nav className={`sticky top-0 z-50 transition-all duration-300 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl supports-[backdrop-filter]:bg-white/60 ${shouldOffsetForSidebar ? 'lg:pl-[284px]' : ''}`}>
+        <nav className={`sticky top-0 z-50 border-b border-blue-300 bg-gradient-to-r from-blue-800 via-blue-700 to-blue-900 text-white shadow-md ${shouldOffsetForSidebar ? 'lg:pl-[284px]' : ''}`}>
             <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
                 {/* Brand / Logo Area */}
                 <Link to="/" className="group flex items-center gap-3 no-underline transition-transform hover:scale-105 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-lg">
@@ -131,47 +131,36 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
                         alt="SLIIT Logo" 
                         className="h-10 w-auto object-contain drop-shadow-sm transition-all duration-300 group-hover:brightness-110" 
                     />
-                    <h2 className="hidden m-0 text-xl font-extrabold tracking-tight sm:block bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
+                    <h2 className="hidden m-0 text-xl font-extrabold tracking-tight sm:block text-white">
                         SLIIT Scheduler
                     </h2>
                 </Link>
 
                 {/* Navigation and Settings Area */}
                 <div className="flex items-center space-x-1 sm:space-x-3">
-                    {/* Theme Toggle Button */}
-                    <button
-                        onClick={onToggleTheme}
-                        type="button"
-                        className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition-all duration-200 hover:bg-slate-200 hover:text-blue-600 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-amber-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
-                        aria-label="Toggle theme"
-                        title="Toggle dark mode"
-                    >
-                        {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-                    </button>
-
                     {/* Divider line before auth controls */}
-                    <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 mx-1 hidden sm:block"></div>
+                    <div className="h-6 w-px bg-blue-300/60 mx-1 hidden sm:block"></div>
 
                     {isAuthenticated ? (
                         <>
                             {/* Navigation Links Group */}
                             <div className="flex space-x-1 md:space-x-2">
                                 {location.pathname !== '/dashboard' && (
-                                    <Link to="/dashboard" className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition-all duration-200 hover:bg-indigo-50 hover:text-indigo-600 dark:text-slate-300 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-400 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+                                    <Link to="/dashboard" className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-blue-50 transition-all duration-200 hover:bg-blue-100/20 hover:text-white outline-none focus-visible:ring-2 focus-visible:ring-blue-200">
                                         <LayoutDashboard className="h-4 w-4" />
                                         <span className="hidden md:inline">Dashboard</span>
                                     </Link>
                                 )}
 
                                 {location.pathname !== '/profile' && (
-                                    <Link to="/profile" className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition-all duration-200 hover:bg-indigo-50 hover:text-indigo-600 dark:text-slate-300 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-400 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+                                    <Link to="/profile" className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-blue-50 transition-all duration-200 hover:bg-blue-100/20 hover:text-white outline-none focus-visible:ring-2 focus-visible:ring-blue-200">
                                         <User className="h-4 w-4" />
                                         <span className="hidden md:inline">Profile</span>
                                     </Link>
                                 )}
 
                                 {user?.role === 'Faculty Coordinator' && location.pathname !== '/scheduler' && (
-                                    <Link to="/scheduler" className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition-all duration-200 hover:bg-indigo-50 hover:text-indigo-600 dark:text-slate-300 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-400 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+                                    <Link to="/scheduler" className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-blue-50 transition-all duration-200 hover:bg-blue-100/20 hover:text-white outline-none focus-visible:ring-2 focus-visible:ring-blue-200">
                                         <Calendar className="h-4 w-4" />
                                         <span className="hidden md:inline">Scheduler</span>
                                     </Link>
@@ -179,39 +168,39 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
                             </div>
 
                             {/* Divider line before avatar */}
-                            <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 mx-1 hidden sm:block"></div>
+                            <div className="h-6 w-px bg-blue-300/60 mx-1 hidden sm:block"></div>
 
                             {/* User Profile Info */}
                             <div className="hidden lg:flex flex-col items-end justify-center mr-2">
                                 {shouldShowName && (
-                                    <span className="text-sm font-bold text-slate-900 dark:text-white leading-tight">
+                                    <span className="text-sm font-bold text-white leading-tight">
                                         {displayName}
                                     </span>
                                 )}
-                                <span className="text-xs font-semibold tracking-wide text-indigo-600 dark:text-indigo-400 uppercase">
+                                <span className="text-xs font-semibold tracking-wide text-blue-100 uppercase">
                                     {displayRole}
                                 </span>
                             </div>
 
                             {/* User Avatar */}
-                            <Link to="/profile" className="relative group cursor-pointer transition-transform hover:scale-105 outline-none rounded-full focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900">
+                            <Link to="/profile" className="relative group cursor-pointer transition-transform hover:scale-105 outline-none rounded-full focus-visible:ring-2 focus-visible:ring-blue-200 focus-visible:ring-offset-2">
                                 {profilePhoto ? (
                                     <img
                                         src={profilePhoto}
                                         alt="Profile"
-                                        className="h-10 w-10 rounded-full border-2 border-indigo-100 dark:border-indigo-900 object-cover shadow-sm group-hover:border-indigo-400 dark:group-hover:border-indigo-500 transition-colors"
+                                        className="h-10 w-10 rounded-full border-2 border-blue-200 object-cover shadow-sm group-hover:border-blue-100 transition-colors"
                                     />
                                 ) : (
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-indigo-100 dark:border-indigo-900 bg-gradient-to-br from-indigo-500 to-purple-600 text-sm font-bold text-white shadow-sm group-hover:from-indigo-400 group-hover:to-purple-500 transition-all">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-blue-200 bg-gradient-to-br from-blue-500 to-blue-700 text-sm font-bold text-white shadow-sm group-hover:from-blue-400 group-hover:to-blue-600 transition-all">
                                         {(displayName || displayRole || 'U').trim().charAt(0).toUpperCase()}
                                     </div>
                                 )}
                             </Link>
 
                             {/* Logout Action */}
-                            <button 
+                            <button
                                 onClick={handleLogout} 
-                                className="group ml-1 flex items-center justify-center rounded-xl bg-rose-50 p-2 text-rose-600 transition-all duration-200 hover:bg-rose-100 hover:text-rose-700 dark:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500/20 dark:hover:text-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
+                                className="group ml-1 flex items-center justify-center rounded-xl bg-white/10 p-2 text-white transition-all duration-200 hover:bg-white/20 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:ring-offset-2"
                                 aria-label="Logout"
                                 title="Logout"
                             >
@@ -222,16 +211,23 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
                     ) : (
                         <>
                             {location.pathname !== '/' && (
-                                <Link to="/" className="flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-slate-600 transition-all duration-200 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+                                <Link to="/" className="flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-blue-50 transition-all duration-200 hover:bg-blue-100/20 hover:text-white outline-none focus-visible:ring-2 focus-visible:ring-blue-200">
                                     <Home className="h-4 w-4" />
                                     <span className="hidden sm:inline">Home</span>
                                 </Link>
                             )}
 
                             {location.pathname !== '/login' && (
-                                <Link to="/login" className="flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-200 transition-all duration-200 hover:-translate-y-0.5 hover:bg-indigo-500 hover:shadow-md hover:shadow-indigo-300 dark:shadow-none dark:hover:bg-indigo-500 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900">
-                                    <LogIn className="h-4 w-4" />
-                                    <span>Sign in</span>
+                                <Link
+                                    to="/login"
+                                    className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl border border-blue-100/80 bg-white px-4 py-2 text-sm font-bold text-blue-700 shadow-[0_8px_18px_rgba(15,23,42,0.18)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_24px_rgba(15,23,42,0.24)] hover:border-white outline-none focus-visible:ring-2 focus-visible:ring-blue-200 focus-visible:ring-offset-2"
+                                >
+                                    <span className="absolute inset-0 bg-gradient-to-r from-blue-50 via-white to-blue-100 opacity-0 transition-opacity duration-300 group-hover:opacity-100" aria-hidden />
+                                    <span className="absolute -left-12 top-0 h-full w-10 -skew-x-12 bg-white/70 blur-[1px] transition-transform duration-700 group-hover:translate-x-44" aria-hidden />
+                                    <span className="relative inline-flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-blue-800 text-white shadow-sm">
+                                        <LogIn className="h-3.5 w-3.5" />
+                                    </span>
+                                    <span className="relative tracking-wide">Sign in</span>
                                 </Link>
                             )}
                         </>
