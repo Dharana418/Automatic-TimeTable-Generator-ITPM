@@ -33,17 +33,29 @@ const SPECIALIZATION_CHIP_STYLE = 'border-slate-300 bg-white text-slate-700';
 
 const YEAR_OPTIONS = ['1', '2', '3', '4'];
 const SEMESTER_OPTIONS = ['1', '2'];
+const MODE_ORDER = { WD: 0, WE: 1 };
 
 const toUpper = (value = '') => String(value).trim().toUpperCase();
 const SUBGROUP_INPUT_PATTERN = /^(0?[1-2])?$/;
 const cleanTwoDigitGroupValue = (value = '') => String(value || '').replace(/[^0-9]/g, '').slice(0, 2);
 
-const getBatchMeta = (batchId = '') => {
-  const normalized = String(batchId).trim();
-  const match = normalized.match(/^Y(\d+)\.S(\d+)\./i);
+const parseBatchIdTokens = (batchId = '') => {
+  const [yearToken = '', semesterToken = '', modeToken = '', specializationToken = '', groupToken = '', subgroupToken = ''] = String(batchId)
+    .trim()
+    .split('.');
+
+  const year = Number(String(yearToken).replace(/[^0-9]/g, ''));
+  const semester = Number(String(semesterToken).replace(/[^0-9]/g, ''));
+  const group = Number(String(groupToken).replace(/[^0-9]/g, ''));
+  const subgroup = Number(String(subgroupToken).replace(/[^0-9]/g, ''));
+
   return {
-    year: match ? match[1] : '',
-    semester: match ? match[2] : '',
+    year: Number.isFinite(year) ? year : 0,
+    semester: Number.isFinite(semester) ? semester : 0,
+    mode: toUpper(modeToken),
+    specialization: normalizeSpecialization(specializationToken),
+    group: Number.isFinite(group) ? group : 0,
+    subgroup: Number.isFinite(subgroup) ? subgroup : 0,
   };
 };
 
@@ -60,15 +72,15 @@ const normalizeSpecialization = (raw = '') => {
 
 const normalizeBatch = (item) => {
   const id = String(item?.id || '').trim();
-  const meta = getBatchMeta(id);
-  const tokens = id.split('.');
+  const tokens = parseBatchIdTokens(id);
   return {
     id,
-    specialization: normalizeSpecialization(item?.department_id || inferSpecializationFromId(id)),
-    year: meta.year || '1',
-    semester: meta.semester || '1',
-    group: tokens[4] || '',
-    subgroup: tokens[5] || '',
+    mode: tokens.mode || 'WD',
+    specialization: normalizeSpecialization(item?.department_id || tokens.specialization || inferSpecializationFromId(id)),
+    year: String(tokens.year || 1),
+    semester: String(tokens.semester || 1),
+    group: tokens.group ? String(tokens.group).padStart(2, '0') : '',
+    subgroup: tokens.subgroup ? String(tokens.subgroup).padStart(2, '0') : '',
     capacity: Number(item?.capacity || 0),
   };
 };
@@ -110,6 +122,26 @@ const parseBatchIdentity = (batchId = '') => {
     scopeKey: [yearToken, semesterToken, toUpper(modeToken), toUpper(specializationToken), groupToken].join('.'),
     subgroup: subgroupToken,
   };
+};
+
+const compareBatchIds = (leftId = '', rightId = '') => {
+  const left = parseBatchIdTokens(leftId);
+  const right = parseBatchIdTokens(rightId);
+
+  if (left.year !== right.year) return left.year - right.year;
+  if (left.semester !== right.semester) return left.semester - right.semester;
+
+  const leftModeRank = MODE_ORDER[left.mode] ?? 99;
+  const rightModeRank = MODE_ORDER[right.mode] ?? 99;
+  if (leftModeRank !== rightModeRank) return leftModeRank - rightModeRank;
+
+  const specCompare = String(left.specialization).localeCompare(String(right.specialization));
+  if (specCompare !== 0) return specCompare;
+
+  if (left.group !== right.group) return left.group - right.group;
+  if (left.subgroup !== right.subgroup) return left.subgroup - right.subgroup;
+
+  return String(leftId).localeCompare(String(rightId));
 };
 
 const splitStudentsIntoSubgroupCapacities = (studentCount, maxCapacity = SUBGROUP_CAPACITY) => {
@@ -212,9 +244,9 @@ export default function BatchList({ initialQuery = '' }) {
     return [...batches]
       .filter((batch) => {
         if (!q) return true;
-        return (`${batch.id} ${batch.specialization} Y${batch.year} S${batch.semester}`).toLowerCase().includes(q);
+        return (`${batch.id} ${batch.specialization} Y${batch.year} S${batch.semester} ${batch.mode}`).toLowerCase().includes(q);
       })
-      .sort((a, b) => a.id.localeCompare(b.id));
+      .sort((a, b) => compareBatchIds(a.id, b.id));
   }, [batches, query]);
 
   const specializationCounts = useMemo(() => {
@@ -641,6 +673,7 @@ export default function BatchList({ initialQuery = '' }) {
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Specialization</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Year</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Semester</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Mode</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Group</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Subgroup</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Capacity</th>
@@ -654,6 +687,7 @@ export default function BatchList({ initialQuery = '' }) {
                 <td className="px-4 py-4 text-sm text-slate-700">{batch.specialization}</td>
                 <td className="px-4 py-4 text-sm text-slate-700">Y{batch.year}</td>
                 <td className="px-4 py-4 text-sm text-slate-700">S{batch.semester}</td>
+                <td className="px-4 py-4 text-sm text-slate-700">{batch.mode || '--'}</td>
                 <td className="px-4 py-4 text-sm text-slate-700">{batch.group || '--'}</td>
                 <td className="px-4 py-4 text-sm text-slate-700">{batch.subgroup || '--'}</td>
                 <td className="px-4 py-4 text-sm text-slate-700">{batch.capacity || '--'}</td>

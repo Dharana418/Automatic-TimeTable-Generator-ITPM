@@ -76,7 +76,7 @@ function App() {
   };
 
   const roleKey = normalizeRoleKey(user?.role);
-  const hasFixedSidebarOffset = false; // Disabled shifting since sidebar is under nav now
+  const hasFixedSidebarOffset = true;
 
   useEffect(() => {
     const fetchUser = async () => {
