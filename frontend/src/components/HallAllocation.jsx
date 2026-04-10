@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { motion as Motion } from 'framer-motion';
 import ToastMessage from './ToastMessage.jsx';
 import HallResourcesPanel from './HallResourcesPanel.jsx';
 import HallRatingsPanel from './HallRatingsPanel.jsx';
@@ -19,6 +20,26 @@ const AMENITIES = [
 const HALL_ID_REGEX = /^[A-Za-z0-9][A-Za-z0-9_-]{1,39}$/;
 const HALL_TEXT_REGEX = /^[A-Za-z0-9][A-Za-z0-9 .,&()/-]{1,79}$/;
 const FLOOR_REGEX = /^[A-Za-z0-9][A-Za-z0-9 .,&()/-]{0,28}$/;
+
+const getPrimaryFloatingButtonMotion = (delay = 0) => ({
+  animate: {
+    y: [0, -6, 0],
+    boxShadow: [
+      '0 8px 18px rgba(14, 116, 144, 0.22)',
+      '0 14px 28px rgba(14, 116, 144, 0.32)',
+      '0 8px 18px rgba(14, 116, 144, 0.22)',
+    ],
+  },
+  transition: {
+    duration: 2.2,
+    repeat: Infinity,
+    repeatType: 'loop',
+    ease: 'easeInOut',
+    delay,
+  },
+  whileHover: { y: -10, scale: 1.05 },
+  whileTap: { y: -2, scale: 0.96 },
+});
 
 const normalizeHallForm = (form) => ({
   hallId: String(form.hallId || '').trim(),
@@ -761,10 +782,12 @@ const HallAllocation = ({ apiBase }) => {
             type="button"
             className="dashboard-btn hall-primary-btn flex-1 sm:flex-none"
             onClick={() => setShowRecommendationsModal(true)}
+            style={{ willChange: 'transform' }}
+            {...getPrimaryFloatingButtonMotion(0)}
           >
              Get Recommendations
-          </button>
-          <button
+          </Motion.button>
+          <Motion.button
             type="button"
             className="dashboard-btn hall-primary-btn flex-1 sm:flex-none"
             onClick={() => {
@@ -782,6 +805,8 @@ const HallAllocation = ({ apiBase }) => {
               setHallError('');
               setShowAddHallModal(true);
             }}
+            style={{ willChange: 'transform' }}
+            {...getPrimaryFloatingButtonMotion(0.3)}
           >
             + Add Hall
           </button>
