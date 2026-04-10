@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import autoschedule from '../assets/SLIIT_LOGO.png';
-import { LogOut, LayoutDashboard, User, Calendar, LogIn, Home } from 'lucide-react';
+import { LogOut, LayoutDashboard, User, Calendar, LogIn, Home, Clock3, GraduationCap } from 'lucide-react';
 
 const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", hasFixedSidebarOffset = false }) => {
     const location = useLocation();
@@ -119,11 +119,12 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
         || location.pathname.startsWith('/faculty')
         || location.pathname.startsWith('/scheduler')
         || location.pathname.startsWith('/academic')
+        || location.pathname.startsWith('/admin')
     );
 
     return (
-        <nav className={`sticky top-0 z-50 border-b border-blue-300 bg-gradient-to-r from-blue-800 via-blue-700 to-blue-900 text-white shadow-md ${shouldOffsetForSidebar ? 'lg:pl-[284px]' : ''}`}>
-            <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <nav className={`sticky top-0 z-50 border-b border-slate-700/70 bg-gradient-to-r from-slate-950 via-slate-900 to-blue-950 text-white shadow-[0_10px_30px_rgba(2,6,23,0.45)] ${shouldOffsetForSidebar ? 'lg:pl-[260px]' : ''}`}>
+            <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between px-4 py-2 sm:px-6 lg:px-8">
                 {/* Brand / Logo Area */}
                 <Link to="/" className="group flex items-center gap-3 no-underline transition-transform hover:scale-105 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-lg">
                     <img 
@@ -131,15 +132,26 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
                         alt="SLIIT Logo" 
                         className="h-10 w-auto object-contain drop-shadow-sm transition-all duration-300 group-hover:brightness-110" 
                     />
-                    <h2 className="hidden m-0 text-xl font-extrabold tracking-tight sm:block text-white">
-                        SLIIT Scheduler
-                    </h2>
+                    <div className="hidden sm:flex sm:flex-col">
+                        <h2 className="m-0 text-xl font-extrabold tracking-tight text-white">
+                            SLIIT Scheduler
+                        </h2>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold tracking-wide text-cyan-200/95">
+                            <GraduationCap className="h-3.5 w-3.5" />
+                            Academic Timetable Intelligence
+                        </span>
+                    </div>
                 </Link>
 
                 {/* Navigation and Settings Area */}
                 <div className="flex items-center space-x-1 sm:space-x-3">
                     {/* Divider line before auth controls */}
-                    <div className="h-6 w-px bg-blue-300/60 mx-1 hidden sm:block"></div>
+                    <div className="h-6 w-px bg-slate-500/60 mx-1 hidden sm:block"></div>
+
+                    <span className="hidden md:inline-flex items-center gap-1 rounded-full border border-cyan-300/50 bg-cyan-300/10 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-cyan-100">
+                        <Clock3 className="h-3.5 w-3.5" />
+                        Live Planner
+                    </span>
 
                     {isAuthenticated ? (
                         <>
@@ -168,7 +180,7 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
                             </div>
 
                             {/* Divider line before avatar */}
-                            <div className="h-6 w-px bg-blue-300/60 mx-1 hidden sm:block"></div>
+                            <div className="h-6 w-px bg-slate-500/60 mx-1 hidden sm:block"></div>
 
                             {/* User Profile Info */}
                             <div className="hidden lg:flex flex-col items-end justify-center mr-2">

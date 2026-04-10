@@ -247,12 +247,51 @@ const buildDemoModules = () => {
     return rows;
 };
 
-const createBatchRow = ({ year, semester, mode, specialization, capacity }) => ({
-    id: `Y${year}.S${semester}.${String(mode || 'WD').trim().toUpperCase()}.${specialization}.01.01`,
-    name: `Y${year}.S${semester}.${String(mode || 'WD').trim().toUpperCase()}.${specialization}.01.01`,
-    department_id: `dept_${toSpecializationKey(specialization)}`,
-    capacity,
-});
+const SUBGROUP_MAX_CAPACITY = 60;
+
+const createBatchRow = ({ year, semester, mode, specialization, group, subgroup, capacity }) => {
+    const groupToken = String(group).padStart(2, '0');
+    const subgroupToken = String(subgroup).padStart(2, '0');
+    const id = `Y${year}.S${semester}.${String(mode || 'WD').trim().toUpperCase()}.${specialization}.${groupToken}.${subgroupToken}`;
+
+    return {
+        id,
+        name: id,
+        department_id: `dept_${toSpecializationKey(specialization)}`,
+        capacity,
+    };
+};
+
+const generateBatchRowsFromStudentCount = ({ year, semester, mode, specialization, studentCount }) => {
+    const rows = [];
+    let remaining = Number(studentCount || 0);
+    let group = 1;
+    let subgroup = 1;
+
+    while (remaining > 0) {
+        const capacity = Math.min(SUBGROUP_MAX_CAPACITY, remaining);
+        rows.push(
+            createBatchRow({
+                year,
+                semester,
+                mode,
+                specialization,
+                group,
+                subgroup,
+                capacity,
+            })
+        );
+
+        remaining -= capacity;
+        subgroup += 1;
+        if (subgroup > 2) {
+            subgroup = 1;
+            group += 1;
+        }
+    }
+
+    return rows;
+};
 
 const buildDemoBatches = () => {
     const rows = [];
@@ -296,13 +335,15 @@ const buildDemoBatches = () => {
         for (const semester of [1, 2]) {
             const mode = semester === 1 ? 'WD' : 'WE';
             for (const plan of yearlyPlan[year]) {
-                rows.push(createBatchRow({
-                    year,
-                    semester,
-                    mode,
-                    specialization: plan.specialization,
-                    capacity: plan.capacity,
-                }));
+                rows.push(
+                    ...generateBatchRowsFromStudentCount({
+                        year,
+                        semester,
+                        mode,
+                        specialization: plan.specialization,
+                        studentCount: plan.capacity,
+                    })
+                );
             }
         }
     }
