@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import schedulerApi from '../api/scheduler';
 
 const SmartRecommendationsPanel = ({ apiBase }) => {
   const [moduleId, setModuleId] = useState('');
   const [batchSize, setBatchSize] = useState('');
   const [requiredResources, setRequiredResources] = useState('');
+  const [modules, setModules] = useState([]);
+  const [loadingModules, setLoadingModules] = useState(false);
   const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
@@ -14,11 +17,73 @@ const SmartRecommendationsPanel = ({ apiBase }) => {
     'wifi',
     'ac',
     'lab_equipment',
+    'accessibility',
     'whiteboard',
-    'sound_system',
-    'computers',
-    'microscopes'
+    'sound_system'
   ];
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadModules = async () => {
+      try {
+        setLoadingModules(true);
+        const response = await schedulerApi.listItems('modules');
+        const list = Array.isArray(response?.items) ? response.items : [];
+        if (isMounted) {
+          setModules(list);
+        }
+      } catch (error) {
+        console.error('Error loading modules for recommendations:', error);
+        if (isMounted) {
+          setToast({ message: 'Failed to load modules list', type: 'error' });
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingModules(false);
+        }
+      }
+    };
+
+    loadModules();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const selectedModule = useMemo(
+    () => modules.find((item) => String(item?.id || '') === String(moduleId || '')) || null,
+    [modules, moduleId]
+  );
+
+  const moduleOptions = useMemo(() => {
+    return modules
+      .map((item) => {
+        const id = String(item?.id || '').trim();
+        if (!id) return null;
+        const code = String(item?.code || item?.module_code || '').trim();
+        const name = String(item?.name || item?.module_name || '').trim();
+        const batch = Number(item?.batch_size);
+        const batchLabel = Number.isFinite(batch) && batch > 0 ? ` | Batch ${batch}` : '';
+        const labelMain = [code, name].filter(Boolean).join(' - ');
+        const label = `${labelMain || id}${batchLabel}`;
+
+        return { value: id, label };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [modules]);
+
+  const handleModuleChange = (nextModuleId) => {
+    setModuleId(nextModuleId);
+
+    const picked = modules.find((item) => String(item?.id || '') === String(nextModuleId || ''));
+    const inferredBatch = Number(picked?.batch_size);
+    if (Number.isInteger(inferredBatch) && inferredBatch > 0) {
+      setBatchSize(String(inferredBatch));
+    }
+  };
 
   const handleGetRecommendations = async (e) => {
     e.preventDefault();
@@ -78,10 +143,10 @@ const SmartRecommendationsPanel = ({ apiBase }) => {
   };
 
   const getSuitabilityLabel = (score) => {
-    if (score >= 90) return { label: 'Excellent', color: 'text-green-600' };
-    if (score >= 75) return { label: 'Very Good', color: 'text-blue-600' };
-    if (score >= 60) return { label: 'Good', color: 'text-yellow-600' };
-    return { label: 'Fair', color: 'text-orange-600' };
+    if (score >= 90) return { label: 'Excellent', color: 'text-emerald-300' };
+    if (score >= 75) return { label: 'Very Good', color: 'text-cyan-300' };
+    if (score >= 60) return { label: 'Good', color: 'text-amber-300' };
+    return { label: 'Fair', color: 'text-orange-300' };
   };
 
   const toggleResource = (resource) => {
@@ -98,46 +163,58 @@ const SmartRecommendationsPanel = ({ apiBase }) => {
   };
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 mt-4">
+    <div className="mt-4 rounded-2xl border border-slate-700 bg-slate-900/95 p-4 text-slate-100 shadow-[0_14px_30px_rgba(2,6,23,0.45)]">
       <div className="mb-3">
-        <h4 className="font-semibold text-slate-800">🎯 Smart Hall Recommendations</h4>
-        <p className="text-xs text-slate-600 mt-1">Get personalized hall suggestions based on class size and equipment needs</p>
+        <h4 className="font-semibold text-cyan-100">🎯 Smart Hall Recommendations</h4>
+        <p className="mt-1 text-xs text-slate-300">Get personalized hall suggestions based on class size and equipment needs</p>
       </div>
 
       {toast && (
-        <div className={`mb-3 p-2 rounded text-sm ${toast.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+        <div className={`mb-3 rounded border p-2 text-sm ${toast.type === 'success' ? 'border-emerald-500/60 bg-emerald-950/70 text-emerald-200' : 'border-rose-500/60 bg-rose-950/70 text-rose-200'}`}>
           {toast.message}
         </div>
       )}
 
-      <form onSubmit={handleGetRecommendations} className="space-y-3 mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+      <form onSubmit={handleGetRecommendations} className="mb-4 space-y-3 rounded-xl border border-slate-700 bg-slate-950/70 p-3">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label className="text-xs font-medium">Module ID *</label>
-            <input
-              type="text"
+            <label className="text-xs font-medium text-slate-200">Module ID *</label>
+            <select
               value={moduleId}
-              onChange={(e) => setModuleId(e.target.value)}
-              placeholder="e.g., CS101"
-              className="w-full border rounded px-2 py-1.5 text-sm mt-1"
-            />
+              onChange={(e) => handleModuleChange(e.target.value)}
+              className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm text-slate-100"
+              disabled={loadingModules}
+              required
+            >
+              <option value="">{loadingModules ? 'Loading modules...' : 'Select a module'}</option>
+              {moduleOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            {selectedModule && (
+              <p className="mt-1 text-[11px] text-slate-400">
+                Selected: {selectedModule.code || selectedModule.module_code || selectedModule.id}
+              </p>
+            )}
           </div>
           <div>
-            <label className="text-xs font-medium">Batch Size *</label>
+            <label className="text-xs font-medium text-slate-200">Batch Size *</label>
             <input
               type="number"
               value={batchSize}
               onChange={(e) => setBatchSize(e.target.value)}
               placeholder="Number of students"
               min="1"
-              className="w-full border rounded px-2 py-1.5 text-sm mt-1"
+              className="mt-1 w-full rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm text-slate-100"
               required
             />
           </div>
         </div>
 
         <div>
-          <label className="text-xs font-medium mb-2 block">Required Equipment/Resources</label>
+          <label className="mb-2 block text-xs font-medium text-slate-200">Required Equipment/Resources</label>
           <div className="space-y-2">
             <div className="flex flex-wrap gap-2">
               {COMMON_RESOURCES.map(resource => {
@@ -153,8 +230,8 @@ const SmartRecommendationsPanel = ({ apiBase }) => {
                     onClick={() => toggleResource(resource)}
                     className={`px-3 py-1 rounded-full text-xs font-medium transition ${
                       isSelected
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-200 text-slate-800 hover:bg-slate-300'
+                        ? 'bg-cyan-600 text-white'
+                        : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
                     }`}
                   >
                     {resource.replace(/_/g, ' ')}
@@ -166,7 +243,7 @@ const SmartRecommendationsPanel = ({ apiBase }) => {
               value={requiredResources}
               onChange={(e) => setRequiredResources(e.target.value)}
               placeholder="Or enter comma-separated resources: projector, wifi, ac, lab_equipment"
-              className="w-full border rounded px-2 py-1.5 text-xs h-12 resize-none"
+              className="h-12 w-full resize-none rounded border border-slate-600 bg-slate-900 px-2 py-1.5 text-xs text-slate-100"
             />
           </div>
         </div>
@@ -174,7 +251,7 @@ const SmartRecommendationsPanel = ({ apiBase }) => {
         <button
           type="submit"
           disabled={loading}
-          className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:bg-gray-400"
+          className="w-full rounded-lg bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-500 disabled:bg-slate-700"
         >
           {loading ? 'Finding halls...' : '🔍 Get Recommendations'}
         </button>
@@ -182,17 +259,17 @@ const SmartRecommendationsPanel = ({ apiBase }) => {
 
       {showRecommendations && recommendations.length > 0 && (
         <div>
-          <h5 className="font-semibold text-slate-800 mb-3 text-sm">Recommended Halls</h5>
+          <h5 className="mb-3 text-sm font-semibold text-cyan-100">Recommended Halls</h5>
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {recommendations.map((rec, idx) => {
               const suitability = getSuitabilityLabel(rec.score);
               
               return (
-                <div key={`${rec.hallId}-${idx}`} className="p-3 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+                <div key={`${rec.hallId}-${idx}`} className="rounded-lg border border-slate-700 bg-gradient-to-r from-slate-900 to-slate-800 p-3">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
-                      <div className="font-semibold text-slate-800">{rec.hallName}</div>
-                      <div className="text-xs text-slate-600">Capacity: <span className="font-medium">{rec.capacity} students</span></div>
+                      <div className="font-semibold text-slate-100">{rec.hallName}</div>
+                      <div className="text-xs text-slate-300">Capacity: <span className="font-medium">{rec.capacity} students</span></div>
                     </div>
                     <div className="text-right">
                       <div className={`text-3xl font-bold ${suitability.color}`}>{rec.score}</div>
@@ -202,10 +279,10 @@ const SmartRecommendationsPanel = ({ apiBase }) => {
 
                   {rec.matchingResources.length > 0 && (
                     <div className="mb-2">
-                      <div className="text-xs font-medium text-green-700 mb-1">✓ Available:</div>
+                      <div className="mb-1 text-xs font-medium text-emerald-300">✓ Available:</div>
                       <div className="flex flex-wrap gap-1">
                         {rec.matchingResources.map(res => (
-                          <span key={res} className="inline-block px-2 py-0.5 bg-green-200 text-green-800 text-xs rounded">
+                          <span key={res} className="inline-block rounded border border-emerald-500/60 bg-emerald-950/60 px-2 py-0.5 text-xs text-emerald-200">
                             {res}
                           </span>
                         ))}
@@ -215,10 +292,10 @@ const SmartRecommendationsPanel = ({ apiBase }) => {
 
                   {rec.missingResources.length > 0 && (
                     <div>
-                      <div className="text-xs font-medium text-orange-700 mb-1">✗ Missing:</div>
+                      <div className="mb-1 text-xs font-medium text-amber-300">✗ Missing:</div>
                       <div className="flex flex-wrap gap-1">
                         {rec.missingResources.map(res => (
-                          <span key={res} className="inline-block px-2 py-0.5 bg-orange-200 text-orange-800 text-xs rounded">
+                          <span key={res} className="inline-block rounded border border-amber-500/60 bg-amber-950/60 px-2 py-0.5 text-xs text-amber-200">
                             {res}
                           </span>
                         ))}
@@ -226,7 +303,7 @@ const SmartRecommendationsPanel = ({ apiBase }) => {
                     </div>
                   )}
 
-                  <div className="mt-2 text-xs text-slate-600">
+                  <div className="mt-2 text-xs text-slate-300">
                     <span>📦 {rec.totalResources} resources</span>
                     {' • '}
                     <span>✨ {rec.goodConditionResources} in good condition</span>
@@ -239,7 +316,7 @@ const SmartRecommendationsPanel = ({ apiBase }) => {
       )}
 
       {showRecommendations && recommendations.length === 0 && (
-        <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
+        <div className="rounded-lg border border-amber-500/60 bg-amber-950/60 p-3 text-xs text-amber-200">
           No halls found matching your criteria. Try increasing batch size tolerance or reducing resource requirements.
         </div>
       )}
