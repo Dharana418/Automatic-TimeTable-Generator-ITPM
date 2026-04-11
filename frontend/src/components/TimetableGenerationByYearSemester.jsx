@@ -7,6 +7,9 @@ import {
   FileCheck2,
   AlertCircle,
   CheckCircle2,
+  BookOpen,
+  Users,
+  Layers,
 } from 'lucide-react';
 
 import {
@@ -72,9 +75,66 @@ const inferSpecializationFromModule = (module = {}) => {
   return 'General';
 };
 
+const extractSpecializationFromBatch = (batch = {}) => {
+  if (!batch) return 'IT';
+  
+  // 1. Try to get specialization directly from batch object
+  if (batch.specialization && typeof batch.specialization === 'string') {
+    const spec = String(batch.specialization).trim().toUpperCase();
+    if (spec && spec.length > 0 && spec !== 'IT') {
+      return spec;
+    }
+  }
+  
+  // 2. Try to extract from batch ID (format: Y1.S1.WD.IT.01.01)
+  if (batch.id) {
+    const batchId = String(batch.id || '').trim();
+    if (batchId.includes('.')) {
+      const tokens = batchId.split('.');
+      console.log(`Parsing batch ID: ${batchId}, tokens:`, tokens);
+      
+      if (tokens.length >= 4) {
+        const spec = tokens[3].trim().toUpperCase();
+        if (spec && spec.length > 0) {
+          return spec;
+        }
+      }
+    }
+  }
+  
+  // 3. Try department_id field
+  if (batch.department_id && typeof batch.department_id === 'string') {
+    const spec = String(batch.department_id).trim().toUpperCase();
+    if (spec && spec.length > 0) {
+      return spec;
+    }
+  }
+  
+  // 4. Try department field
+  if (batch.department && typeof batch.department === 'string') {
+    const spec = String(batch.department).trim().toUpperCase();
+    if (spec && spec.length > 0) {
+      return spec;
+    }
+  }
+  
+  // Default fallback
+  return 'IT';
+};
+
 /* ---------------- CONSTANTS ---------------- */
 
 const DEFAULT_SPECIALIZATIONS = ['SE', 'IT', 'CS', 'General'];
+const SPECIALIZATIONS_LIST = [
+  { key: 'IT', label: 'IT' },
+  { key: 'SE', label: 'SE' },
+  { key: 'DS', label: 'DS' },
+  { key: 'ISE', label: 'ISE' },
+  { key: 'CS', label: 'CS' },
+  { key: 'IM', label: 'IM' },
+  { key: 'CN', label: 'CN' },
+  { key: 'CYBER SECURITY', label: 'Cyber Security' },
+];
 const WEEKDAY_FREE_DAY_OPTIONS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const MODULE_LIMIT_PER_SPECIALIZATION = 5;
 
@@ -89,6 +149,16 @@ const TimetableGenerationByYearSemester = () => {
   const [algorithms, setAlgorithms] = useState(['hybrid']);
   const [timetableName, setTimetableName] = useState('');
 
+  // New state for specialization, group, and sub-group
+  const [specializations, setSpecializations] = useState([]);
+  const [selectedSpecialization, setSelectedSpecialization] = useState('');
+  const [groups, setGroups] = useState([]);
+  const [selectedGroup, setSelectedGroup] = useState('');
+  const [subGroups, setSubGroups] = useState([]);
+  const [selectedSubGroup, setSelectedSubGroup] = useState('');
+  const [batches, setBatches] = useState([]);
+  const [selectedBatch, setSelectedBatch] = useState('');
+
   const [generatedTimetable, setGeneratedTimetable] = useState(null);
   const [existingTimetables, setExistingTimetables] = useState([]);
 
@@ -96,6 +166,7 @@ const TimetableGenerationByYearSemester = () => {
 
   const [loading, setLoading] = useState(false);
   const [loadingModules, setLoadingModules] = useState(false);
+  const [loadingBatches, setLoadingBatches] = useState(false);
 
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -145,9 +216,117 @@ const TimetableGenerationByYearSemester = () => {
     setExistingTimetables(res.data || []);
   }, [selectedYear, selectedSemester]);
 
+  const fetchBatches = useCallback(async () => {
+    try {
+      setLoadingBatches(true);
+      setError(null);
+      
+      console.log('Fetching batches...');
+      const res = await listItems('batches');
+      let batchList = res.data || [];
+      
+      console.log('Raw batch data:', batchList);
+      console.log('Batch count:', batchList.length);
+      
+      // Set batches with complete data
+      setBatches(batchList);
+      
+      // Extract unique specializations from batches using the helper function
+      const specsSet = new Set();
+      
+      if (batchList.length > 0) {
+        // Extract from actual batch data
+        batchList.forEach(batch => {
+          const spec = extractSpecializationFromBatch(batch);
+          console.log(`Batch ${batch.id} -> Specialization: ${spec}`);
+          if (spec && spec !== 'IT') { // Avoid duplicates
+            specsSet.add(spec);
+          }
+        });
+      }
+      
+      // Always include the predefined specializations as fallback/default
+      SPECIALIZATIONS_LIST.forEach(spec => {
+        specsSet.add(spec.key);
+      });
+      
+      const uniqueSpecs = Array.from(specsSet)
+        .filter(Boolean)
+        .sort();
+      
+      console.log('Final specializations:', uniqueSpecs);
+      
+      setSpecializations(uniqueSpecs);
+      
+      if (uniqueSpecs.length === 0) {
+        setError('No specializations available');
+      }
+    } catch (err) {
+      console.error('Batch fetch error:', err);
+      // Fallback: use default specializations
+      setSpecializations(SPECIALIZATIONS_LIST.map(s => s.key));
+      setError('Could not fetch batches - using defaults');
+    } finally {
+      setLoadingBatches(false);
+    }
+  }, []);
+
+  const handleSpecializationChange = (spec) => {
+    setSelectedSpecialization(spec);
+    setSelectedGroup('');
+    setSelectedSubGroup('');
+    
+    // Filter groups from batches for this specialization
+    const filteredBatches = batches.filter(b => {
+      const batchSpec = extractSpecializationFromBatch(b);
+      return batchSpec === spec;
+    });
+    
+    const groupsSet = new Set();
+    filteredBatches.forEach(b => {
+      const tokens = String(b.id || '').split('.');
+      if (tokens.length >= 5) {
+        const grp = tokens[4];
+        if (grp) groupsSet.add(grp);
+      }
+    });
+    
+    const uniqueGroups = Array.from(groupsSet).sort();
+    console.log(`Groups for ${spec}:`, uniqueGroups);
+    setGroups(uniqueGroups);
+    setSubGroups([]);
+  };
+
+  const handleGroupChange = (grp) => {
+    setSelectedGroup(grp);
+    setSelectedSubGroup('');
+    
+    // Filter sub-groups from batches for this specialization + group
+    const filteredBatches = batches.filter(b => {
+      const batchSpec = extractSpecializationFromBatch(b);
+      const tokens = String(b.id || '').split('.');
+      const batchGroup = tokens.length >= 5 ? tokens[4] : '';
+      return batchSpec === selectedSpecialization && batchGroup === grp;
+    });
+    
+    const subGroupsSet = new Set();
+    filteredBatches.forEach(b => {
+      const tokens = String(b.id || '').split('.');
+      if (tokens.length >= 6) {
+        const subGrp = tokens[5];
+        if (subGrp) subGroupsSet.add(subGrp);
+      }
+    });
+    
+    const uniqueSubGroups = Array.from(subGroupsSet).sort();
+    console.log(`Sub-groups for ${selectedSpecialization}/${grp}:`, uniqueSubGroups);
+    setSubGroups(uniqueSubGroups);
+  };
+
   useEffect(() => {
     fetchAcademicYears();
-  }, [fetchAcademicYears]);
+    fetchBatches();
+  }, [fetchAcademicYears, fetchBatches]);
 
   useEffect(() => {
     fetchModules();
@@ -159,7 +338,7 @@ const TimetableGenerationByYearSemester = () => {
   const handleGenerate = async (e) => {
     e.preventDefault();
 
-    if (!selectedYear || !selectedSemester || !timetableName) {
+    if (!selectedYear || !selectedSemester || !timetableName || !selectedSpecialization || !selectedGroup || !selectedSubGroup || !selectedBatch) {
       setError('Fill all required fields');
       return;
     }
@@ -174,6 +353,10 @@ const TimetableGenerationByYearSemester = () => {
           algorithms,
           timetableName,
           weekdayFreeDay,
+          specialization: selectedSpecialization,
+          group: selectedGroup,
+          subgroup: selectedSubGroup,
+          batchId: selectedBatch,
         }
       );
 
@@ -216,6 +399,18 @@ const TimetableGenerationByYearSemester = () => {
         </div>
       )}
 
+      {/* DEBUG PANEL */}
+      <div className="mb-6 rounded-2xl border border-slate-300 bg-slate-100 p-4">
+        <div className="text-xs font-mono text-slate-700">
+          <div className="mb-2 font-bold">Debug Info:</div>
+          <div>Status: {loadingBatches ? '🔄 Loading...' : '✓ Ready'}</div>
+          <div>Specializations loaded: {specializations.length}</div>
+          <div>Selected specialization: {selectedSpecialization || '(none)'}</div>
+          <div>Available: {specializations.join(', ') || 'None'}</div>
+          {batches.length > 0 && <div>Batches fetched: {batches.length}</div>}
+        </div>
+      </div>
+
       {/* FORM SECTION */}
       <form onSubmit={handleGenerate} className="">
         <div className="mb-8">
@@ -255,6 +450,106 @@ const TimetableGenerationByYearSemester = () => {
                 <option value="">Select Semester</option>
                 <option value="1">Semester 1</option>
                 <option value="2">Semester 2</option>
+              </select>
+            </div>
+
+            {/* SPECIALIZATION SELECT */}
+            <div className="w-full">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">
+                <BookOpen size={16} className="inline mr-2" /> Specialization
+              </label>
+              <select
+                value={selectedSpecialization}
+                onChange={(e) => handleSpecializationChange(e.target.value)}
+                disabled={loadingBatches}
+                className="w-full rounded-xl border-2 border-indigo-200 bg-gradient-to-br from-indigo-50 to-purple-50 px-4 py-3 font-semibold text-slate-900 shadow-md transition-all duration-200 hover:border-indigo-300 hover:shadow-lg focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-300/50 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <option value="">
+                  {loadingBatches ? 'Loading specializations...' : specializations.length === 0 ? 'No specializations available' : 'Select Specialization'}
+                </option>
+                {specializations.map((spec) => (
+                  <option key={spec} value={spec}>
+                    {spec}
+                  </option>
+                ))}
+              </select>
+              {specializations.length === 0 && !loadingBatches && (
+                <p className="text-xs text-amber-600 mt-2 font-medium">
+                  ⚠️ Using default specializations. Check console for batch fetch details.
+                </p>
+              )}
+            </div>
+
+            {/* GROUP SELECT */}
+            <div className="w-full">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">
+                <Users size={16} className="inline mr-2" /> Group
+              </label>
+              <select
+                value={selectedGroup}
+                onChange={(e) => handleGroupChange(e.target.value)}
+                disabled={!selectedSpecialization}
+                className="w-full rounded-xl border-2 border-rose-200 bg-gradient-to-br from-rose-50 to-pink-50 px-4 py-3 font-semibold text-slate-900 shadow-md transition-all duration-200 hover:border-rose-300 hover:shadow-lg focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-300/50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="">{selectedSpecialization ? 'Select Group' : 'Select Specialization First'}</option>
+                {groups.map((group) => (
+                  <option key={group} value={group}>
+                    {group}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* SUB-GROUP SELECT */}
+            <div className="w-full">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">
+                <Layers size={16} className="inline mr-2" /> Sub-Group
+              </label>
+              <select
+                value={selectedSubGroup}
+                onChange={(e) => setSelectedSubGroup(e.target.value)}
+                disabled={!selectedGroup}
+                className="w-full rounded-xl border-2 border-cyan-200 bg-gradient-to-br from-cyan-50 to-blue-50 px-4 py-3 font-semibold text-slate-900 shadow-md transition-all duration-200 hover:border-cyan-300 hover:shadow-lg focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-300/50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="">{selectedGroup ? 'Select Sub-Group' : 'Select Group First'}</option>
+                {subGroups.map((subgroup) => (
+                  <option key={subgroup} value={subgroup}>
+                    {subgroup}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* BATCH SELECT */}
+            <div className="w-full">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">
+                <GraduationCap size={16} className="inline mr-2" /> Batch
+              </label>
+              <select
+                value={selectedBatch}
+                onChange={(e) => setSelectedBatch(e.target.value)}
+                disabled={!selectedSubGroup}
+                className="w-full rounded-xl border-2 border-teal-200 bg-gradient-to-br from-teal-50 to-cyan-50 px-4 py-3 font-semibold text-slate-900 shadow-md transition-all duration-200 hover:border-teal-300 hover:shadow-lg focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-300/50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="">{selectedSubGroup ? 'Select Batch' : 'Select Sub-Group First'}</option>
+                {batches
+                  .filter(b => {
+                    const batchSpec = extractSpecializationFromBatch(b);
+                    const tokens = String(b.id || '').split('.');
+                    const batchGroup = tokens.length >= 5 ? tokens[4] : '';
+                    const batchSubGroup = tokens.length >= 6 ? tokens[5] : '';
+                    
+                    return (
+                      batchSpec === selectedSpecialization && 
+                      batchGroup === selectedGroup && 
+                      batchSubGroup === selectedSubGroup
+                    );
+                  })
+                  .map((batch) => (
+                    <option key={batch.id} value={batch.id}>
+                      {batch.name || batch.id}
+                    </option>
+                  ))}
               </select>
             </div>
 
@@ -300,6 +595,51 @@ const TimetableGenerationByYearSemester = () => {
               </button>
             </div>
           </div>
+
+          {/* SELECTION SUMMARY */}
+          {(selectedYear || selectedSemester || selectedSpecialization || selectedGroup || selectedSubGroup) && (
+            <div className="rounded-2xl border-2 border-blue-300 bg-gradient-to-r from-blue-50 to-indigo-50 p-5 mb-6">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-blue-900 mb-4">Your Selection</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                {selectedYear && (
+                  <div className="rounded-lg bg-white/70 px-3 py-2 backdrop-blur-sm">
+                    <p className="text-xs font-semibold text-slate-600">Year</p>
+                    <p className="text-sm font-bold text-slate-900">{selectedYear}</p>
+                  </div>
+                )}
+                {selectedSemester && (
+                  <div className="rounded-lg bg-white/70 px-3 py-2 backdrop-blur-sm">
+                    <p className="text-xs font-semibold text-slate-600">Semester</p>
+                    <p className="text-sm font-bold text-slate-900">Sem {selectedSemester}</p>
+                  </div>
+                )}
+                {selectedSpecialization && (
+                  <div className="rounded-lg bg-white/70 px-3 py-2 backdrop-blur-sm">
+                    <p className="text-xs font-semibold text-slate-600">Specialization</p>
+                    <p className="text-sm font-bold text-slate-900">{selectedSpecialization}</p>
+                  </div>
+                )}
+                {selectedGroup && (
+                  <div className="rounded-lg bg-white/70 px-3 py-2 backdrop-blur-sm">
+                    <p className="text-xs font-semibold text-slate-600">Group</p>
+                    <p className="text-sm font-bold text-slate-900">{selectedGroup}</p>
+                  </div>
+                )}
+                {selectedSubGroup && (
+                  <div className="rounded-lg bg-white/70 px-3 py-2 backdrop-blur-sm">
+                    <p className="text-xs font-semibold text-slate-600">Sub-Group</p>
+                    <p className="text-sm font-bold text-slate-900">{selectedSubGroup}</p>
+                  </div>
+                )}
+                {selectedBatch && (
+                  <div className="rounded-lg bg-white/70 px-3 py-2 backdrop-blur-sm">
+                    <p className="text-xs font-semibold text-slate-600">Batch</p>
+                    <p className="text-sm font-bold text-slate-900">{selectedBatch.slice(0, 8)}...</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* MODULES INFO */}
           {loadingModules && (
