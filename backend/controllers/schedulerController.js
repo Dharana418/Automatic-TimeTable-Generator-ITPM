@@ -2074,7 +2074,7 @@ export const runSchedulerForYearSemester = async (req, res) => {
     const rawModuleLimitPerSpecialization = Number(options.moduleLimitPerSpecialization || 0);
     const moduleLimitPerSpecialization = Number.isFinite(rawModuleLimitPerSpecialization) && rawModuleLimitPerSpecialization > 0
       ? Math.floor(rawModuleLimitPerSpecialization)
-      : null;
+      : 5;
 
     const yearNumber = Number(academicYear);
     const semesterNumber = Number(semester);
@@ -2163,10 +2163,14 @@ export const runSchedulerForYearSemester = async (req, res) => {
     // Load faculty soft constraints if user is faculty coordinator
     const mergedOptions = await withFacultySoftConstraints(req.user, {
       logicalScheduling: true,
-      enforceWeeklyLabAndTutorial: true,
+      fixedSessionBlueprint: true,
+      lectureSessionsPerWeek: 1,
+      labSessionsPerWeek: 1,
       lectureDurationHours: 3,
       labDurationHours: 2,
-      tutorialDurationHours: 1,
+      tutorialSessionsPerWeek: 0,
+      tutorialDurationHours: 0,
+      moduleLimitPerSpecialization,
       ...options,
     });
 
