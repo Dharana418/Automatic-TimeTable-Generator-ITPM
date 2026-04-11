@@ -294,6 +294,27 @@ const parseBatchSubgroupIdentity = (batchId = '') => {
   };
 };
 
+const parseBatchSchedulingScope = (batch = {}) => {
+  const source = String(batch?.id || batch?.name || '').trim();
+  const [yearToken = '', semesterToken = '', modeToken = '', specializationToken = '', groupToken = '', subgroupToken = ''] = source.split('.');
+
+  const year = Number(String(yearToken).replace(/[^0-9]/g, ''));
+  const semester = Number(String(semesterToken).replace(/[^0-9]/g, ''));
+
+  const specialization = normalizeSpecializationCode(specializationToken);
+  const group = String(groupToken || '').trim();
+  const subgroup = String(subgroupToken || '').trim();
+
+  return {
+    year: Number.isInteger(year) && year > 0 ? year : null,
+    semester: Number.isInteger(semester) && semester > 0 ? semester : null,
+    mode: String(modeToken || '').trim().toUpperCase(),
+    specialization,
+    group,
+    subgroup,
+  };
+};
+
 const validateBatchSubgroupRules = async ({ batchId, ignoreId = null }) => {
   const candidate = parseBatchSubgroupIdentity(batchId);
   if (!candidate) {
@@ -2048,10 +2069,41 @@ export const runSchedulerForYearSemester = async (req, res) => {
     const batches = batchesRes.rows;
 
     const requestedSpecialization = normalizeSpecializationCode(options.specialization || '');
+    const requestedGroup = String(options.group || '').trim();
+    const requestedSubgroup = String(options.subgroup || '').trim();
     const rawModuleLimitPerSpecialization = Number(options.moduleLimitPerSpecialization || 0);
     const moduleLimitPerSpecialization = Number.isFinite(rawModuleLimitPerSpecialization) && rawModuleLimitPerSpecialization > 0
       ? Math.floor(rawModuleLimitPerSpecialization)
       : null;
+
+    const yearNumber = Number(academicYear);
+    const semesterNumber = Number(semester);
+
+    const filteredBatches = batches.filter((batch) => {
+      const scope = parseBatchSchedulingScope(batch);
+
+      if (Number.isInteger(yearNumber) && yearNumber > 0 && scope.year && scope.year !== yearNumber) {
+        return false;
+      }
+
+      if (Number.isInteger(semesterNumber) && semesterNumber > 0 && scope.semester && scope.semester !== semesterNumber) {
+        return false;
+      }
+
+      if (requestedSpecialization && scope.specialization && scope.specialization !== requestedSpecialization) {
+        return false;
+      }
+
+      if (requestedGroup && scope.group && scope.group !== requestedGroup) {
+        return false;
+      }
+
+      if (requestedSubgroup && scope.subgroup && scope.subgroup !== requestedSubgroup) {
+        return false;
+      }
+
+      return true;
+    });
 
     const specializationFilteredModules = requestedSpecialization
       ? modules.filter((module) => normalizeSpecializationCode(inferModuleSpecialization(module)) === requestedSpecialization)
@@ -2096,6 +2148,14 @@ export const runSchedulerForYearSemester = async (req, res) => {
       });
     }
 
+    if (!filteredBatches.length) {
+      return res.status(400).json({
+        error: requestedSubgroup
+          ? `No batches found for academic year ${academicYear}, semester ${semester}, specialization ${requestedSpecialization || 'ALL'}, group ${requestedGroup || 'ALL'}, subgroup ${requestedSubgroup}.`
+          : `No batches found for academic year ${academicYear}, semester ${semester}, specialization ${requestedSpecialization || 'ALL'}, group ${requestedGroup || 'ALL'}.`,
+      });
+    }
+
     // Load and apply hall allocations
     const hallAllocationMap = await loadCoordinatorHallAllocationMap();
     const modulesWithAllocations = applyCoordinatorHallAllocations(filteredModules, hallAllocationMap);
@@ -2116,7 +2176,7 @@ export const runSchedulerForYearSemester = async (req, res) => {
       modules: modulesWithAllocations,
       lics,
       instructors,
-      batches,
+      batches: filteredBatches,
       options: mergedOptions,
     };
 
@@ -2133,11 +2193,15 @@ export const runSchedulerForYearSemester = async (req, res) => {
       data: {
         academicYear: String(academicYear),
         semester: String(semester),
+        specialization: requestedSpecialization || null,
+        group: requestedGroup || null,
+        subgroup: requestedSubgroup || null,
         generatedAt: new Date().toISOString(),
         algorithms: Array.isArray(algorithms) ? algorithms : [algorithms],
         hallAllocations: Object.fromEntries(hallAllocationMap),
         modulesCount: filteredModules.length,
         hallsCount: halls.length,
+        batchesCount: filteredBatches.length,
         schedule: results.gemini?.schedule || results.hybrid?.schedule || results.pso?.schedule || results.genetic?.schedule || results.ant?.schedule || results.tabu?.schedule || [],
         allResults: results,
       },
@@ -2172,10 +2236,14 @@ export const runSchedulerForYearSemester = async (req, res) => {
         created_at: savedTimetable.created_at,
       },
       summary: {
-        modulesScheduled: modules.length,
+        modulesScheduled: filteredModules.length,
         hallsUsed: halls.length,
+        batchesUsed: filteredBatches.length,
         academicYear,
         semester,
+        specialization: requestedSpecialization || null,
+        group: requestedGroup || null,
+        subgroup: requestedSubgroup || null,
         algorithmUsed: algorithms[0] || 'hybrid',
       },
       results,

@@ -167,6 +167,115 @@ function getModuleCohortKey(module = {}) {
   return `cohort:${specialization}:y${academicYear}:s${semester}:c${campus}`;
 }
 
+function normalizeSpecializationToken(value = '') {
+  const normalized = normalizeText(value).replace(/[^a-z0-9]/g, '');
+  const aliases = {
+    computerscience: 'cs',
+    informationsystemengineering: 'ise',
+    interactmedia: 'im',
+    interactivemedia: 'im',
+    cybersecurity: 'cybersecurity',
+  };
+
+  return aliases[normalized] || normalized;
+}
+
+function parseBatchIdentity(batchId = '') {
+  const [yearToken = '', semesterToken = '', modeToken = '', specializationToken = '', groupToken = '', subgroupToken = ''] = String(batchId)
+    .trim()
+    .split('.');
+
+  if (!yearToken || !semesterToken || !modeToken || !specializationToken || !groupToken || !subgroupToken) {
+    return null;
+  }
+
+  return {
+    year: Number(String(yearToken).replace(/[^0-9]/g, '')),
+    semester: Number(String(semesterToken).replace(/[^0-9]/g, '')),
+    mode: normalizeText(modeToken),
+    specialization: normalizeSpecializationToken(specializationToken),
+    group: String(groupToken).trim(),
+    subgroup: String(subgroupToken).trim(),
+  };
+}
+
+function inferModuleYear(module = {}) {
+  const details = module?.details || {};
+  const direct = Number(module?.academic_year || details?.academic_year || details?.year || 0);
+  if (direct >= 1 && direct <= 10) return direct;
+
+  const match = String(module?.code || '').toUpperCase().match(/^[A-Z]+(\d)/);
+  return match ? Number(match[1]) : null;
+}
+
+function inferModuleSemester(module = {}) {
+  const details = module?.details || {};
+  const direct = Number(module?.semester || details?.semester || details?.sem || 0);
+  if (direct === 1 || direct === 2) return direct;
+  return null;
+}
+
+function inferModuleSpecialization(module = {}) {
+  const details = module?.details || {};
+  const explicit =
+    details?.specialization ||
+    details?.spec ||
+    details?.stream ||
+    module?.specialization ||
+    module?.department ||
+    '';
+
+  const normalizedExplicit = normalizeSpecializationToken(explicit);
+  if (normalizedExplicit) return normalizedExplicit;
+
+  const code = String(module?.code || '').toLowerCase();
+  if (code.startsWith('it')) return 'it';
+  if (code.startsWith('se')) return 'se';
+  if (code.startsWith('ds')) return 'ds';
+  if (code.startsWith('is')) return 'ise';
+  if (code.startsWith('cs')) return 'cs';
+  if (code.startsWith('cn')) return 'cn';
+  if (code.startsWith('im') || code.startsWith('ie')) return 'im';
+  return '';
+}
+
+function getTargetBatchesForModule(module = {}, batches = []) {
+  const details = module?.details || {};
+  const explicitBatchIds = [
+    ...(Array.isArray(details.batch_ids) ? details.batch_ids : []),
+    ...(Array.isArray(details.batchIds) ? details.batchIds : []),
+    details.batch_id,
+    details.batchId,
+    module.batch_id,
+  ]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+
+  if (explicitBatchIds.length) {
+    const idSet = new Set(explicitBatchIds);
+    return batches.filter((batch) => idSet.has(String(batch?.id || '').trim()));
+  }
+
+  const moduleYear = inferModuleYear(module);
+  const moduleSemester = inferModuleSemester(module);
+  const moduleSpecialization = inferModuleSpecialization(module);
+  const dayType = normalizeText(module?.day_type || details?.day_type || 'weekday');
+
+  return batches.filter((batch) => {
+    const parsed = parseBatchIdentity(batch?.id || batch?.name || '');
+    if (!parsed) return false;
+
+    if (moduleYear && parsed.year && parsed.year !== moduleYear) return false;
+    if (moduleSemester && parsed.semester && parsed.semester !== moduleSemester) return false;
+    if (moduleSpecialization && parsed.specialization !== moduleSpecialization) return false;
+
+    if (dayType === 'weekend' && parsed.mode !== 'we') return false;
+    if ((dayType === 'weekday' || dayType === '') && parsed.mode !== 'wd') return false;
+
+    return true;
+  });
+}
+
 function parsePositiveInteger(value, fallback) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
@@ -394,21 +503,27 @@ export function buildProblem(constraints = {}, options = {}) {
   const sessions = [];
   modules.forEach((module) => {
     const components = getModuleSessionBlueprints(module, options);
+    const targetBatches = getTargetBatchesForModule(module, batches);
     let runningIndex = 0;
 
-    components.forEach((component) => {
-      for (let i = 0; i < component.count; i += 1) {
-        sessions.push({
-          module,
-          sessionType: component.type,
-          sessionIndex: runningIndex,
-          isLab: component.type === 'lab' || isLabModule(module),
-          durationSlots: component.type === 'lab' ? Math.max(2, component.durationSlots) : component.durationSlots,
-          expectedStudents: getModuleExpectedSize(module),
-          batchKeys: getModuleBatchKeys(module, batches),
-        });
-        runningIndex += 1;
-      }
+    const resolvedTargets = targetBatches.length ? targetBatches : [null];
+
+    resolvedTargets.forEach((targetBatch) => {
+      components.forEach((component) => {
+        for (let i = 0; i < component.count; i += 1) {
+          sessions.push({
+            module,
+            targetBatch,
+            sessionType: component.type,
+            sessionIndex: runningIndex,
+            isLab: component.type === 'lab' || isLabModule(module),
+            durationSlots: component.type === 'lab' ? Math.max(2, component.durationSlots) : component.durationSlots,
+            expectedStudents: Number(targetBatch?.capacity || getModuleExpectedSize(module)),
+            batchKeys: targetBatch?.id ? [String(targetBatch.id)] : getModuleBatchKeys(module, batches),
+          });
+          runningIndex += 1;
+        }
+      });
     });
   });
 
@@ -568,6 +683,8 @@ export function evaluateSolution(solution, problem, options = {}) {
       sessionType: session.sessionType || 'lecture',
       isLab: session.isLab,
       durationSlots: session.durationSlots,
+      batchId: session.targetBatch?.id || null,
+      batchName: session.targetBatch?.name || session.targetBatch?.id || null,
       instructorId: instructor ? (instructor.id || instructor._id || instructor.email || instructor.name) : null,
       instructorName: instructor?.name || null,
       hallId: hall?.id || hall?.name || null,

@@ -160,6 +160,34 @@ const parseSchedule = (timetable) => {
   return [];
 };
 
+const parseTimetableData = (rawData) => {
+  if (!rawData) return {};
+  if (typeof rawData === 'object') return rawData;
+
+  if (typeof rawData === 'string') {
+    try {
+      return JSON.parse(rawData);
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+};
+
+const extractTimetableMeta = (timetable = {}) => {
+  const data = parseTimetableData(timetable.data);
+  const year = String(timetable.year || data.academicYear || data.year || '').trim();
+  const semester = String(timetable.semester || data.semester || '').trim();
+  const specialization = String(data.specialization || 'ALL').trim() || 'ALL';
+
+  return {
+    year: year || 'ALL',
+    semester: semester || 'ALL',
+    specialization: specialization.toUpperCase(),
+  };
+};
+
 const buildBatchTable = (scheduleRows = []) => {
   const batchMap = new Map();
 
@@ -270,6 +298,9 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
   const [generateSemester, setGenerateSemester] = useState('1');
   const [generateName, setGenerateName] = useState('');
   const [generatePending, setGeneratePending] = useState(false);
+  const [filterYear, setFilterYear] = useState('ALL');
+  const [filterSemester, setFilterSemester] = useState('ALL');
+  const [filterSpecialization, setFilterSpecialization] = useState('ALL');
   const [dayModeFilter, setDayModeFilter] = useState('ALL');
   const [layoutMode, setLayoutMode] = useState('unified');
 
@@ -318,6 +349,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
         algorithms: ['hybrid'],
         options: {
           moduleLimitPerSpecialization: 5,
+          specialization: filterSpecialization !== 'ALL' ? filterSpecialization : undefined,
         },
         timetableName: name,
       });
@@ -341,10 +373,63 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
     }
   };
 
+  const yearOptions = useMemo(() => {
+    const values = [...new Set(timetables.map((tt) => extractTimetableMeta(tt).year).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    return ['ALL', ...values];
+  }, [timetables]);
+
+  const semesterOptions = useMemo(() => {
+    const scoped = timetables.filter((tt) => {
+      if (filterYear === 'ALL') return true;
+      return extractTimetableMeta(tt).year === filterYear;
+    });
+    const values = [...new Set(scoped.map((tt) => extractTimetableMeta(tt).semester).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    return ['ALL', ...values];
+  }, [timetables, filterYear]);
+
+  const specializationOptions = useMemo(() => {
+    const scoped = timetables.filter((tt) => {
+      const meta = extractTimetableMeta(tt);
+      if (filterYear !== 'ALL' && meta.year !== filterYear) return false;
+      if (filterSemester !== 'ALL' && meta.semester !== filterSemester) return false;
+      return true;
+    });
+    const values = [...new Set(scoped.map((tt) => extractTimetableMeta(tt).specialization).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    return ['ALL', ...values];
+  }, [timetables, filterYear, filterSemester]);
+
+  const filteredTimetables = useMemo(() => {
+    return timetables.filter((tt) => {
+      const meta = extractTimetableMeta(tt);
+      if (filterYear !== 'ALL' && meta.year !== filterYear) return false;
+      if (filterSemester !== 'ALL' && meta.semester !== filterSemester) return false;
+      if (filterSpecialization !== 'ALL' && meta.specialization !== filterSpecialization) return false;
+      return true;
+    });
+  }, [timetables, filterYear, filterSemester, filterSpecialization]);
+
+  useEffect(() => {
+    if (!yearOptions.includes(filterYear)) {
+      setFilterYear('ALL');
+    }
+  }, [yearOptions, filterYear]);
+
+  useEffect(() => {
+    if (!semesterOptions.includes(filterSemester)) {
+      setFilterSemester('ALL');
+    }
+  }, [semesterOptions, filterSemester]);
+
+  useEffect(() => {
+    if (!specializationOptions.includes(filterSpecialization)) {
+      setFilterSpecialization('ALL');
+    }
+  }, [specializationOptions, filterSpecialization]);
+
   const selectedTimetable = useMemo(() => {
     if (!selectedId) return null;
-    return timetables.find((tt) => String(tt.id) === String(selectedId)) || null;
-  }, [selectedId, timetables]);
+    return filteredTimetables.find((tt) => String(tt.id) === String(selectedId)) || null;
+  }, [selectedId, filteredTimetables]);
 
   const schedule = useMemo(() => parseSchedule(selectedTimetable), [selectedTimetable]);
 
@@ -369,6 +454,18 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
   }, [filteredBatchTables]);
 
   const activeTimeline = useMemo(() => buildCampusTimeline(dayModeFilter), [dayModeFilter]);
+
+  useEffect(() => {
+    if (!filteredTimetables.length) {
+      setSelectedId('');
+      return;
+    }
+
+    const found = filteredTimetables.some((tt) => String(tt.id) === String(selectedId));
+    if (!found) {
+      setSelectedId(String(filteredTimetables[0].id));
+    }
+  }, [filteredTimetables, selectedId]);
 
   useEffect(() => {
     if (!schedule.length) return;
@@ -406,10 +503,10 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                 className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                 value={selectedId}
                 onChange={(e) => setSelectedId(e.target.value)}
-                disabled={loading || !timetables.length}
+                disabled={loading || !filteredTimetables.length}
               >
-                {!timetables.length && <option value="">No timetables available</option>}
-                {timetables.map((tt) => (
+                {!filteredTimetables.length && <option value="">No filtered timetables available</option>}
+                {filteredTimetables.map((tt) => (
                   <option key={tt.id} value={String(tt.id)}>
                     {tt.name || `Timetable #${tt.id}`} - {tt.status || 'pending'}
                   </option>
@@ -460,6 +557,72 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
               >
                 {generatePending ? 'Generating...' : 'Generate Timetable'}
               </button>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-cyan-200/80 bg-gradient-to-r from-cyan-50 via-white to-sky-50 p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Display Generated Timetables</p>
+            <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+              <select
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                value={filterYear}
+                onChange={(e) => setFilterYear(e.target.value)}
+              >
+                {yearOptions.map((year) => (
+                  <option key={year} value={year}>{year === 'ALL' ? 'All Years' : `Year ${year}`}</option>
+                ))}
+              </select>
+              <select
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                value={filterSemester}
+                onChange={(e) => setFilterSemester(e.target.value)}
+              >
+                {semesterOptions.map((semester) => (
+                  <option key={semester} value={semester}>{semester === 'ALL' ? 'All Semesters' : `Semester ${semester}`}</option>
+                ))}
+              </select>
+              <select
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                value={filterSpecialization}
+                onChange={(e) => setFilterSpecialization(e.target.value)}
+              >
+                {specializationOptions.map((spec) => (
+                  <option key={spec} value={spec}>{spec === 'ALL' ? 'All Specializations' : spec}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-sky-300 bg-white px-3 py-1 text-xs font-semibold text-sky-700">
+                {filteredTimetables.length} timetable(s)
+              </span>
+              {filterYear !== 'ALL' && <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700">Year {filterYear}</span>}
+              {filterSemester !== 'ALL' && <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700">Semester {filterSemester}</span>}
+              {filterSpecialization !== 'ALL' && <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700">{filterSpecialization}</span>}
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-3">
+              {filteredTimetables.slice(0, 9).map((tt) => {
+                const meta = extractTimetableMeta(tt);
+                const active = String(selectedId) === String(tt.id);
+                return (
+                  <button
+                    key={tt.id}
+                    type="button"
+                    onClick={() => setSelectedId(String(tt.id))}
+                    className={`rounded-xl border px-3 py-3 text-left transition ${active ? 'border-sky-500 bg-sky-100/70 shadow-sm' : 'border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50'}`}
+                  >
+                    <p className="truncate text-sm font-semibold text-slate-900">{tt.name || `Timetable #${tt.id}`}</p>
+                    <p className="mt-1 text-xs text-slate-600">Y{meta.year} • S{meta.semester} • {meta.specialization}</p>
+                    <p className="mt-1 text-[11px] uppercase tracking-[0.08em] text-slate-500">{tt.status || 'pending'}</p>
+                  </button>
+                );
+              })}
+              {!filteredTimetables.length && (
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-4 text-sm text-slate-600">
+                  No generated timetables match this filter.
+                </div>
+              )}
             </div>
           </div>
 
@@ -521,6 +684,15 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
 
           {loading && <p className="mt-4 text-sm text-slate-600">Loading timetable data...</p>}
           {!loading && error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+
+          {!loading && !!selectedTimetable && (
+            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">Active Timetable Context</p>
+              <p className="mt-1 text-sm text-slate-800">
+                {selectedTimetable.name || `Timetable #${selectedTimetable.id}`} • Year {extractTimetableMeta(selectedTimetable).year} • Semester {extractTimetableMeta(selectedTimetable).semester} • {extractTimetableMeta(selectedTimetable).specialization}
+              </p>
+            </div>
+          )}
         </section>
 
         {!loading && !!selectedTimetable && layoutMode === 'unified' && (
