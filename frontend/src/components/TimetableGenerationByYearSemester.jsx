@@ -423,6 +423,5 @@ const TimetableGenerationByYearSemester = () => {
     </div>
   );
 };
-};
 
 export default TimetableGenerationByYearSemester;
