@@ -3,7 +3,6 @@ import psoScheduler from '../scheduler/psoScheduler.js';
 import hybridScheduler from '../scheduler/hybridScheduler.js';
 import geneticScheduler from '../scheduler/geneticScheduler.js';
 import tabuScheduler from '../scheduler/tabuScheduler.js';
-import { generateTimetableWithGemini } from '../engine/geminiScheduler.js';
 import pool from '../config/db.js';
 
 const allowedTypes = ['halls', 'modules', 'lics', 'instructors', 'departments', 'batches'];
@@ -413,28 +412,6 @@ const runSelectedAlgorithms = async (constraints, algorithms, options) => {
   const normalizedAlgorithms = (algorithms || []).map(normalizeAlgorithmKey);
   const results = {};
 
-  if (normalizedAlgorithms.includes('gemini')) {
-    try {
-      const assignmentsDb = await pool.query('SELECT * FROM module_assignments');
-      const geminiInput = { ...constraints, assignments: assignmentsDb.rows };
-      const geminiOutput = await generateTimetableWithGemini(geminiInput);
-      results.gemini = { schedule: geminiOutput.timetable || [], score: 100 };
-      
-      // Route constraint bottlenecks directly to the Mission Control Conflict Dashboard
-      if (geminiOutput.conflicts && geminiOutput.conflicts.length > 0) {
-        for (const conflict of geminiOutput.conflicts) {
-           await pool.query(
-            `INSERT INTO scheduling_conflicts (conflict_type, description, resolved) VALUES ($1, $2, false)`,
-            [conflict.conflict_type || 'AI Generator Halt', conflict.description || JSON.stringify(conflict)]
-           );
-        }
-      }
-    } catch (err) {
-       console.error("Gemini Failure:", err);
-       results.gemini = { schedule: [], score: 0, error: err.message };
-    }
-  }
-
   if (normalizedAlgorithms.includes('pso')) {
     results.pso = psoScheduler(constraints, options);
   }
@@ -460,7 +437,7 @@ const runSelectedAlgorithms = async (constraints, algorithms, options) => {
 
 const pickPrimaryScheduleFromResults = (results = {}, requestedAlgorithms = []) => {
   const normalizedRequested = (requestedAlgorithms || []).map(normalizeAlgorithmKey);
-  const priority = [...normalizedRequested, 'hybrid', 'tabu', 'genetic', 'pso', 'ant', 'gemini'];
+  const priority = [...normalizedRequested, 'hybrid', 'tabu', 'genetic', 'pso', 'ant'];
 
   for (const key of priority) {
     const result = results?.[key];
@@ -2082,23 +2059,23 @@ export const runSchedulerForYearSemester = async (req, res) => {
     const filteredBatches = batches.filter((batch) => {
       const scope = parseBatchSchedulingScope(batch);
 
-      if (Number.isInteger(yearNumber) && yearNumber > 0 && scope.year && scope.year !== yearNumber) {
+      if (Number.isInteger(yearNumber) && yearNumber > 0 && (!scope.year || scope.year !== yearNumber)) {
         return false;
       }
 
-      if (Number.isInteger(semesterNumber) && semesterNumber > 0 && scope.semester && scope.semester !== semesterNumber) {
+      if (Number.isInteger(semesterNumber) && semesterNumber > 0 && (!scope.semester || scope.semester !== semesterNumber)) {
         return false;
       }
 
-      if (requestedSpecialization && scope.specialization && scope.specialization !== requestedSpecialization) {
+      if (requestedSpecialization && (!scope.specialization || scope.specialization !== requestedSpecialization)) {
         return false;
       }
 
-      if (requestedGroup && scope.group && scope.group !== requestedGroup) {
+      if (requestedGroup && (!scope.group || scope.group !== requestedGroup)) {
         return false;
       }
 
-      if (requestedSubgroup && scope.subgroup && scope.subgroup !== requestedSubgroup) {
+      if (requestedSubgroup && (!scope.subgroup || scope.subgroup !== requestedSubgroup)) {
         return false;
       }
 
@@ -2202,7 +2179,7 @@ export const runSchedulerForYearSemester = async (req, res) => {
         modulesCount: filteredModules.length,
         hallsCount: halls.length,
         batchesCount: filteredBatches.length,
-        schedule: results.gemini?.schedule || results.hybrid?.schedule || results.pso?.schedule || results.genetic?.schedule || results.ant?.schedule || results.tabu?.schedule || [],
+        schedule: results.hybrid?.schedule || results.pso?.schedule || results.genetic?.schedule || results.ant?.schedule || results.tabu?.schedule || [],
         allResults: results,
       },
     };

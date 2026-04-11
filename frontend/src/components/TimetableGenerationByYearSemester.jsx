@@ -105,7 +105,7 @@ const TimetableGenerationByYearSemester = () => {
   const [success, setSuccess] = useState(null);
 
   // Generation options
-  const [algorithms, setAlgorithms] = useState(['gemini']);
+  const [algorithms, setAlgorithms] = useState(['hybrid']);
   const [timetableName, setTimetableName] = useState('');
   const [generatedTimetable, setGeneratedTimetable] = useState(null);
   const [existingTimetables, setExistingTimetables] = useState([]);
@@ -297,6 +297,21 @@ const TimetableGenerationByYearSemester = () => {
 
     if (!selectedSemester) {
       setError('Please select a semester');
+      return;
+    }
+
+    if (selectedSpecialization === 'ALL') {
+      setError('Please select a specialization to generate a scoped timetable');
+      return;
+    }
+
+    if (groupOptions.length > 1 && selectedGroup === 'ALL') {
+      setError('Please select a group for the selected year, semester, and specialization');
+      return;
+    }
+
+    if (subgroupOptions.length > 1 && selectedSubgroup === 'ALL') {
+      setError('Please select a subgroup for the selected year, semester, specialization, and group');
       return;
     }
 

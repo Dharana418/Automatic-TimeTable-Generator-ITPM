@@ -99,10 +99,11 @@ const StatCard = ({ label, value, status, chart, pulse = false, iconEl, accent =
   <article
     className="fc-card-hover"
     style={{
-      borderRadius: 16, padding: '18px',
-      background: 'linear-gradient(180deg, #ffffff 0%, #f4f8fc 100%)',
-      border: '1px solid #d8e3ee',
-      boxShadow: '0 10px 22px rgba(20, 55, 90, 0.08)',
+      borderRadius: 18, padding: '18px',
+      background: 'linear-gradient(145deg, rgba(255,255,255,0.9), rgba(239,246,255,0.76))',
+      border: '1px solid rgba(191,219,254,0.75)',
+      boxShadow: '0 14px 30px rgba(14, 116, 144, 0.14)',
+      backdropFilter: 'blur(10px)',
       position: 'relative', overflow: 'hidden',
     }}
   >
@@ -149,10 +150,11 @@ const ActionTile = ({ title, description, buttonText, onClick, iconEl, accent = 
   <article
     className="fc-card-hover"
     style={{
-      borderRadius: 14, padding: '18px',
-      background: gradient || 'linear-gradient(180deg, #ffffff 0%, #f5f9fd 100%)',
-      border: '1px solid #d7e3ee',
-      boxShadow: '0 8px 20px rgba(20,55,90,0.08)',
+      borderRadius: 16, padding: '18px',
+      background: gradient || 'linear-gradient(145deg, rgba(255,255,255,0.9), rgba(239,246,255,0.76))',
+      border: '1px solid rgba(191,219,254,0.75)',
+      boxShadow: '0 10px 24px rgba(14,116,144,0.12)',
+      backdropFilter: 'blur(8px)',
       display: 'flex', flexDirection: 'column', gap: 12,
     }}
   >
@@ -298,6 +300,18 @@ const FacultyCoordinatorDashboard = ({ user }) => {
     { label: 'Constraint', value: `w5 = ${softConstraintForm.w5Weight}`, status: 'Policy Mode', chart: sparklineSets.constraint, pulse: false, iconEl: Icon.sliders('#f59e0b'), accent: '#f59e0b', trend: 'Configured' },
   ];
 
+  const readinessScore = useMemo(() => {
+    const w5 = Number(softConstraintForm.w5Weight || 0);
+    return Math.min(100, Math.round(resources.length * 9 + Math.min(savedTimetables.length, 6) * 8 + w5 * 0.6));
+  }, [resources.length, savedTimetables.length, softConstraintForm.w5Weight]);
+
+  const signalCards = [
+    { label: 'Readiness', value: `${readinessScore}%`, hint: 'Engine confidence', tone: '#0ea5e9' },
+    { label: 'Coverage', value: `${resources.length} LIC`, hint: 'Resource mapped', tone: '#6366f1' },
+    { label: 'Archives', value: `${savedTimetables.length}`, hint: 'Saved outputs', tone: '#14b8a6' },
+    { label: 'Policy', value: `w5 ${softConstraintForm.w5Weight}`, hint: 'Constraint weight', tone: '#f59e0b' },
+  ];
+
   const extractSchedule = (timetable) => {
     const rawData = timetable?.data;
     const parsed = typeof rawData === 'string' ? (() => {
@@ -374,9 +388,9 @@ const FacultyCoordinatorDashboard = ({ user }) => {
         <button
           type="button"
           onClick={() => navigate('/scheduler/by-year')}
-          className="fc-btn"
+          className="fc-btn fc-btn-lg"
           style={{
-            padding: '8px 18px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            cursor: 'pointer',
             background: 'linear-gradient(90deg, #0ea5e9, #6366f1)',
             border: 'none', color: '#fff',
             boxShadow: '0 6px 20px rgba(14,165,233,0.4)',
@@ -390,23 +404,63 @@ const FacultyCoordinatorDashboard = ({ user }) => {
         .fc-day-btn { transition: all 0.2s ease; }
         .fc-day-btn:hover { transform: scale(1.05); }
         .fc-pill-row { display: flex; flex-wrap: wrap; gap: 8px; }
+        .fc-card-hover { transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease; }
+        .fc-card-hover:hover { transform: translateY(-4px); box-shadow: 0 16px 36px rgba(14,116,144,0.18) !important; border-color: rgba(56,189,248,0.55) !important; }
+        .fc-kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+        .fc-main-grid { display: grid; grid-template-columns: minmax(0,1fr) 360px; gap: 20px; align-items: start; }
+        .fc-soft-panel { position: sticky; top: 80px; }
+        .fc-hero-title { font-size: clamp(1.45rem, 2.2vw, 1.95rem); line-height: 1.2; letter-spacing: 0.01em; }
+        .fc-section-title { font-size: clamp(1.02rem, 1.2vw, 1.2rem); line-height: 1.25; letter-spacing: 0.005em; }
+        .fc-section-note { font-size: 13px; line-height: 1.6; }
+        .fc-btn-lg { min-height: 42px; padding: 10px 18px !important; border-radius: 12px !important; font-size: 13px !important; font-weight: 800 !important; }
+        .fc-btn-md { min-height: 38px; padding: 9px 14px !important; border-radius: 10px !important; font-size: 12px !important; font-weight: 700 !important; }
+        .fc-btn-sm { min-height: 34px; padding: 7px 12px !important; border-radius: 10px !important; font-size: 12px !important; font-weight: 700 !important; }
+        .fc-btn-lg:hover { transform: translateY(-1px); filter: brightness(1.03); }
+        .fc-btn-md:hover { transform: translateY(-1px); filter: brightness(1.02); }
+        .fc-btn-sm:hover { transform: none; filter: brightness(1.01); }
+        .fc-signal-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 24px; }
+        .fc-signal-card { border-radius: 14px; border: 1px solid rgba(191,219,254,0.8); background: linear-gradient(160deg, rgba(255,255,255,0.92), rgba(239,246,255,0.72)); box-shadow: 0 10px 20px rgba(14,116,144,0.1); padding: 12px 14px; }
+        .fc-signal-label { font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #5f7389; }
+        .fc-signal-value { margin-top: 6px; font-size: 20px; line-height: 1.15; font-weight: 800; color: #14314b; }
+        .fc-signal-hint { margin-top: 4px; font-size: 12px; color: #6b8198; }
+        .fc-pulse-dot { animation: fcPulse 1.6s ease-in-out infinite; }
+        @keyframes fcPulse {
+          0% { transform: scale(0.85); opacity: 0.65; }
+          50% { transform: scale(1.2); opacity: 1; }
+          100% { transform: scale(0.85); opacity: 0.65; }
+        }
+        @keyframes fcShimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        @media (max-width: 1100px) {
+          .fc-main-grid { grid-template-columns: 1fr !important; }
+          .fc-soft-panel { position: relative !important; top: 0 !important; }
+          .fc-signal-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 640px) {
+          .fc-hero-wrap { padding: 22px 20px !important; }
+          .fc-signal-grid { grid-template-columns: 1fr; }
+        }
         @media (max-width: 768px) { .fc-actions-grid { grid-template-columns: 1fr !important; } }
       `}</style>
 
       {/* ── Welcome banner ── */}
-      <div id="fcOverview" style={{
-        borderRadius: 18, padding: '24px 28px', marginBottom: 24,
-        background: 'linear-gradient(130deg, #0f5d99 0%, #2f80c3 52%, #5ea4da 100%)',
-        border: '1px solid rgba(255,255,255,0.35)',
-        boxShadow: '0 16px 30px rgba(15, 93, 153, 0.25)',
+      <div id="fcOverview" className="fc-hero-wrap" style={{
+        borderRadius: 18, padding: '26px 30px', marginBottom: 24,
+        background: 'linear-gradient(130deg, rgba(14,165,233,0.9) 0%, rgba(99,102,241,0.88) 52%, rgba(34,211,238,0.85) 100%)',
+        border: '1px solid rgba(224,242,254,0.75)',
+        boxShadow: '0 18px 34px rgba(14, 116, 144, 0.28)',
+        backdropFilter: 'blur(8px)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16,
         position: 'relative', overflow: 'hidden',
       }}>
-        <div style={{ position: 'absolute', top: -80, right: -70, width: 220, height: 220, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', top: -80, right: -70, width: 220, height: 220, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.35) 0%, transparent 70%)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', bottom: -90, left: -80, width: 260, height: 260, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 70%)', pointerEvents: 'none' }} />
         <div>
-          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(226,242,255,0.9)' }}>{greeting}, {username}</p>
-          <h2 style={{ margin: '6px 0 0', fontSize: 22, fontWeight: 800, color: '#ffffff' }}>Scheduling coordination is ready</h2>
-          <p style={{ margin: '6px 0 0', fontSize: 13, color: 'rgba(237,246,255,0.92)' }}>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(226,242,255,0.9)' }}>{greeting}, {username}</p>
+          <h2 className="fc-hero-title" style={{ margin: '8px 0 0', fontWeight: 800, color: '#ffffff' }}>Scheduling coordination is ready</h2>
+          <p style={{ margin: '8px 0 0', fontSize: 14, lineHeight: 1.55, maxWidth: 560, color: 'rgba(237,246,255,0.92)' }}>
             Manage batches, modules, and soft constraints from a single workspace.
           </p>
         </div>
@@ -419,9 +473,9 @@ const FacultyCoordinatorDashboard = ({ user }) => {
               key={q.label}
               type="button"
               onClick={() => navigate(q.path)}
-              className="fc-btn"
+              className="fc-btn fc-btn-md"
               style={{
-                padding: '9px 18px', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                cursor: 'pointer',
                 background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.45)',
                 color: '#ffffff',
                 boxShadow: '0 4px 14px rgba(2,6,23,0.2)',
@@ -434,30 +488,44 @@ const FacultyCoordinatorDashboard = ({ user }) => {
       </div>
 
       {/* ── KPI Stats row ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 24 }}>
+      <div className="fc-kpi-grid" style={{ marginBottom: 24 }}>
         {stats.map((s) => (
           <StatCard key={s.label} {...s} />
         ))}
       </div>
 
+      <section className="fc-signal-grid" aria-label="Academic Intelligence Strip">
+        {signalCards.map((item) => (
+          <article key={item.label} className="fc-signal-card fc-card-hover">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <p className="fc-signal-label" style={{ margin: 0 }}>{item.label}</p>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: item.tone, boxShadow: `0 0 0 6px ${item.tone}1f` }} />
+            </div>
+            <p className="fc-signal-value" style={{ margin: 0 }}>{item.value}</p>
+            <p className="fc-signal-hint" style={{ marginBottom: 0 }}>{item.hint}</p>
+          </article>
+        ))}
+      </section>
+
       {/* ── Main 2-col layout ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 340px', gap: 20, alignItems: 'start' }}>
+      <div className="fc-main-grid">
 
         {/* Left – Operations center */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
 
           {/* Action tiles */}
           <section id="fcOperations" style={{
-            borderRadius: 16, padding: '22px',
-            background: 'linear-gradient(180deg, #ffffff 0%, #f5f9fd 100%)',
-            border: '1px solid #d8e3ee',
-            boxShadow: '0 10px 24px rgba(20,55,90,0.08)',
+            borderRadius: 16, padding: '24px',
+            background: 'linear-gradient(145deg, rgba(255,255,255,0.9), rgba(239,246,255,0.76))',
+            border: '1px solid rgba(191,219,254,0.75)',
+            boxShadow: '0 14px 28px rgba(14,116,144,0.12)',
+            backdropFilter: 'blur(10px)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 22 }}>
               <div>
                 <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#1f6fa8' }}>Workspace Operations</p>
-                <h3 style={{ margin: '6px 0 0', fontSize: 18, fontWeight: 800, color: '#14314b' }}>Operations Center</h3>
-                <p style={{ margin: '4px 0 0', fontSize: 13, color: '#5f7389', maxWidth: 480 }}>
+                <h3 className="fc-section-title" style={{ margin: '8px 0 0', fontWeight: 800, color: '#14314b' }}>Operations Center</h3>
+                <p className="fc-section-note" style={{ margin: '6px 0 0', color: '#5f7389', maxWidth: 520 }}>
                   Coordinate batches, inspect modules, and launch the timetable generation engine.
                 </p>
               </div>
@@ -499,13 +567,14 @@ const FacultyCoordinatorDashboard = ({ user }) => {
 
           {/* Activity feed placeholder */}
           <section id="fcActivity" style={{
-            borderRadius: 16, padding: '22px',
-            background: 'linear-gradient(180deg, #ffffff 0%, #f5f9fd 100%)',
-            border: '1px solid #d8e3ee',
-            boxShadow: '0 10px 24px rgba(20,55,90,0.08)',
+            borderRadius: 16, padding: '24px',
+            background: 'linear-gradient(145deg, rgba(255,255,255,0.9), rgba(239,246,255,0.76))',
+            border: '1px solid rgba(191,219,254,0.75)',
+            boxShadow: '0 14px 28px rgba(14,116,144,0.12)',
+            backdropFilter: 'blur(10px)',
           }}>
             <p style={{ margin: '0 0 16px', fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#1f6fa8' }}>Recent Activity</p>
-            <h3 style={{ margin: '0 0 18px', fontSize: 16, fontWeight: 800, color: '#14314b' }}>System Log</h3>
+            <h3 className="fc-section-title" style={{ margin: '0 0 18px', fontWeight: 800, color: '#14314b' }}>System Log</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {[
                 { time: 'Just now', text: 'Soft constraints profile loaded', col: '#38bdf8' },
@@ -513,8 +582,9 @@ const FacultyCoordinatorDashboard = ({ user }) => {
                 { time: '10 min ago', text: 'Batch registry updated', col: '#a78bfa' },
                 { time: '1 hr ago', text: 'Timetable engine last run', col: '#f59e0b' },
               ].map((item, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 12, background: '#ffffff', border: '1px solid #d9e4ee' }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: item.col, flexShrink: 0 }} />
+                <div key={i} className="fc-card-hover" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 12, background: '#ffffff', border: '1px solid #d9e4ee', position: 'relative', overflow: 'hidden' }}>
+                  <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: `linear-gradient(180deg, ${item.col}, transparent)` }} />
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: item.col, flexShrink: 0, boxShadow: `0 0 0 6px ${item.col}1f` }} />
                   <span style={{ fontSize: 13, color: '#1e3a52', flex: 1 }}>{item.text}</span>
                   <span style={{ fontSize: 11, color: '#6b8198', whiteSpace: 'nowrap' }}>{item.time}</span>
                 </div>
@@ -523,22 +593,23 @@ const FacultyCoordinatorDashboard = ({ user }) => {
           </section>
 
           <section id="fcTimetables" style={{
-            borderRadius: 16, padding: '22px',
-            background: 'linear-gradient(180deg, #ffffff 0%, #f5f9fd 100%)',
-            border: '1px solid #d8e3ee',
-            boxShadow: '0 10px 24px rgba(20,55,90,0.08)',
+            borderRadius: 16, padding: '24px',
+            background: 'linear-gradient(145deg, rgba(255,255,255,0.9), rgba(239,246,255,0.76))',
+            border: '1px solid rgba(191,219,254,0.75)',
+            boxShadow: '0 14px 28px rgba(14,116,144,0.12)',
+            backdropFilter: 'blur(10px)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
               <div>
                 <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#1f6fa8' }}>Saved Timetables</p>
-                <h3 style={{ margin: '6px 0 0', fontSize: 16, fontWeight: 800, color: '#14314b' }}>View & Download (CSV for Excel)</h3>
+                <h3 className="fc-section-title" style={{ margin: '8px 0 0', fontWeight: 800, color: '#14314b' }}>View & Download (CSV for Excel)</h3>
               </div>
               <button
                 type="button"
                 onClick={refreshTimetables}
-                className="fc-btn"
+                className="fc-btn fc-btn-md"
                 style={{
-                  padding: '8px 12px', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                  cursor: 'pointer',
                   background: 'linear-gradient(90deg, #0f5d99, #2f80c3)', border: 'none', color: '#fff',
                 }}
               >
@@ -547,13 +618,27 @@ const FacultyCoordinatorDashboard = ({ user }) => {
             </div>
 
             {loadingTimetables ? (
-              <p style={{ margin: 0, fontSize: 13, color: '#5f7389' }}>Loading timetables...</p>
+              <div style={{ display: 'grid', gap: 10 }}>
+                {Array.from({ length: 3 }).map((_, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      height: 52,
+                      borderRadius: 12,
+                      border: '1px solid #d8e3ee',
+                      background: 'linear-gradient(90deg, #f0f7ff 25%, #ffffff 50%, #f0f7ff 75%)',
+                      backgroundSize: '200% 100%',
+                      animation: 'fcShimmer 1.2s linear infinite',
+                    }}
+                  />
+                ))}
+              </div>
             ) : savedTimetables.length === 0 ? (
               <p style={{ margin: 0, fontSize: 13, color: '#5f7389' }}>No saved timetables available yet.</p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {savedTimetables.slice(0, 20).map((tt) => (
-                  <div key={tt.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 12px', borderRadius: 10, border: '1px solid #d8e3ee', background: '#fff' }}>
+                  <div key={tt.id} className="fc-card-hover" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 12px', borderRadius: 12, border: '1px solid #d8e3ee', background: '#fff' }}>
                     <div>
                       <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#14314b' }}>{tt.name || `Timetable ${tt.id}`}</p>
                       <p style={{ margin: '4px 0 0', fontSize: 12, color: '#5f7389' }}>Year {tt.year || '-'} • Semester {tt.semester || '-'} • Status: {tt.status || 'pending'}</p>
@@ -561,9 +646,9 @@ const FacultyCoordinatorDashboard = ({ user }) => {
                     <button
                       type="button"
                       onClick={() => downloadTimetableCsv(tt)}
-                      className="fc-btn"
+                      className="fc-btn fc-btn-sm"
                       style={{
-                        padding: '8px 12px', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                        cursor: 'pointer',
                         background: 'rgba(15,93,153,0.12)', border: '1px solid rgba(15,93,153,0.28)', color: '#0f5d99',
                       }}
                     >
@@ -577,17 +662,17 @@ const FacultyCoordinatorDashboard = ({ user }) => {
         </div>
 
         {/* Right – Soft Constraints Panel */}
-        <section id="fcSoftConstraints" style={{
-          borderRadius: 16, padding: '22px',
-          background: 'linear-gradient(180deg, #ffffff 0%, #f5f9fd 100%)',
-          border: '1px solid #d8e3ee',
-          boxShadow: '0 10px 24px rgba(20,55,90,0.08)',
-          position: 'sticky', top: 80,
+        <section id="fcSoftConstraints" className="fc-soft-panel" style={{
+          borderRadius: 16, padding: '24px',
+          background: 'linear-gradient(145deg, rgba(255,255,255,0.9), rgba(239,246,255,0.76))',
+          border: '1px solid rgba(191,219,254,0.75)',
+          boxShadow: '0 14px 28px rgba(14,116,144,0.12)',
+          backdropFilter: 'blur(10px)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
             <div>
               <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#1f6fa8' }}>Settings Console</p>
-              <h3 style={{ margin: '6px 0 0', fontSize: 16, fontWeight: 800, color: '#14314b' }}>Soft Constraints</h3>
+              <h3 className="fc-section-title" style={{ margin: '8px 0 0', fontWeight: 800, color: '#14314b' }}>Soft Constraints</h3>
             </div>
             <span style={{
               padding: '4px 10px', borderRadius: 20, fontSize: 10, fontWeight: 700,
@@ -599,7 +684,7 @@ const FacultyCoordinatorDashboard = ({ user }) => {
 
           {/* Day selector */}
           <div style={{ marginBottom: 20 }}>
-            <p style={{ margin: '0 0 10px', fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#5f7389' }}>Preferred Days</p>
+            <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#5f7389' }}>Preferred Days</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
               {dayOptions.map((day) => {
                 const isOn = selectedDays.includes(day);
@@ -652,9 +737,9 @@ const FacultyCoordinatorDashboard = ({ user }) => {
             type="button"
             onClick={saveSoftConstraints}
             disabled={savingSoftConstraints}
-            className="fc-btn"
+            className="fc-btn fc-btn-lg"
             style={{
-              width: '100%', padding: '12px', borderRadius: 12, fontSize: 14, fontWeight: 800, cursor: savingSoftConstraints ? 'not-allowed' : 'pointer',
+              width: '100%', cursor: savingSoftConstraints ? 'not-allowed' : 'pointer',
               background: savingSoftConstraints ? 'rgba(148,163,184,0.15)' : 'linear-gradient(90deg, #0ea5e9, #6366f1)',
               border: 'none', color: '#fff',
               boxShadow: savingSoftConstraints ? 'none' : '0 8px 24px rgba(14,165,233,0.35)',
