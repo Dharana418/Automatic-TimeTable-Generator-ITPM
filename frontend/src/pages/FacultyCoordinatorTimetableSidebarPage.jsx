@@ -455,6 +455,21 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
 
   const activeTimeline = useMemo(() => buildCampusTimeline(dayModeFilter), [dayModeFilter]);
 
+  const insightMetrics = useMemo(() => {
+    const uniqueModules = new Set(schedule.map((row) => row.moduleName || row.moduleId || 'Module')).size;
+    const uniqueGroups = new Set(filteredBatchTables.map((batch) => batch.batchKey)).size;
+    const generatedAt = selectedTimetable?.created_at
+      ? new Date(selectedTimetable.created_at).toLocaleString()
+      : 'Not selected';
+
+    return {
+      timetables: filteredTimetables.length,
+      modules: uniqueModules,
+      groups: uniqueGroups,
+      generatedAt,
+    };
+  }, [filteredTimetables.length, filteredBatchTables, schedule, selectedTimetable]);
+
   useEffect(() => {
     if (!filteredTimetables.length) {
       setSelectedId('');
@@ -484,7 +499,40 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
       footerNote="Faculty Coordinator timetable report view"
     >
       <div id="top" className="flex flex-col gap-6">
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <section className="relative overflow-hidden rounded-3xl border border-sky-200/80 bg-gradient-to-br from-sky-50 via-white to-cyan-50 p-6 shadow-[0_20px_45px_rgba(14,116,144,0.12)]">
+          <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.25),transparent_70%)]" />
+          <div className="pointer-events-none absolute -bottom-24 -left-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(14,165,233,0.16),transparent_70%)]" />
+          <div className="relative grid grid-cols-1 gap-4 lg:grid-cols-[1.35fr_1fr]">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Creative Timetable Studio</p>
+              <h2 className="mt-2 text-2xl font-extrabold text-slate-900">Timetable View Intelligence Panel</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-700">
+                Explore generated timetables by year, semester, and specialization with a dynamic master grid and grouped academic layouts.
+              </p>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-sky-300 bg-white px-3 py-1 text-xs font-semibold text-sky-700">{insightMetrics.timetables} filtered timetable(s)</span>
+                <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700">{dayModeFilter === 'WD' ? 'Weekday Mode' : dayModeFilter === 'WE' ? 'Weekend Mode' : 'All Batch Modes'}</span>
+                <span className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs text-emerald-700">Layout: {layoutMode === 'unified' ? 'Master View' : 'Grouped View'}</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl border border-sky-200 bg-white/95 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Modules</p>
+                <p className="mt-1 text-2xl font-extrabold text-slate-900">{insightMetrics.modules}</p>
+              </div>
+              <div className="rounded-2xl border border-sky-200 bg-white/95 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Groups</p>
+                <p className="mt-1 text-2xl font-extrabold text-slate-900">{insightMetrics.groups}</p>
+              </div>
+              <div className="col-span-2 rounded-2xl border border-sky-200 bg-white/95 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Last Generated</p>
+                <p className="mt-1 text-sm font-semibold text-slate-800">{insightMetrics.generatedAt}</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_35px_rgba(15,23,42,0.06)]">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">Institution Name</h2>
@@ -516,7 +564,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              className="rounded-xl border border-sky-300 bg-white px-4 py-2 text-sm font-semibold text-sky-800 transition hover:-translate-y-0.5 hover:bg-sky-50"
             >
               Refresh
             </button>
@@ -553,7 +601,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                 type="button"
                 onClick={generateTimetableNow}
                 disabled={generatePending}
-                className="rounded-lg border border-blue-600 bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+                className="rounded-xl border border-sky-600 bg-gradient-to-r from-sky-600 to-cyan-600 px-3 py-2 text-sm font-semibold text-white transition hover:shadow-lg disabled:bg-slate-400"
               >
                 {generatePending ? 'Generating...' : 'Generate Timetable'}
               </button>
@@ -696,7 +744,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
         </section>
 
         {!loading && !!selectedTimetable && layoutMode === 'unified' && (
-          <section className="overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50/30 p-4 shadow-sm">
+          <section className="overflow-hidden rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50/80 via-white to-cyan-50/70 p-4 shadow-[0_16px_40px_rgba(5,150,105,0.14)]">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h4 className="text-base font-bold text-slate-900">Unified Timetable (All Modules)</h4>
               <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
@@ -782,7 +830,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
         )}
 
         {!loading && !!selectedTimetable && layoutMode === 'grouped' && (
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_35px_rgba(15,23,42,0.06)]">
             <h3 className="text-lg font-bold text-slate-900">Table of Contents</h3>
             {!groupedByYearSemester.length ? (
               <p className="mt-3 text-sm text-slate-600">
@@ -820,7 +868,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
             <section
               id={tableId}
               key={batch.batchKey}
-              className={`overflow-hidden rounded-2xl border ${isOdd ? 'border-blue-200 bg-blue-50/30' : 'border-slate-200 bg-slate-50/30'} p-4 shadow-sm`}
+              className={`overflow-hidden rounded-3xl border ${isOdd ? 'border-blue-200 bg-gradient-to-br from-blue-50/70 via-white to-sky-50/60' : 'border-slate-200 bg-gradient-to-br from-slate-50/80 via-white to-cyan-50/50'} p-4 shadow-[0_12px_30px_rgba(15,23,42,0.08)]`}
             >
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h4 className="text-base font-bold text-slate-900">{batch.batchKey}</h4>

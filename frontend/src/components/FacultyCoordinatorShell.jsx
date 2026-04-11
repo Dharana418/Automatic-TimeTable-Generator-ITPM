@@ -122,7 +122,6 @@ const ACADEMIC_NAV_GROUPS = [
       { id: 'modules', label: 'Module Registry', to: '/academic/modules', icon: Icon.book, color: '#38bdf8' },
       { id: 'personnel', label: 'Personnel Roster', to: '/academic/personnel', icon: Icon.users, color: '#a78bfa' },
       { id: 'calendar', label: 'Academic Calendar', to: '/academic/calendar', icon: Icon.calendar, color: '#f472b6' },
-      { id: 'timetable', label: 'Timetables', to: '/scheduler/by-year', icon: Icon.grid, color: '#4ade80' },
     ],
   },
 ];
