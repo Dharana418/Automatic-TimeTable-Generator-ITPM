@@ -836,8 +836,8 @@ export const addItem = async (req, res) => {
       };
 
       const { rows } = await pool.query(
-        `INSERT INTO modules(id, code, name, batch_size, day_type, credits, lectures_per_week, details, lic_id, academic_year, semester)
-         VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        `INSERT INTO modules(id, code, name, batch_size, day_type, credits, lectures_per_week, details, lic_id, academic_year, semester, created_by)
+         VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
          RETURNING *`,
         [
           id,
@@ -851,6 +851,7 @@ export const addItem = async (req, res) => {
           licId,
           effectiveAcademicYear,
           semester || null,
+          req.user?.id || null,
         ]
       );
       return res.status(201).json({ success: true, item: rows[0] });
@@ -1003,7 +1004,21 @@ export const listItems = async (req, res) => {
       const requestedSemester = Number(req.query?.semester || 0);
       const requestedSpecialization = normalizeSpecializationCode(req.query?.specialization || '');
 
-      const { rows } = await pool.query(`SELECT * FROM modules ORDER BY created_at DESC`);
+      let rows = [];
+      if (isFacultyCoordinator(req.user)) {
+        const listResult = await pool.query(
+          `SELECT m.*
+           FROM modules m
+           JOIN users u ON u.id = m.created_by
+           WHERE regexp_replace(lower(COALESCE(u.role, '')), '[^a-z0-9]', '', 'g') = 'academiccoordinator'
+           ORDER BY m.created_at DESC`
+        );
+        rows = listResult.rows;
+      } else {
+        const listResult = await pool.query(`SELECT * FROM modules ORDER BY created_at DESC`);
+        rows = listResult.rows;
+      }
+
       const filtered = rows.filter((module) => {
         const moduleYear = inferModuleYear(module);
         const moduleSemester = inferModuleSemester(module);
@@ -1049,6 +1064,10 @@ export const deleteItem = async (req, res) => {
       return res.status(400).json({ error: 'Invalid data type' });
     }
 
+    if (type === 'modules' && isFacultyCoordinator(req.user)) {
+      return res.status(403).json({ error: 'Faculty Coordinator can only view modules managed by Academic Coordinator' });
+    }
+
     const { rowCount } = await pool.query(`DELETE FROM ${type} WHERE id = $1`, [id]);
     if (!rowCount) return res.status(404).json({ error: 'Item not found' });
 
@@ -1066,6 +1085,10 @@ export const updateItem = async (req, res) => {
 
     if (!allowedTypes.includes(type)) return res.status(400).json({ error: 'Invalid data type' });
     if (!id) return res.status(400).json({ error: 'Item id is required' });
+
+    if (type === 'modules' && isFacultyCoordinator(req.user)) {
+      return res.status(403).json({ error: 'Faculty Coordinator can only view modules managed by Academic Coordinator' });
+    }
 
     if (type === 'halls') {
       const {

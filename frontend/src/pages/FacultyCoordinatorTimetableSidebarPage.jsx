@@ -497,6 +497,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
       badge="Timetable Report"
       backgroundImage={facultyDashboardBg}
       footerNote="Faculty Coordinator timetable report view"
+      sidebarTheme="timetable"
     >
       <div id="top" className="flex flex-col gap-6">
         <section className="relative overflow-hidden rounded-3xl border border-sky-200/80 bg-gradient-to-br from-sky-50 via-white to-cyan-50 p-6 shadow-[0_20px_45px_rgba(14,116,144,0.12)]">
@@ -564,17 +565,17 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="rounded-xl border border-sky-300 bg-white px-4 py-2 text-sm font-semibold text-sky-800 transition hover:-translate-y-0.5 hover:bg-sky-50"
+              className="rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:from-slate-200 hover:to-slate-50"
             >
               Refresh
             </button>
           </div>
 
-          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <div className="mt-4 rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 via-white to-slate-200 p-3">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Generate On This Page</p>
             <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-4">
               <select
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                className="rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-2 text-sm text-slate-900"
                 value={generateYear}
                 onChange={(e) => setGenerateYear(e.target.value)}
               >
@@ -584,7 +585,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                 <option value="4">Year 4</option>
               </select>
               <select
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                className="rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-2 text-sm text-slate-900"
                 value={generateSemester}
                 onChange={(e) => setGenerateSemester(e.target.value)}
               >
@@ -592,7 +593,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                 <option value="2">Semester 2</option>
               </select>
               <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                className="rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500"
                 placeholder="Timetable name (optional)"
                 value={generateName}
                 onChange={(e) => setGenerateName(e.target.value)}
@@ -608,11 +609,11 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
             </div>
           </div>
 
-          <div className="mt-4 rounded-xl border border-cyan-200/80 bg-gradient-to-r from-cyan-50 via-white to-sky-50 p-4 shadow-sm">
+          <div className="mt-4 rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 via-white to-slate-200 p-4 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Display Generated Timetables</p>
             <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
               <select
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                className="rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-2 text-sm text-slate-900"
                 value={filterYear}
                 onChange={(e) => setFilterYear(e.target.value)}
               >
@@ -621,7 +622,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                 ))}
               </select>
               <select
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                className="rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-2 text-sm text-slate-900"
                 value={filterSemester}
                 onChange={(e) => setFilterSemester(e.target.value)}
               >
@@ -630,7 +631,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                 ))}
               </select>
               <select
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                className="rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-2 text-sm text-slate-900"
                 value={filterSpecialization}
                 onChange={(e) => setFilterSpecialization(e.target.value)}
               >
@@ -644,9 +645,9 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
               <span className="rounded-full border border-sky-300 bg-white px-3 py-1 text-xs font-semibold text-sky-700">
                 {filteredTimetables.length} timetable(s)
               </span>
-              {filterYear !== 'ALL' && <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700">Year {filterYear}</span>}
-              {filterSemester !== 'ALL' && <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700">Semester {filterSemester}</span>}
-              {filterSpecialization !== 'ALL' && <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700">{filterSpecialization}</span>}
+              {filterYear !== 'ALL' && <span className="rounded-full border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-1 text-xs text-slate-700">Year {filterYear}</span>}
+              {filterSemester !== 'ALL' && <span className="rounded-full border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-1 text-xs text-slate-700">Semester {filterSemester}</span>}
+              {filterSpecialization !== 'ALL' && <span className="rounded-full border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-1 text-xs text-slate-700">{filterSpecialization}</span>}
             </div>
 
             <div className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-3">
@@ -667,7 +668,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                 );
               })}
               {!filteredTimetables.length && (
-                <div className="rounded-xl border border-slate-200 bg-white px-3 py-4 text-sm text-slate-600">
+                <div className="rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-4 text-sm text-slate-600">
                   No generated timetables match this filter.
                 </div>
               )}
@@ -678,7 +679,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
             <div>
               <label className="block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Batch Type</label>
               <select
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-2 text-sm text-slate-900 focus:border-slate-400 focus:outline-none"
                 value={dayModeFilter}
                 onChange={(e) => setDayModeFilter(e.target.value)}
               >
@@ -691,21 +692,21 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
               <button
                 type="button"
                 onClick={() => setDayModeFilter('WD')}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold ${dayModeFilter === 'WD' ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white text-slate-700'}`}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold ${dayModeFilter === 'WD' ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-gradient-to-r from-slate-100 to-white text-slate-700'}`}
               >
                 Weekday
               </button>
               <button
                 type="button"
                 onClick={() => setDayModeFilter('WE')}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold ${dayModeFilter === 'WE' ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white text-slate-700'}`}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold ${dayModeFilter === 'WE' ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-gradient-to-r from-slate-100 to-white text-slate-700'}`}
               >
                 Weekend
               </button>
               <button
                 type="button"
                 onClick={() => setDayModeFilter('ALL')}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold ${dayModeFilter === 'ALL' ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white text-slate-700'}`}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold ${dayModeFilter === 'ALL' ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-gradient-to-r from-slate-100 to-white text-slate-700'}`}
               >
                 All
               </button>
@@ -717,14 +718,14 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
             <button
               type="button"
               onClick={() => setLayoutMode('unified')}
-              className={`rounded-full border px-3 py-1 text-xs font-semibold ${layoutMode === 'unified' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300 bg-white text-slate-700'}`}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${layoutMode === 'unified' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300 bg-gradient-to-r from-slate-100 to-white text-slate-700'}`}
             >
               One Master Timetable
             </button>
             <button
               type="button"
               onClick={() => setLayoutMode('grouped')}
-              className={`rounded-full border px-3 py-1 text-xs font-semibold ${layoutMode === 'grouped' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300 bg-white text-slate-700'}`}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${layoutMode === 'grouped' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300 bg-gradient-to-r from-slate-100 to-white text-slate-700'}`}
             >
               Group Timetables
             </button>
