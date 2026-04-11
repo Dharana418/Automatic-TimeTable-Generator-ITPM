@@ -140,6 +140,7 @@ export default function FacultyCoordinatorShell({
   brandTitle = 'Faculty Coordinator',
   brandSubtitle = 'Scheduling Console',
   sidebarSections = [],
+  sidebarTheme = 'default',
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -160,6 +161,24 @@ export default function FacultyCoordinatorShell({
 
   const currentYear = new Date().getFullYear();
   const roleKey = normalizeRoleKey(user?.role);
+
+  const sidebarPalette = sidebarTheme === 'timetable'
+    ? {
+      background: 'linear-gradient(180deg, rgba(12,74,110,0.96) 0%, rgba(17,94,89,0.97) 100%)',
+      borderRight: '1px solid rgba(167,243,208,0.28)',
+      shadow: '4px 0 40px rgba(8,47,73,0.45)',
+      brandBackground: 'linear-gradient(135deg, #0f766e 0%, #0891b2 100%)',
+      brandShadow: '0 8px 24px rgba(6,182,212,0.28)',
+      brandLabelColor: 'rgba(204,251,241,0.95)',
+    }
+    : {
+      background: 'linear-gradient(180deg, rgba(2,6,23,0.97) 0%, rgba(15,23,42,0.97) 100%)',
+      borderRight: '1px solid rgba(148,163,184,0.1)',
+      shadow: '4px 0 40px rgba(0,0,0,0.5)',
+      brandBackground: 'linear-gradient(135deg, #1e3a8a 0%, #4f46e5 100%)',
+      brandShadow: '0 8px 24px rgba(79,70,229,0.28)',
+      brandLabelColor: 'rgba(165,180,252,0.95)',
+    };
 
   const roleDefaultNavGroups = roleKey === 'academiccoordinator' ? ACADEMIC_NAV_GROUPS : FACULTY_NAV_GROUPS;
 
@@ -335,9 +354,9 @@ export default function FacultyCoordinatorShell({
         style={{
           display: 'flex', flexDirection: 'column',
           width: sidebarCollapsed ? 72 : 260,
-          background: 'linear-gradient(180deg, rgba(2,6,23,0.97) 0%, rgba(15,23,42,0.97) 100%)',
-          borderRight: '1px solid rgba(148,163,184,0.1)',
-          boxShadow: '4px 0 40px rgba(0,0,0,0.5)',
+          background: sidebarPalette.background,
+          borderRight: sidebarPalette.borderRight,
+          boxShadow: sidebarPalette.shadow,
           backdropFilter: 'blur(20px)',
           transition: 'width 0.3s cubic-bezier(0.4,0,0.2,1)',
           transform: mobileOpen ? 'translateX(0)' : undefined,
@@ -348,15 +367,15 @@ export default function FacultyCoordinatorShell({
         <div style={{ padding: sidebarCollapsed ? '20px 12px' : '20px', borderBottom: '1px solid rgba(148,163,184,0.1)', display: 'flex', alignItems: 'center', gap: 12, overflow: 'hidden' }}>
           <div style={{
             minWidth: 42, height: 42, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'linear-gradient(135deg, #1e3a8a 0%, #4f46e5 100%)',
-            boxShadow: '0 8px 24px rgba(79,70,229,0.28)',
+            background: sidebarPalette.brandBackground,
+            boxShadow: sidebarPalette.brandShadow,
             fontSize: 16, fontWeight: 800, color: '#fff', letterSpacing: 1,
           }}>
             {brandCode}
           </div>
           {!sidebarCollapsed && (
             <div style={{ overflow: 'hidden' }}>
-              <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(165,180,252,0.95)', margin: 0 }}>{brandTitle}</p>
+              <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: sidebarPalette.brandLabelColor, margin: 0 }}>{brandTitle}</p>
               <p style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', margin: 0, marginTop: 2 }}>{brandSubtitle}</p>
             </div>
           )}
