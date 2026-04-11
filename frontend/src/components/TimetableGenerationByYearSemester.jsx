@@ -17,7 +17,6 @@ import {
   getTimetablesForYearSemester,
   approveTimetable,
   rejectTimetable,
-  getAvailableAlgorithms,
   downloadTimetableAsCSV,
 } from '../api/timetableGeneration.js';
 
@@ -27,6 +26,7 @@ import {
 } from '../api/moduleManagement.js';
 
 import { listItems } from '../api/scheduler.js';
+import seedBatches from '../data/batches.js';
 import { toast } from 'react-toastify';
 
 /* ---------------- HELPERS ---------------- */
@@ -122,6 +122,48 @@ const extractSpecializationFromBatch = (batch = {}) => {
   return 'IT';
 };
 
+const normalizeYearToken = (value = '') => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  const match = raw.match(/\d+/);
+  return match ? String(Number(match[0])) : '';
+};
+
+const parseBatchSelectionId = (batchId = '') => {
+  const [yearToken = '', semesterToken = '', modeToken = '', specializationToken = '', groupToken = '', subgroupToken = ''] = String(batchId || '')
+    .trim()
+    .split('.');
+
+  if (!yearToken || !semesterToken || !modeToken || !specializationToken || !groupToken || !subgroupToken) {
+    return null;
+  }
+
+  return {
+    year: String(yearToken).replace(/^Y/i, ''),
+    semester: String(semesterToken).replace(/^S/i, ''),
+    mode: String(modeToken).trim().toUpperCase(),
+    specialization: normalizeSpecialization(specializationToken),
+    group: String(groupToken).trim(),
+    subgroup: String(subgroupToken).trim(),
+  };
+};
+
+const buildBatchIdFromSelection = (year, semester, specialization, group, subgroup) => {
+  const yearToken = normalizeYearToken(year);
+  const semesterToken = String(semester || '').trim();
+  const specializationToken = normalizeSpecialization(specialization);
+  const modeToken = semesterToken === '1' ? 'WD' : semesterToken === '2' ? 'WE' : '';
+  const groupToken = String(group || '').trim().padStart(2, '0');
+  const subgroupToken = String(subgroup || '').trim().padStart(2, '0');
+
+  if (!yearToken || !semesterToken || !modeToken || !specializationToken || !groupToken || !subgroupToken) {
+    return '';
+  }
+
+  return `Y${yearToken}.S${semesterToken}.${modeToken}.${specializationToken}.${groupToken}.${subgroupToken}`;
+};
+
 /* ---------------- CONSTANTS ---------------- */
 
 const DEFAULT_SPECIALIZATIONS = ['SE', 'IT', 'CS', 'General'];
@@ -146,7 +188,7 @@ const TimetableGenerationByYearSemester = () => {
   const [selectedSemester, setSelectedSemester] = useState('');
 
   const [modules, setModules] = useState([]);
-  const [algorithms, setAlgorithms] = useState(['hybrid']);
+  const algorithms = ['hybrid'];
   const [timetableName, setTimetableName] = useState('');
 
   // New state for specialization, group, and sub-group
@@ -171,7 +213,29 @@ const TimetableGenerationByYearSemester = () => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
-  const availableAlgorithms = useMemo(() => getAvailableAlgorithms(), []);
+  const matchingBatches = useMemo(() => {
+    if (!selectedYear || !selectedSemester || !selectedSpecialization) {
+      return [];
+    }
+
+    const yearToken = normalizeYearToken(selectedYear);
+    const semesterToken = String(selectedSemester || '').trim();
+    const specializationToken = normalizeSpecialization(selectedSpecialization);
+
+    return batches.filter((batch) => {
+      const identity = parseBatchSelectionId(batch.id || batch.name || '');
+      if (!identity) return false;
+      if (yearToken && identity.year !== yearToken) return false;
+      if (semesterToken && identity.semester !== semesterToken) return false;
+      if (specializationToken && identity.specialization !== specializationToken) return false;
+      return true;
+    });
+  }, [batches, selectedYear, selectedSemester, selectedSpecialization]);
+
+  const resolvedBatchId = useMemo(
+    () => buildBatchIdFromSelection(selectedYear, selectedSemester, selectedSpecialization, selectedGroup, selectedSubGroup),
+    [selectedYear, selectedSemester, selectedSpecialization, selectedGroup, selectedSubGroup]
+  );
 
   /* ---------------- FETCH ---------------- */
 
@@ -190,7 +254,7 @@ const TimetableGenerationByYearSemester = () => {
     try {
       setLoadingModules(true);
 
-      const res = await getModulesByYear(selectedYear, selectedSemester);
+      const res = await getModulesByYear(selectedYear, selectedSemester, selectedSpecialization || null);
 
       const mapped = (res.data || []).map((m) => ({
         ...m,
@@ -204,7 +268,7 @@ const TimetableGenerationByYearSemester = () => {
     } finally {
       setLoadingModules(false);
     }
-  }, [selectedYear, selectedSemester]);
+  }, [selectedYear, selectedSemester, selectedSpecialization]);
 
   const fetchExisting = useCallback(async () => {
     if (!selectedYear || !selectedSemester) return;
@@ -223,7 +287,15 @@ const TimetableGenerationByYearSemester = () => {
       
       console.log('Fetching batches...');
       const res = await listItems('batches');
-      let batchList = res.data || [];
+      let batchList = Array.isArray(res?.items)
+        ? res.items
+        : Array.isArray(res?.data)
+          ? res.data
+          : [];
+
+      if (!batchList.length) {
+        batchList = seedBatches;
+      }
       
       console.log('Raw batch data:', batchList);
       console.log('Batch count:', batchList.length);
@@ -234,16 +306,13 @@ const TimetableGenerationByYearSemester = () => {
       // Extract unique specializations from batches using the helper function
       const specsSet = new Set();
       
-      if (batchList.length > 0) {
-        // Extract from actual batch data
-        batchList.forEach(batch => {
-          const spec = extractSpecializationFromBatch(batch);
-          console.log(`Batch ${batch.id} -> Specialization: ${spec}`);
-          if (spec && spec !== 'IT') { // Avoid duplicates
-            specsSet.add(spec);
-          }
-        });
-      }
+      batchList.forEach((batch) => {
+        const spec = extractSpecializationFromBatch(batch);
+        console.log(`Batch ${batch.id} -> Specialization: ${spec}`);
+        if (spec) {
+          specsSet.add(spec);
+        }
+      });
       
       // Always include the predefined specializations as fallback/default
       SPECIALIZATIONS_LIST.forEach(spec => {
@@ -264,6 +333,7 @@ const TimetableGenerationByYearSemester = () => {
     } catch (err) {
       console.error('Batch fetch error:', err);
       // Fallback: use default specializations
+      setBatches(seedBatches);
       setSpecializations(SPECIALIZATIONS_LIST.map(s => s.key));
       setError('Could not fetch batches - using defaults');
     } finally {
@@ -271,56 +341,93 @@ const TimetableGenerationByYearSemester = () => {
     }
   }, []);
 
+  useEffect(() => {
+    const uniqueGroups = Array.from(
+      new Set(
+        matchingBatches
+          .map((batch) => parseBatchSelectionId(batch.id || batch.name || '')?.group)
+          .filter(Boolean)
+      )
+    ).sort((left, right) => left.localeCompare(right));
+
+    setGroups(uniqueGroups);
+
+    if (!selectedGroup || !uniqueGroups.includes(selectedGroup)) {
+      if (selectedGroup) {
+        setSelectedGroup('');
+        setSelectedSubGroup('');
+      }
+      setSubGroups([]);
+      setSelectedBatch('');
+      return;
+    }
+
+    const uniqueSubGroups = Array.from(
+      new Set(
+        matchingBatches
+          .map((batch) => parseBatchSelectionId(batch.id || batch.name || ''))
+          .filter((identity) => identity && identity.group === selectedGroup)
+          .map((identity) => identity.subgroup)
+          .filter(Boolean)
+      )
+    ).sort((left, right) => left.localeCompare(right));
+
+    setSubGroups(uniqueSubGroups);
+
+    if (selectedSubGroup && !uniqueSubGroups.includes(selectedSubGroup)) {
+      setSelectedSubGroup('');
+      setSelectedBatch('');
+      return;
+    }
+
+    if (selectedYear && selectedSemester && selectedSpecialization && selectedGroup && selectedSubGroup) {
+      const nextBatchId = matchingBatches.find((batch) => {
+        const identity = parseBatchSelectionId(batch.id || batch.name || '');
+        return identity && identity.group === selectedGroup && identity.subgroup === selectedSubGroup;
+      })?.id || resolvedBatchId;
+
+      if (nextBatchId !== selectedBatch) {
+        setSelectedBatch(nextBatchId);
+      }
+    } else if (selectedBatch) {
+      setSelectedBatch('');
+    }
+  }, [
+    matchingBatches,
+    resolvedBatchId,
+    selectedBatch,
+    selectedGroup,
+    selectedSemester,
+    selectedSpecialization,
+    selectedSubGroup,
+    selectedYear,
+  ]);
+
   const handleSpecializationChange = (spec) => {
     setSelectedSpecialization(spec);
     setSelectedGroup('');
     setSelectedSubGroup('');
-    
-    // Filter groups from batches for this specialization
-    const filteredBatches = batches.filter(b => {
-      const batchSpec = extractSpecializationFromBatch(b);
-      return batchSpec === spec;
-    });
-    
-    const groupsSet = new Set();
-    filteredBatches.forEach(b => {
-      const tokens = String(b.id || '').split('.');
-      if (tokens.length >= 5) {
-        const grp = tokens[4];
-        if (grp) groupsSet.add(grp);
-      }
-    });
-    
-    const uniqueGroups = Array.from(groupsSet).sort();
-    console.log(`Groups for ${spec}:`, uniqueGroups);
-    setGroups(uniqueGroups);
-    setSubGroups([]);
+    setSelectedBatch('');
   };
 
   const handleGroupChange = (grp) => {
     setSelectedGroup(grp);
     setSelectedSubGroup('');
-    
-    // Filter sub-groups from batches for this specialization + group
-    const filteredBatches = batches.filter(b => {
-      const batchSpec = extractSpecializationFromBatch(b);
-      const tokens = String(b.id || '').split('.');
-      const batchGroup = tokens.length >= 5 ? tokens[4] : '';
-      return batchSpec === selectedSpecialization && batchGroup === grp;
-    });
-    
-    const subGroupsSet = new Set();
-    filteredBatches.forEach(b => {
-      const tokens = String(b.id || '').split('.');
-      if (tokens.length >= 6) {
-        const subGrp = tokens[5];
-        if (subGrp) subGroupsSet.add(subGrp);
-      }
-    });
-    
-    const uniqueSubGroups = Array.from(subGroupsSet).sort();
-    console.log(`Sub-groups for ${selectedSpecialization}/${grp}:`, uniqueSubGroups);
-    setSubGroups(uniqueSubGroups);
+    setSelectedBatch('');
+  };
+
+  const handleYearChange = (year) => {
+    setSelectedYear(year);
+    setSelectedGroup('');
+    setSelectedSubGroup('');
+    setSelectedBatch('');
+  };
+
+  const handleSemesterChange = (semester) => {
+    setSelectedSemester(semester);
+    setSelectedGroup('');
+    setSelectedSubGroup('');
+    setSelectedBatch('');
   };
 
   useEffect(() => {
@@ -338,7 +445,9 @@ const TimetableGenerationByYearSemester = () => {
   const handleGenerate = async (e) => {
     e.preventDefault();
 
-    if (!selectedYear || !selectedSemester || !timetableName || !selectedSpecialization || !selectedGroup || !selectedSubGroup || !selectedBatch) {
+    const batchId = selectedBatch || resolvedBatchId;
+
+    if (!selectedYear || !selectedSemester || !timetableName || !selectedSpecialization || !selectedGroup || !selectedSubGroup || !batchId) {
       setError('Fill all required fields');
       return;
     }
@@ -356,7 +465,7 @@ const TimetableGenerationByYearSemester = () => {
           specialization: selectedSpecialization,
           group: selectedGroup,
           subgroup: selectedSubGroup,
-          batchId: selectedBatch,
+          batchId,
         }
       );
 
@@ -425,7 +534,7 @@ const TimetableGenerationByYearSemester = () => {
               </label>
               <select
                 value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value)}
+                onChange={(e) => handleYearChange(e.target.value)}
                 className="w-full rounded-xl border-2 border-sky-200 bg-gradient-to-br from-sky-50 to-blue-50 px-4 py-3 font-semibold text-slate-900 shadow-md transition-all duration-200 hover:border-sky-300 hover:shadow-lg focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-300/50"
               >
                 <option value="">Select Year</option>
@@ -444,7 +553,7 @@ const TimetableGenerationByYearSemester = () => {
               </label>
               <select
                 value={selectedSemester}
-                onChange={(e) => setSelectedSemester(e.target.value)}
+                onChange={(e) => handleSemesterChange(e.target.value)}
                 className="w-full rounded-xl border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 to-green-50 px-4 py-3 font-semibold text-slate-900 shadow-md transition-all duration-200 hover:border-emerald-300 hover:shadow-lg focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-300/50"
               >
                 <option value="">Select Semester</option>
@@ -488,10 +597,18 @@ const TimetableGenerationByYearSemester = () => {
               <select
                 value={selectedGroup}
                 onChange={(e) => handleGroupChange(e.target.value)}
-                disabled={!selectedSpecialization}
+                disabled={!selectedYear || !selectedSemester || !selectedSpecialization || groups.length === 0}
                 className="w-full rounded-xl border-2 border-rose-200 bg-gradient-to-br from-rose-50 to-pink-50 px-4 py-3 font-semibold text-slate-900 shadow-md transition-all duration-200 hover:border-rose-300 hover:shadow-lg focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-300/50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <option value="">{selectedSpecialization ? 'Select Group' : 'Select Specialization First'}</option>
+                <option value="">
+                  {!selectedYear || !selectedSemester
+                    ? 'Select Year and Semester First'
+                    : !selectedSpecialization
+                      ? 'Select Specialization First'
+                      : groups.length === 0
+                        ? 'No Groups Available'
+                        : 'Select Group'}
+                </option>
                 {groups.map((group) => (
                   <option key={group} value={group}>
                     {group}
@@ -508,10 +625,20 @@ const TimetableGenerationByYearSemester = () => {
               <select
                 value={selectedSubGroup}
                 onChange={(e) => setSelectedSubGroup(e.target.value)}
-                disabled={!selectedGroup}
+                disabled={!selectedYear || !selectedSemester || !selectedSpecialization || !selectedGroup || subGroups.length === 0}
                 className="w-full rounded-xl border-2 border-cyan-200 bg-gradient-to-br from-cyan-50 to-blue-50 px-4 py-3 font-semibold text-slate-900 shadow-md transition-all duration-200 hover:border-cyan-300 hover:shadow-lg focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-300/50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <option value="">{selectedGroup ? 'Select Sub-Group' : 'Select Group First'}</option>
+                <option value="">
+                  {!selectedYear || !selectedSemester
+                    ? 'Select Year and Semester First'
+                    : !selectedSpecialization
+                      ? 'Select Specialization First'
+                      : !selectedGroup
+                        ? 'Select Group First'
+                        : subGroups.length === 0
+                          ? 'No Sub-Groups Available'
+                          : 'Select Sub-Group'}
+                </option>
                 {subGroups.map((subgroup) => (
                   <option key={subgroup} value={subgroup}>
                     {subgroup}
@@ -520,37 +647,16 @@ const TimetableGenerationByYearSemester = () => {
               </select>
             </div>
 
-            {/* BATCH SELECT */}
+            {/* BATCH PREVIEW */}
             <div className="w-full">
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">
                 <GraduationCap size={16} className="inline mr-2" /> Batch
               </label>
-              <select
-                value={selectedBatch}
-                onChange={(e) => setSelectedBatch(e.target.value)}
-                disabled={!selectedSubGroup}
-                className="w-full rounded-xl border-2 border-teal-200 bg-gradient-to-br from-teal-50 to-cyan-50 px-4 py-3 font-semibold text-slate-900 shadow-md transition-all duration-200 hover:border-teal-300 hover:shadow-lg focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-300/50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <option value="">{selectedSubGroup ? 'Select Batch' : 'Select Sub-Group First'}</option>
-                {batches
-                  .filter(b => {
-                    const batchSpec = extractSpecializationFromBatch(b);
-                    const tokens = String(b.id || '').split('.');
-                    const batchGroup = tokens.length >= 5 ? tokens[4] : '';
-                    const batchSubGroup = tokens.length >= 6 ? tokens[5] : '';
-                    
-                    return (
-                      batchSpec === selectedSpecialization && 
-                      batchGroup === selectedGroup && 
-                      batchSubGroup === selectedSubGroup
-                    );
-                  })
-                  .map((batch) => (
-                    <option key={batch.id} value={batch.id}>
-                      {batch.name || batch.id}
-                    </option>
-                  ))}
-              </select>
+              <div className="rounded-xl border-2 border-teal-200 bg-gradient-to-br from-teal-50 to-cyan-50 px-4 py-3 font-semibold text-slate-900 shadow-md">
+                {selectedYear && selectedSemester && selectedSpecialization && selectedGroup && selectedSubGroup
+                  ? selectedBatch || resolvedBatchId || 'Batch will be generated automatically'
+                  : 'Select year, semester, specialization, group, and subgroup to auto-generate the batch'}
+              </div>
             </div>
 
             {/* TIMETABLE NAME */}
@@ -634,7 +740,7 @@ const TimetableGenerationByYearSemester = () => {
                 {selectedBatch && (
                   <div className="rounded-lg bg-white/70 px-3 py-2 backdrop-blur-sm">
                     <p className="text-xs font-semibold text-slate-600">Batch</p>
-                    <p className="text-sm font-bold text-slate-900">{selectedBatch.slice(0, 8)}...</p>
+                    <p className="text-sm font-bold text-slate-900">{selectedBatch}</p>
                   </div>
                 )}
               </div>
