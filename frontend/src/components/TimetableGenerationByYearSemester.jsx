@@ -78,7 +78,7 @@ const TimetableGenerationByYearSemester = () => {
   const [success, setSuccess] = useState(null);
 
   // Generation options
-  const [algorithms, setAlgorithms] = useState(['gemini']);
+  const [algorithms, setAlgorithms] = useState(['hybrid']);
   const [timetableName, setTimetableName] = useState('');
   const [generatedTimetable, setGeneratedTimetable] = useState(null);
   const [existingTimetables, setExistingTimetables] = useState([]);
@@ -389,17 +389,22 @@ const TimetableGenerationByYearSemester = () => {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">Generate Timetable by Specialization, Year & Semester</h1>
+    <div className="mx-auto max-w-7xl p-2 md:p-4">
+      <div className="fc-surface mb-5 p-5 md:p-6">
+        <h1 className="text-3xl font-bold text-slate-900">Generate Timetable by Specialization, Year & Semester</h1>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          Configure the academic scope, choose optimization engines, and generate publish-ready timetables with elegant review controls.
+        </p>
+      </div>
 
       {/* Messages */}
       {error && (
-        <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 shadow-sm">
           {error}
         </div>
       )}
       {success && (
-        <div className="mb-4 p-4 bg-green-100 text-green-700 rounded">
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-700 shadow-sm">
           {success}
         </div>
       )}
@@ -407,7 +412,7 @@ const TimetableGenerationByYearSemester = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Panel: Generation Form */}
         <div className="lg:col-span-2">
-          <div className="bg-white p-6 rounded-lg shadow">
+          <div className="fc-surface p-6">
             <h2 className="text-2xl font-semibold mb-4">Generation Options</h2>
 
             <form onSubmit={handleGenerateTimetable} className="space-y-4">
@@ -419,7 +424,7 @@ const TimetableGenerationByYearSemester = () => {
                 <select
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(e.target.value)}
-                  className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="fc-input-elegant"
                 >
                   <option value="">-- Select Year --</option>
                   {academicYears.map((item) => (
@@ -438,7 +443,7 @@ const TimetableGenerationByYearSemester = () => {
                 <select
                   value={selectedSemester}
                   onChange={(e) => setSelectedSemester(e.target.value)}
-                  className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="fc-input-elegant"
                 >
                   <option value="">-- Select Semester --</option>
                   {semesters.map((sem) => (
@@ -457,7 +462,7 @@ const TimetableGenerationByYearSemester = () => {
                 <select
                   value={selectedSpecialization}
                   onChange={(e) => setSelectedSpecialization(e.target.value)}
-                  className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="fc-input-elegant"
                   disabled={!selectedYear || loadingModules}
                 >
                   {specializationOptions.map((spec) => (
@@ -479,7 +484,7 @@ const TimetableGenerationByYearSemester = () => {
                 <select
                   value={weekdayFreeDay}
                   onChange={(e) => setWeekdayFreeDay(e.target.value)}
-                  className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="fc-input-elegant"
                 >
                   {WEEKDAY_FREE_DAY_OPTIONS.map((day) => (
                     <option key={day} value={day}>
@@ -502,7 +507,7 @@ const TimetableGenerationByYearSemester = () => {
                   value={timetableName}
                   onChange={(e) => setTimetableName(e.target.value)}
                   required
-                  className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="fc-input-elegant"
                   placeholder="Required: e.g., Semester1_Weekday_Final"
                 />
               </div>
@@ -512,11 +517,11 @@ const TimetableGenerationByYearSemester = () => {
                 <label className="block text-sm font-medium mb-2">
                   Scheduling Algorithm(s) *
                 </label>
-                <div className="space-y-2 bg-gray-50 p-4 rounded">
+                <div className="space-y-2 rounded-xl border border-sky-100 bg-sky-50/40 p-4">
                   {availableAlgorithms.map((algo) => (
                     <label
                       key={algo.value}
-                      className="flex items-center p-2 hover:bg-white rounded"
+                      className="flex items-center rounded-lg p-2 hover:bg-white"
                     >
                       <input
                         type="checkbox"
@@ -539,7 +544,7 @@ const TimetableGenerationByYearSemester = () => {
               <button
                 type="submit"
                 disabled={loading || !selectedYear || !selectedSemester}
-                className="w-full px-4 py-3 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 disabled:bg-gray-400"
+                className="fc-button-primary w-full disabled:bg-gray-400"
               >
                 {loading ? 'Generating...' : 'Generate Timetable'}
               </button>
@@ -547,7 +552,7 @@ const TimetableGenerationByYearSemester = () => {
 
             {/* Generated Timetable Summary */}
             {generatedTimetable && (
-              <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded">
+              <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
                 <h3 className="font-semibold text-green-900 mb-2">
                   ✓ Timetable Generated Successfully
                 </h3>
@@ -583,6 +588,7 @@ const TimetableGenerationByYearSemester = () => {
                       )
                     }
                     className="mt-3 px-3 py-2 bg-green-600 text-white rounded text-sm hover:bg-green-700"
+                    className="fc-button-secondary mt-3"
                   >
                     Export to CSV
                   </button>
@@ -590,7 +596,7 @@ const TimetableGenerationByYearSemester = () => {
               </div>
             )}
 
-            <div className="mt-6 rounded border border-blue-200 bg-blue-50 p-4">
+            <div className="mt-6 rounded-xl border border-sky-200 bg-gradient-to-r from-sky-50 via-white to-cyan-50 p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <h3 className="text-base font-semibold text-blue-900">
                   Categorized Generation (Year + Semester + Specialization)
@@ -599,7 +605,7 @@ const TimetableGenerationByYearSemester = () => {
                   type="button"
                   onClick={handleGenerateAllCategories}
                   disabled={bulkGenerating || !selectedYear || !selectedSemester || !specializationCategoryRows.length}
-                  className="rounded bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:bg-gray-400"
+                  className="fc-button-primary px-3 py-1.5 text-xs disabled:bg-gray-400"
                 >
                   {bulkGenerating ? 'Generating all...' : 'Generate All Categories'}
                 </button>
@@ -610,7 +616,7 @@ const TimetableGenerationByYearSemester = () => {
               ) : specializationCategoryRows.length === 0 ? (
                 <p className="text-sm text-blue-800">No specialization categories found for this selection.</p>
               ) : (
-                <div className="overflow-x-auto rounded border bg-white">
+                <div className="overflow-x-auto rounded-xl border border-sky-100 bg-white">
                   <table className="min-w-full text-sm">
                     <thead className="bg-blue-100">
                       <tr>
@@ -635,7 +641,7 @@ const TimetableGenerationByYearSemester = () => {
                                 type="button"
                                 onClick={() => handleGenerateByCategory(row.specialization)}
                                 disabled={Boolean(categoryGenerating[key]) || bulkGenerating}
-                                className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:bg-gray-400"
+                                className="fc-button-primary px-3 py-1.5 text-xs disabled:bg-gray-400"
                               >
                                 {categoryGenerating[key] ? 'Generating...' : 'Generate'}
                               </button>
@@ -653,7 +659,7 @@ const TimetableGenerationByYearSemester = () => {
 
         {/* Right Panel: Existing Timetables */}
         <div className="space-y-6">
-          <div className="bg-white p-6 rounded-lg shadow">
+          <div className="fc-surface p-6">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xl font-semibold">Academic Coordinator Modules</h3>
               <span className="text-sm text-gray-600">
@@ -668,7 +674,7 @@ const TimetableGenerationByYearSemester = () => {
             ) : filteredAcademicModules.length === 0 ? (
               <p className="text-gray-500 text-sm">No modules found for the selected filter.</p>
             ) : (
-              <div className="max-h-80 overflow-y-auto border rounded">
+              <div className="max-h-80 overflow-y-auto rounded-xl border border-sky-100">
                 <table className="min-w-full text-sm">
                   <thead className="bg-gray-50 sticky top-0">
                     <tr>
@@ -691,7 +697,7 @@ const TimetableGenerationByYearSemester = () => {
             )}
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow">
+          <div className="fc-surface p-6">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-xl font-semibold">Existing Timetables</h3>
             <button
@@ -712,7 +718,7 @@ const TimetableGenerationByYearSemester = () => {
                 existingTimetables.map((tt) => (
                   <div
                     key={tt.id}
-                    className="p-3 border rounded bg-gray-50 text-sm"
+                    className="rounded-xl border border-sky-100 bg-sky-50/40 p-3 text-sm"
                   >
                     <div className="font-medium text-gray-900">
                       {tt.name || `Timetable #${tt.id}`}
@@ -740,14 +746,14 @@ const TimetableGenerationByYearSemester = () => {
                         <button
                           onClick={() => handleApproveTimetable(tt.id)}
                           disabled={loading}
-                          className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 disabled:bg-gray-400"
+                          className="fc-button-primary px-2 py-1 text-xs disabled:bg-gray-400"
                         >
                           Approve
                         </button>
                         <button
                           onClick={() => handleRejectTimetable(tt.id)}
                           disabled={loading}
-                          className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 disabled:bg-gray-400"
+                          className="rounded-lg border border-red-300 bg-red-600 px-2 py-1 text-xs font-semibold text-white transition hover:bg-red-700 disabled:bg-gray-400"
                         >
                           Reject
                         </button>

@@ -263,8 +263,8 @@ export default function FacultyCoordinatorShell({
       style={{
         fontFamily: "'Inter', 'Segoe UI', sans-serif",
         backgroundImage: backgroundImage
-          ? `linear-gradient(135deg, rgba(15,23,42,0.66) 0%, rgba(12,22,40,0.58) 55%, rgba(15,23,42,0.68) 100%), url(${backgroundImage})`
-          : 'linear-gradient(135deg, #091120 0%, #152238 52%, #091120 100%)',
+          ? `linear-gradient(135deg, rgba(239,246,255,0.86) 0%, rgba(248,250,252,0.84) 55%, rgba(232,245,255,0.86) 100%), url(${backgroundImage})`
+          : 'linear-gradient(135deg, #eaf4ff 0%, #f8fbff 52%, #eef7ff 100%)',
         backgroundSize: backgroundImage ? 'cover' : 'auto',
         backgroundPosition: backgroundImage ? 'center' : 'initial',
         backgroundRepeat: backgroundImage ? 'no-repeat' : 'repeat',
@@ -273,9 +273,9 @@ export default function FacultyCoordinatorShell({
     >
       {/* Animated background orbs */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden" style={{ zIndex: 0 }}>
-        <div style={{ position: 'absolute', width: 600, height: 600, top: '-200px', left: '-150px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(34,197,94,0.1) 0%, transparent 70%)', animation: 'fcOrb1 20s ease-in-out infinite' }} />
-        <div style={{ position: 'absolute', width: 500, height: 500, bottom: '-100px', right: '-100px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(245,158,11,0.08) 0%, transparent 70%)', animation: 'fcOrb2 25s ease-in-out infinite' }} />
-        <div style={{ position: 'absolute', width: 300, height: 300, top: '40%', left: '50%', borderRadius: '50%', background: 'radial-gradient(circle, rgba(225,29,72,0.06) 0%, transparent 70%)', animation: 'fcOrb3 18s ease-in-out infinite' }} />
+        <div style={{ position: 'absolute', width: 600, height: 600, top: '-200px', left: '-150px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(56,189,248,0.16) 0%, transparent 70%)', animation: 'fcOrb1 20s ease-in-out infinite' }} />
+        <div style={{ position: 'absolute', width: 500, height: 500, bottom: '-100px', right: '-100px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(14,165,233,0.12) 0%, transparent 70%)', animation: 'fcOrb2 25s ease-in-out infinite' }} />
+        <div style={{ position: 'absolute', width: 300, height: 300, top: '40%', left: '50%', borderRadius: '50%', background: 'radial-gradient(circle, rgba(16,185,129,0.1) 0%, transparent 70%)', animation: 'fcOrb3 18s ease-in-out infinite' }} />
       </div>
 
       <style>{`
@@ -336,9 +336,9 @@ export default function FacultyCoordinatorShell({
         style={{
           display: 'flex', flexDirection: 'column',
           width: sidebarCollapsed ? 72 : 260,
-          background: 'linear-gradient(180deg, rgba(2,8,23,0.97) 0%, rgba(7,20,43,0.97) 100%)',
-          borderRight: '1px solid rgba(148,163,184,0.1)',
-          boxShadow: '4px 0 40px rgba(0,0,0,0.5)',
+          background: 'linear-gradient(180deg, rgba(250,247,255,0.97) 0%, rgba(243,240,255,0.95) 52%, rgba(238,236,255,0.94) 100%)',
+          borderRight: '1px solid rgba(221,214,254,0.95)',
+          boxShadow: '4px 0 28px rgba(76, 29, 149, 0.12)',
           backdropFilter: 'blur(20px)',
           transition: 'width 0.3s cubic-bezier(0.4,0,0.2,1)',
           transform: mobileOpen ? 'translateX(0)' : undefined,
@@ -349,16 +349,16 @@ export default function FacultyCoordinatorShell({
         <div style={{ padding: sidebarCollapsed ? '20px 12px' : '20px', borderBottom: '1px solid rgba(148,163,184,0.1)', display: 'flex', alignItems: 'center', gap: 12, overflow: 'hidden' }}>
           <div style={{
             minWidth: 42, height: 42, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'linear-gradient(135deg, #166534 0%, #22c55e 100%)',
-            boxShadow: '0 8px 24px rgba(34,197,94,0.35)',
+            background: 'linear-gradient(135deg, #6d28d9 0%, #8b5cf6 100%)',
+            boxShadow: '0 8px 24px rgba(109,40,217,0.3)',
             fontSize: 16, fontWeight: 800, color: '#fff', letterSpacing: 1,
           }}>
             {brandCode}
           </div>
           {!sidebarCollapsed && (
             <div style={{ overflow: 'hidden' }}>
-              <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(34,197,94,0.9)', margin: 0 }}>{brandTitle}</p>
-              <p style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', margin: 0, marginTop: 2 }}>{brandSubtitle}</p>
+              <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#5b21b6', margin: 0 }}>{brandTitle}</p>
+              <p style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0, marginTop: 2 }}>{brandSubtitle}</p>
             </div>
           )}
         </div>
@@ -368,13 +368,14 @@ export default function FacultyCoordinatorShell({
           {navGroups.map((group) => (
             <div key={group.title}>
               {!sidebarCollapsed && (
-                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.6)', marginBottom: 8, paddingLeft: 8 }}>
+                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(91,33,182,0.72)', marginBottom: 8, paddingLeft: 8 }}>
                   {group.title}
                 </p>
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {group.items.map((item) => {
                   const itemAccent = item.color || '#38bdf8';
+                  const sidebarAccent = '#7c3aed';
                   const isActive = item.type === 'section'
                     ? location.pathname === '/dashboard' && location.hash === `#${item.id}`
                     : location.pathname === item.to;
@@ -402,17 +403,17 @@ export default function FacultyCoordinatorShell({
                         display: 'flex', alignItems: 'center', gap: 10,
                         padding: sidebarCollapsed ? '10px' : '10px 12px',
                         borderRadius: 12,
-                        border: isActive ? `1px solid ${hexToRgba(itemAccent, 0.38)}` : '1px solid transparent',
+                        border: isActive ? `1px solid ${hexToRgba(sidebarAccent, 0.35)}` : '1px solid transparent',
                         background: isActive
-                          ? `linear-gradient(90deg, ${hexToRgba(itemAccent, 0.24)} 0%, ${hexToRgba(itemAccent, 0.14)} 100%)`
-                          : 'transparent',
-                        boxShadow: isActive ? `0 0 0 1px ${hexToRgba(itemAccent, 0.32)}, 0 6px 24px ${hexToRgba(itemAccent, 0.22)}` : 'none',
-                        color: isActive ? '#e0f2fe' : 'rgba(148,163,184,0.85)',
+                          ? `linear-gradient(90deg, ${hexToRgba(sidebarAccent, 0.22)} 0%, ${hexToRgba(sidebarAccent, 0.12)} 100%)`
+                          : 'rgba(255,255,255,0.5)',
+                        boxShadow: isActive ? `0 0 0 1px ${hexToRgba(sidebarAccent, 0.3)}, 0 6px 24px ${hexToRgba(sidebarAccent, 0.18)}` : 'none',
+                        color: isActive ? '#5b21b6' : '#334155',
                         fontSize: 14, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
                         justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
                       }}
                     >
-                      <span style={{ color: isActive ? itemAccent : 'rgba(148,163,184,0.7)', flexShrink: 0 }}>{item.icon}</span>
+                      <span style={{ color: isActive ? '#6d28d9' : '#64748b', flexShrink: 0 }}>{item.icon}</span>
                       {!sidebarCollapsed && <span>{item.label}</span>}
                       {sidebarCollapsed && hoveredNavId === item.id && (
                         <span
@@ -424,9 +425,9 @@ export default function FacultyCoordinatorShell({
                             whiteSpace: 'nowrap',
                             fontSize: 12,
                             fontWeight: 600,
-                            color: '#f8fafc',
-                            background: 'linear-gradient(135deg, rgba(2,8,23,0.95), rgba(15,23,42,0.95))',
-                            border: '1px solid rgba(148,163,184,0.3)',
+                            color: '#0f172a',
+                            background: 'linear-gradient(135deg, rgba(255,255,255,0.96), rgba(240,249,255,0.95))',
+                            border: '1px solid rgba(186,230,253,0.9)',
                             borderRadius: 8,
                             padding: '5px 10px',
                             boxShadow: '0 8px 20px rgba(0,0,0,0.35)',
@@ -452,8 +453,8 @@ export default function FacultyCoordinatorShell({
         <div style={{ padding: sidebarCollapsed ? '12px 8px' : '12px 16px', borderTop: '1px solid rgba(148,163,184,0.1)' }}>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 10,
-            background: 'rgba(15,23,42,0.7)', borderRadius: 12, padding: sidebarCollapsed ? '10px 0' : '10px 12px',
-            border: '1px solid rgba(148,163,184,0.08)',
+            background: 'rgba(255,255,255,0.9)', borderRadius: 12, padding: sidebarCollapsed ? '10px 0' : '10px 12px',
+            border: '1px solid rgba(221,214,254,0.95)',
             justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
           }}>
             <div style={{
@@ -464,8 +465,8 @@ export default function FacultyCoordinatorShell({
             }}>{initials}</div>
             {!sidebarCollapsed && (
               <div style={{ overflow: 'hidden' }}>
-                <p style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</p>
-                <p style={{ fontSize: 10, color: '#34d399', margin: 0, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' }}>● Active Session</p>
+                <p style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</p>
+                <p style={{ fontSize: 10, color: '#6d28d9', margin: 0, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' }}>● Active Session</p>
               </div>
             )}
           </div>
@@ -479,7 +480,7 @@ export default function FacultyCoordinatorShell({
             position: 'absolute', top: 24, right: -12,
             width: 24, height: 24, borderRadius: '50%',
             background: 'linear-gradient(135deg, #0ea5e9, #6366f1)',
-            border: '2px solid rgba(2,8,23,0.97)',
+            border: '2px solid #ffffff',
             display: 'none', alignItems: 'center', justifyContent: 'center',
             color: '#fff', cursor: 'pointer', boxShadow: '0 4px 12px rgba(14,165,233,0.4)',
           }}
@@ -495,10 +496,10 @@ export default function FacultyCoordinatorShell({
         {/* Top header */}
         <header style={{
           position: 'sticky', top: 0, zIndex: 30,
-          background: 'rgba(7,20,43,0.8)',
-          borderBottom: '1px solid rgba(148,163,184,0.12)',
+          background: 'rgba(255,255,255,0.86)',
+          borderBottom: '1px solid rgba(186,230,253,0.9)',
           backdropFilter: 'blur(20px)',
-          boxShadow: '0 4px 30px rgba(0,0,0,0.3)',
+          boxShadow: '0 8px 24px rgba(14,116,144,0.1)',
           padding: '0 24px',
           height: 64, display: 'flex', alignItems: 'center',
           flexShrink: 0,
@@ -510,15 +511,15 @@ export default function FacultyCoordinatorShell({
                 type="button"
                 onClick={() => setMobileOpen(true)}
                 className="fc-btn lg:hidden"
-                style={{ padding: '8px', borderRadius: 8, background: 'rgba(148,163,184,0.1)', border: '1px solid rgba(148,163,184,0.15)', color: '#94a3b8', cursor: 'pointer' }}
+                style={{ padding: '8px', borderRadius: 8, background: 'rgba(240,249,255,0.9)', border: '1px solid rgba(186,230,253,0.9)', color: '#0369a1', cursor: 'pointer' }}
               >
                 {Icon.menu}
               </button>
 
               <div>
                 <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#38bdf8' }}>{badge}</p>
-                <h1 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#f1f5f9', lineHeight: 1.3 }}>{title}</h1>
-                {subtitle && <p style={{ margin: 0, fontSize: 12, color: '#94a3b8' }}>{subtitle}</p>}
+                <h1 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#0f172a', lineHeight: 1.3 }}>{title}</h1>
+                {subtitle && <p style={{ margin: 0, fontSize: 12, color: '#475569' }}>{subtitle}</p>}
               </div>
             </div>
 
@@ -526,12 +527,12 @@ export default function FacultyCoordinatorShell({
               {/* Notification bell */}
               <button type="button" className="fc-btn" style={{
                 width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                borderRadius: 10, border: '1px solid rgba(148,163,184,0.15)',
-                background: 'rgba(148,163,184,0.08)', color: '#94a3b8', cursor: 'pointer',
+                borderRadius: 10, border: '1px solid rgba(186,230,253,0.9)',
+                background: 'rgba(240,249,255,0.9)', color: '#0369a1', cursor: 'pointer',
                 position: 'relative',
               }}>
                 {Icon.bell}
-                <span style={{ position: 'absolute', top: 8, right: 8, width: 7, height: 7, borderRadius: '50%', background: '#38bdf8', border: '1.5px solid rgba(7,20,43,0.97)' }} />
+                <span style={{ position: 'absolute', top: 8, right: 8, width: 7, height: 7, borderRadius: '50%', background: '#38bdf8', border: '1.5px solid #ffffff' }} />
               </button>
 
               {headerActions}
@@ -539,7 +540,7 @@ export default function FacultyCoordinatorShell({
               {/* User chip */}
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 10, padding: '6px 12px 6px 6px',
-                background: 'rgba(15,23,42,0.7)', border: '1px solid rgba(148,163,184,0.12)',
+                background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(186,230,253,0.9)',
                 borderRadius: 40, backdropFilter: 'blur(10px)',
               }}>
                 <div style={{
@@ -549,8 +550,8 @@ export default function FacultyCoordinatorShell({
                   fontSize: 11, fontWeight: 800, color: '#fff',
                 }}>{initials}</div>
                 <div style={{ display: 'none' }} className="sm:block">
-                  <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#f1f5f9' }}>{displayName}</p>
-                  <p style={{ margin: 0, fontSize: 10, color: '#34d399', fontWeight: 600 }}>{Icon.shield} Coordinator</p>
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#0f172a' }}>{displayName}</p>
+                  <p style={{ margin: 0, fontSize: 10, color: '#0369a1', fontWeight: 600 }}>Coordinator</p>
                 </div>
               </div>
             </div>
@@ -575,9 +576,9 @@ export default function FacultyCoordinatorShell({
           <div
             style={{
               borderRadius: 14,
-              border: '1px solid rgba(148,163,184,0.16)',
-              background: 'linear-gradient(180deg, rgba(2,8,23,0.72), rgba(2,8,23,0.6))',
-              boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
+              border: '1px solid rgba(186,230,253,0.9)',
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.92), rgba(240,249,255,0.9))',
+              boxShadow: '0 10px 24px rgba(14,116,144,0.1)',
               backdropFilter: 'blur(10px)',
               display: 'flex',
               alignItems: 'center',
@@ -587,11 +588,11 @@ export default function FacultyCoordinatorShell({
               padding: '12px 14px',
             }}
           >
-            <p style={{ margin: 0, fontSize: 12, color: '#cbd5e1' }}>
+            <p style={{ margin: 0, fontSize: 12, color: '#334155' }}>
               {footerNote || `SLIIT Timetable Coordinator Workspace • ${currentYear}`}
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12 }}>
-              <span style={{ color: '#94a3b8' }}>Data sync secured</span>
+              <span style={{ color: '#64748b' }}>Data sync secured</span>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }} className="fc-pulse-dot" />
             </div>
           </div>
