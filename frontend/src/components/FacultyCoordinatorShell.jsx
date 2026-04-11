@@ -263,8 +263,8 @@ export default function FacultyCoordinatorShell({
       style={{
         fontFamily: "'Inter', 'Segoe UI', sans-serif",
         backgroundImage: backgroundImage
-          ? `linear-gradient(135deg, rgba(15,23,42,0.66) 0%, rgba(12,22,40,0.58) 55%, rgba(15,23,42,0.68) 100%), url(${backgroundImage})`
-          : 'linear-gradient(135deg, #091120 0%, #152238 52%, #091120 100%)',
+          ? `linear-gradient(135deg, rgba(15,23,42,0.72) 0%, rgba(17,24,39,0.64) 52%, rgba(30,41,59,0.76) 100%), url(${backgroundImage})`
+          : 'linear-gradient(135deg, #0b1120 0%, #111827 42%, #172554 100%)',
         backgroundSize: backgroundImage ? 'cover' : 'auto',
         backgroundPosition: backgroundImage ? 'center' : 'initial',
         backgroundRepeat: backgroundImage ? 'no-repeat' : 'repeat',
@@ -273,9 +273,9 @@ export default function FacultyCoordinatorShell({
     >
       {/* Animated background orbs */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden" style={{ zIndex: 0 }}>
-        <div style={{ position: 'absolute', width: 600, height: 600, top: '-200px', left: '-150px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(34,197,94,0.1) 0%, transparent 70%)', animation: 'fcOrb1 20s ease-in-out infinite' }} />
-        <div style={{ position: 'absolute', width: 500, height: 500, bottom: '-100px', right: '-100px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(245,158,11,0.08) 0%, transparent 70%)', animation: 'fcOrb2 25s ease-in-out infinite' }} />
-        <div style={{ position: 'absolute', width: 300, height: 300, top: '40%', left: '50%', borderRadius: '50%', background: 'radial-gradient(circle, rgba(225,29,72,0.06) 0%, transparent 70%)', animation: 'fcOrb3 18s ease-in-out infinite' }} />
+        <div style={{ position: 'absolute', width: 600, height: 600, top: '-200px', left: '-150px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(79,70,229,0.1) 0%, transparent 72%)', animation: 'fcOrb1 20s ease-in-out infinite' }} />
+        <div style={{ position: 'absolute', width: 500, height: 500, bottom: '-100px', right: '-100px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(16,185,129,0.07) 0%, transparent 72%)', animation: 'fcOrb2 25s ease-in-out infinite' }} />
+        <div style={{ position: 'absolute', width: 300, height: 300, top: '40%', left: '50%', borderRadius: '50%', background: 'radial-gradient(circle, rgba(14,165,233,0.05) 0%, transparent 72%)', animation: 'fcOrb3 18s ease-in-out infinite' }} />
       </div>
 
       <style>{`
@@ -336,7 +336,7 @@ export default function FacultyCoordinatorShell({
         style={{
           display: 'flex', flexDirection: 'column',
           width: sidebarCollapsed ? 72 : 260,
-          background: 'linear-gradient(180deg, rgba(2,8,23,0.97) 0%, rgba(7,20,43,0.97) 100%)',
+          background: 'linear-gradient(180deg, rgba(2,6,23,0.97) 0%, rgba(15,23,42,0.97) 100%)',
           borderRight: '1px solid rgba(148,163,184,0.1)',
           boxShadow: '4px 0 40px rgba(0,0,0,0.5)',
           backdropFilter: 'blur(20px)',
@@ -349,15 +349,15 @@ export default function FacultyCoordinatorShell({
         <div style={{ padding: sidebarCollapsed ? '20px 12px' : '20px', borderBottom: '1px solid rgba(148,163,184,0.1)', display: 'flex', alignItems: 'center', gap: 12, overflow: 'hidden' }}>
           <div style={{
             minWidth: 42, height: 42, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'linear-gradient(135deg, #166534 0%, #22c55e 100%)',
-            boxShadow: '0 8px 24px rgba(34,197,94,0.35)',
+            background: 'linear-gradient(135deg, #1e3a8a 0%, #4f46e5 100%)',
+            boxShadow: '0 8px 24px rgba(79,70,229,0.28)',
             fontSize: 16, fontWeight: 800, color: '#fff', letterSpacing: 1,
           }}>
             {brandCode}
           </div>
           {!sidebarCollapsed && (
             <div style={{ overflow: 'hidden' }}>
-              <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(34,197,94,0.9)', margin: 0 }}>{brandTitle}</p>
+              <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(165,180,252,0.95)', margin: 0 }}>{brandTitle}</p>
               <p style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', margin: 0, marginTop: 2 }}>{brandSubtitle}</p>
             </div>
           )}
@@ -404,7 +404,7 @@ export default function FacultyCoordinatorShell({
                         borderRadius: 12,
                         border: isActive ? `1px solid ${hexToRgba(itemAccent, 0.38)}` : '1px solid transparent',
                         background: isActive
-                          ? `linear-gradient(90deg, ${hexToRgba(itemAccent, 0.24)} 0%, ${hexToRgba(itemAccent, 0.14)} 100%)`
+                          ? `linear-gradient(90deg, ${hexToRgba(itemAccent, 0.20)} 0%, ${hexToRgba(itemAccent, 0.10)} 100%)`
                           : 'transparent',
                         boxShadow: isActive ? `0 0 0 1px ${hexToRgba(itemAccent, 0.32)}, 0 6px 24px ${hexToRgba(itemAccent, 0.22)}` : 'none',
                         color: isActive ? '#e0f2fe' : 'rgba(148,163,184,0.85)',
@@ -458,14 +458,14 @@ export default function FacultyCoordinatorShell({
           }}>
             <div style={{
               width: 34, height: 34, minWidth: 34, borderRadius: '50%',
-              background: 'linear-gradient(135deg, #14532d, #22c55e)',
+              background: 'linear-gradient(135deg, #1e3a8a, #4f46e5)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 12, fontWeight: 800, color: '#fff',
             }}>{initials}</div>
             {!sidebarCollapsed && (
               <div style={{ overflow: 'hidden' }}>
                 <p style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</p>
-                <p style={{ fontSize: 10, color: '#34d399', margin: 0, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' }}>● Active Session</p>
+                <p style={{ fontSize: 10, color: '#a5b4fc', margin: 0, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' }}>● Active Session</p>
               </div>
             )}
           </div>
@@ -478,7 +478,7 @@ export default function FacultyCoordinatorShell({
           style={{
             position: 'absolute', top: 24, right: -12,
             width: 24, height: 24, borderRadius: '50%',
-            background: 'linear-gradient(135deg, #0ea5e9, #6366f1)',
+            background: 'linear-gradient(135deg, #1e3a8a, #6366f1)',
             border: '2px solid rgba(2,8,23,0.97)',
             display: 'none', alignItems: 'center', justifyContent: 'center',
             color: '#fff', cursor: 'pointer', boxShadow: '0 4px 12px rgba(14,165,233,0.4)',
@@ -495,7 +495,7 @@ export default function FacultyCoordinatorShell({
         {/* Top header */}
         <header style={{
           position: 'sticky', top: 0, zIndex: 30,
-          background: 'rgba(7,20,43,0.8)',
+          background: 'rgba(15,23,42,0.82)',
           borderBottom: '1px solid rgba(148,163,184,0.12)',
           backdropFilter: 'blur(20px)',
           boxShadow: '0 4px 30px rgba(0,0,0,0.3)',
@@ -510,13 +510,13 @@ export default function FacultyCoordinatorShell({
                 type="button"
                 onClick={() => setMobileOpen(true)}
                 className="fc-btn lg:hidden"
-                style={{ padding: '8px', borderRadius: 8, background: 'rgba(148,163,184,0.1)', border: '1px solid rgba(148,163,184,0.15)', color: '#94a3b8', cursor: 'pointer' }}
+                style={{ padding: '8px', borderRadius: 8, background: 'rgba(148,163,184,0.1)', border: '1px solid rgba(148,163,184,0.15)', color: '#cbd5e1', cursor: 'pointer' }}
               >
                 {Icon.menu}
               </button>
 
               <div>
-                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#38bdf8' }}>{badge}</p>
+                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#a5b4fc' }}>{badge}</p>
                 <h1 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#f1f5f9', lineHeight: 1.3 }}>{title}</h1>
                 {subtitle && <p style={{ margin: 0, fontSize: 12, color: '#94a3b8' }}>{subtitle}</p>}
               </div>
@@ -550,7 +550,7 @@ export default function FacultyCoordinatorShell({
                 }}>{initials}</div>
                 <div style={{ display: 'none' }} className="sm:block">
                   <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#f1f5f9' }}>{displayName}</p>
-                  <p style={{ margin: 0, fontSize: 10, color: '#34d399', fontWeight: 600 }}>{Icon.shield} Coordinator</p>
+                  <p style={{ margin: 0, fontSize: 10, color: '#a5b4fc', fontWeight: 600 }}>{Icon.shield} Coordinator</p>
                 </div>
               </div>
             </div>
