@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Wand2, CalendarDays, GraduationCap, Cpu, FileCheck2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import {
   generateTimetableForYearSemester,
   getTimetablesForYearSemester,
@@ -8,6 +9,7 @@ import {
   downloadTimetableAsCSV,
 } from '../api/timetableGeneration.js';
 import { getAcademicYears, getModulesByYear } from '../api/moduleManagement.js';
+import { listItems } from '../api/scheduler.js';
 import { toast } from 'react-toastify';
 
 const parseJsonSafe = (value, fallback = {}) => {
@@ -68,6 +70,31 @@ const inferSpecializationFromModule = (module = {}) => {
 const DEFAULT_SPECIALIZATIONS = ['SE', 'IT', 'CS', 'IME', 'ISE', 'CSNE', 'CYBER SECURITY', 'General'];
 const WEEKDAY_FREE_DAY_OPTIONS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const MODULE_LIMIT_PER_SPECIALIZATION = 5;
+const DEFAULT_GROUP_OPTIONS = ['ALL'];
+const DEFAULT_SUBGROUP_OPTIONS = ['ALL'];
+
+const cardClass = 'rounded-3xl border border-sky-100 bg-white/95 shadow-[0_18px_40px_rgba(14,116,144,0.10)]';
+const inputClass = 'w-full rounded-xl border border-sky-100 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-sky-500 focus:ring-4 focus:ring-sky-100';
+const labelClass = 'mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700';
+const helperClass = 'mt-1 text-xs text-slate-500';
+
+const parseBatchScope = (batchId = '') => {
+  const [yearToken = '', semesterToken = '', modeToken = '', specializationToken = '', groupToken = '', subgroupToken = ''] = String(batchId)
+    .trim()
+    .split('.');
+
+  const year = Number(String(yearToken).replace(/[^0-9]/g, ''));
+  const semester = Number(String(semesterToken).replace(/[^0-9]/g, ''));
+
+  return {
+    year: Number.isInteger(year) && year > 0 ? String(year) : '',
+    semester: Number.isInteger(semester) && semester > 0 ? String(semester) : '',
+    mode: String(modeToken || '').trim().toUpperCase(),
+    specialization: normalizeSpecialization(specializationToken || ''),
+    group: String(groupToken || '').trim(),
+    subgroup: String(subgroupToken || '').trim(),
+  };
+};
 
 const TimetableGenerationByYearSemester = () => {
   const [academicYears, setAcademicYears] = useState([]);
@@ -78,16 +105,17 @@ const TimetableGenerationByYearSemester = () => {
   const [success, setSuccess] = useState(null);
 
   // Generation options
-  const [algorithms, setAlgorithms] = useState(['gemini']);
+  const [algorithms, setAlgorithms] = useState(['hybrid']);
   const [timetableName, setTimetableName] = useState('');
   const [generatedTimetable, setGeneratedTimetable] = useState(null);
   const [existingTimetables, setExistingTimetables] = useState([]);
   const [showExisting, setShowExisting] = useState(false);
   const [modulesFromAcademic, setModulesFromAcademic] = useState([]);
+  const [batches, setBatches] = useState([]);
   const [selectedSpecialization, setSelectedSpecialization] = useState('ALL');
+  const [selectedGroup, setSelectedGroup] = useState('ALL');
+  const [selectedSubgroup, setSelectedSubgroup] = useState('ALL');
   const [loadingModules, setLoadingModules] = useState(false);
-  const [categoryGenerating, setCategoryGenerating] = useState({});
-  const [bulkGenerating, setBulkGenerating] = useState(false);
   const [weekdayFreeDay, setWeekdayFreeDay] = useState('Fri');
 
   const availableAlgorithms = getAvailableAlgorithms();
@@ -108,6 +136,15 @@ const TimetableGenerationByYearSemester = () => {
       setExistingTimetables(response.data || []);
     } catch (err) {
       console.error('Error fetching existing timetables:', err);
+    }
+  }, []);
+
+  const fetchBatches = useCallback(async () => {
+    try {
+      const response = await listItems('batches');
+      setBatches(response.items || []);
+    } catch {
+      setBatches([]);
     }
   }, []);
 
@@ -160,7 +197,8 @@ const TimetableGenerationByYearSemester = () => {
   // Fetch academic years on mount
   useEffect(() => {
     fetchAcademicYears();
-  }, [fetchAcademicYears]);
+    fetchBatches();
+  }, [fetchAcademicYears, fetchBatches]);
 
   // Fetch existing timetables when year/semester changes
   useEffect(() => {
@@ -182,7 +220,14 @@ const TimetableGenerationByYearSemester = () => {
 
   useEffect(() => {
     setSelectedSpecialization('ALL');
+    setSelectedGroup('ALL');
+    setSelectedSubgroup('ALL');
   }, [selectedYear]);
+
+  useEffect(() => {
+    setSelectedGroup('ALL');
+    setSelectedSubgroup('ALL');
+  }, [selectedSemester, selectedSpecialization]);
 
   const specializationOptions = React.useMemo(() => {
     const values = [...new Set([...DEFAULT_SPECIALIZATIONS, ...modulesFromAcademic.map((m) => m.specialization).filter(Boolean)])];
@@ -194,17 +239,42 @@ const TimetableGenerationByYearSemester = () => {
     return modulesFromAcademic.filter((module) => module.specialization === selectedSpecialization);
   }, [modulesFromAcademic, selectedSpecialization]);
 
-  const specializationCategoryRows = React.useMemo(() => {
-    const counts = new Map();
-    modulesFromAcademic.forEach((module) => {
-      const spec = module.specialization || 'General';
-      counts.set(spec, (counts.get(spec) || 0) + 1);
-    });
+  const matchingBatchScopes = React.useMemo(() => {
+    return batches
+      .map((batch) => parseBatchScope(batch?.id || batch?.name || ''))
+      .filter((scope) => {
+        if (!scope.year || !scope.semester) return false;
+        if (selectedYear && scope.year !== String(selectedYear)) return false;
+        if (selectedSemester && scope.semester !== String(selectedSemester)) return false;
+        if (selectedSpecialization !== 'ALL' && scope.specialization !== selectedSpecialization) return false;
+        return true;
+      });
+  }, [batches, selectedYear, selectedSemester, selectedSpecialization]);
 
-    return Array.from(counts.entries())
-      .map(([specialization, moduleCount]) => ({ specialization, moduleCount }))
-      .sort((a, b) => a.specialization.localeCompare(b.specialization));
-  }, [modulesFromAcademic]);
+  const groupOptions = React.useMemo(() => {
+    const groups = [...new Set(matchingBatchScopes.map((scope) => scope.group).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    return groups.length ? ['ALL', ...groups] : DEFAULT_GROUP_OPTIONS;
+  }, [matchingBatchScopes]);
+
+  const subgroupOptions = React.useMemo(() => {
+    const scoped = selectedGroup === 'ALL'
+      ? matchingBatchScopes
+      : matchingBatchScopes.filter((scope) => scope.group === selectedGroup);
+    const subgroups = [...new Set(scoped.map((scope) => scope.subgroup).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    return subgroups.length ? ['ALL', ...subgroups] : DEFAULT_SUBGROUP_OPTIONS;
+  }, [matchingBatchScopes, selectedGroup]);
+
+  useEffect(() => {
+    if (!groupOptions.includes(selectedGroup)) {
+      setSelectedGroup('ALL');
+    }
+  }, [groupOptions, selectedGroup]);
+
+  useEffect(() => {
+    if (!subgroupOptions.includes(selectedSubgroup)) {
+      setSelectedSubgroup('ALL');
+    }
+  }, [subgroupOptions, selectedSubgroup]);
 
   const handleAlgorithmChange = (algo) => {
     setAlgorithms((prev) =>
@@ -230,6 +300,21 @@ const TimetableGenerationByYearSemester = () => {
       return;
     }
 
+    if (selectedSpecialization === 'ALL') {
+      setError('Please select a specialization to generate a scoped timetable');
+      return;
+    }
+
+    if (groupOptions.length > 1 && selectedGroup === 'ALL') {
+      setError('Please select a group for the selected year, semester, and specialization');
+      return;
+    }
+
+    if (subgroupOptions.length > 1 && selectedSubgroup === 'ALL') {
+      setError('Please select a subgroup for the selected year, semester, specialization, and group');
+      return;
+    }
+
     if (algorithms.length === 0) {
       setError('Please select at least one algorithm');
       return;
@@ -251,6 +336,8 @@ const TimetableGenerationByYearSemester = () => {
           algorithms,
           timetableName: resolvedTimetableName,
           specialization: selectedSpecialization !== 'ALL' ? selectedSpecialization : undefined,
+          group: selectedGroup !== 'ALL' ? selectedGroup : undefined,
+          subgroup: selectedSubgroup !== 'ALL' ? selectedSubgroup : undefined,
           weekdayFreeDay,
           moduleLimitPerSpecialization: MODULE_LIMIT_PER_SPECIALIZATION,
         }
@@ -311,115 +398,57 @@ const TimetableGenerationByYearSemester = () => {
     downloadTimetableAsCSV(schedule, selectedYear, selectedSemester);
   };
 
-  const handleGenerateByCategory = async (specialization) => {
-    if (!selectedYear || !selectedSemester || !specialization) {
-      setError('Please select year and semester first.');
-      return;
-    }
-
-    if (!String(timetableName || '').trim()) {
-      setError('Timetable name is required');
-      return;
-    }
-
-    const key = `${selectedYear}-${selectedSemester}-${specialization}`;
-    try {
-      setCategoryGenerating((prev) => ({ ...prev, [key]: true }));
-      setError(null);
-
-      const response = await generateTimetableForYearSemester(selectedYear, selectedSemester, {
-        algorithms,
-        timetableName: String(timetableName).trim(),
-        specialization,
-        weekdayFreeDay,
-        moduleLimitPerSpecialization: MODULE_LIMIT_PER_SPECIALIZATION,
-      });
-
-      setGeneratedTimetable(response);
-      setSuccess(
-        `Generated timetable for Year ${selectedYear}, Semester ${selectedSemester}, ${specialization}. ID: ${response.timetableId}`,
-      );
-      fetchExistingTimetables(selectedYear, selectedSemester);
-    } catch (err) {
-      setError(err.response?.data?.error || err.message || `Failed to generate for ${specialization}`);
-    } finally {
-      setCategoryGenerating((prev) => ({ ...prev, [key]: false }));
-    }
-  };
-
-  const handleGenerateAllCategories = async () => {
-    if (!selectedYear || !selectedSemester) {
-      setError('Please select year and semester first.');
-      return;
-    }
-
-    if (!specializationCategoryRows.length) {
-      setError('No specialization categories with modules are available for this year and semester.');
-      return;
-    }
-
-    if (!String(timetableName || '').trim()) {
-      setError('Timetable name is required');
-      return;
-    }
-
-    try {
-      setBulkGenerating(true);
-      setError(null);
-
-      for (const row of specializationCategoryRows) {
-        await generateTimetableForYearSemester(selectedYear, selectedSemester, {
-          algorithms,
-          timetableName: `${String(timetableName).trim()}_${row.specialization.replace(/\s+/g, '_')}`,
-          specialization: row.specialization,
-          weekdayFreeDay,
-          moduleLimitPerSpecialization: MODULE_LIMIT_PER_SPECIALIZATION,
-        });
-      }
-
-      setSuccess(
-        `Generated all categories for Year ${selectedYear}, Semester ${selectedSemester} (${specializationCategoryRows.length} specializations).`,
-      );
-      fetchExistingTimetables(selectedYear, selectedSemester);
-    } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed while generating all categories');
-    } finally {
-      setBulkGenerating(false);
-    }
-  };
-
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">Generate Timetable by Specialization, Year & Semester</h1>
+    <div className="mx-auto max-w-7xl p-6">
+      <div className="mb-6 rounded-3xl border border-sky-100/80 bg-gradient-to-r from-sky-50 via-white to-cyan-50 p-6 shadow-[0_14px_30px_rgba(14,116,144,0.12)]">
+        <div className="flex items-start gap-3">
+          <div className="rounded-xl bg-gradient-to-br from-sky-600 to-cyan-600 p-2.5 text-white shadow-lg shadow-sky-200">
+            <Wand2 className="h-5 w-5" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 md:text-3xl">Generate Timetable by Specialization, Year & Semester</h1>
+            <p className="mt-1 text-sm text-slate-600">Create elegant, conflict-aware timetables with specialization, subgroup, semester, and hall-aware filtering.</p>
+          </div>
+        </div>
+      </div>
 
       {/* Messages */}
       {error && (
-        <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           {error}
         </div>
       )}
       {success && (
-        <div className="mb-4 p-4 bg-green-100 text-green-700 rounded">
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-700">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
           {success}
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Left Panel: Generation Form */}
         <div className="lg:col-span-2">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-2xl font-semibold mb-4">Generation Options</h2>
+          <div className={`${cardClass} p-6`}>
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <h2 className="flex items-center gap-2 text-2xl font-semibold text-slate-900">
+                <FileCheck2 className="h-6 w-6 text-indigo-600" />
+                Generation Options
+              </h2>
+              <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700">Academic Planner</span>
+            </div>
 
             <form onSubmit={handleGenerateTimetable} className="space-y-4">
               {/* Year Selection */}
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <label className={labelClass}>
+                  <CalendarDays className="h-4 w-4 text-sky-600" />
                   Academic Year *
                 </label>
                 <select
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(e.target.value)}
-                  className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={inputClass}
                 >
                   <option value="">-- Select Year --</option>
                   {academicYears.map((item) => (
@@ -432,13 +461,14 @@ const TimetableGenerationByYearSemester = () => {
 
               {/* Semester Selection */}
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <label className={labelClass}>
+                  <GraduationCap className="h-4 w-4 text-sky-600" />
                   Semester *
                 </label>
                 <select
                   value={selectedSemester}
                   onChange={(e) => setSelectedSemester(e.target.value)}
-                  className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={inputClass}
                 >
                   <option value="">-- Select Semester --</option>
                   {semesters.map((sem) => (
@@ -451,13 +481,14 @@ const TimetableGenerationByYearSemester = () => {
 
               {/* Specialization Selection */}
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <label className={labelClass}>
+                  <GraduationCap className="h-4 w-4 text-sky-600" />
                   Specialization
                 </label>
                 <select
                   value={selectedSpecialization}
                   onChange={(e) => setSelectedSpecialization(e.target.value)}
-                  className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={inputClass}
                   disabled={!selectedYear || loadingModules}
                 >
                   {specializationOptions.map((spec) => (
@@ -466,20 +497,65 @@ const TimetableGenerationByYearSemester = () => {
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-xs text-gray-500">
+                <p className={helperClass}>
                   Modules are fetched from Academic Coordinator records with a cap of {MODULE_LIMIT_PER_SPECIALIZATION} modules per specialization for the selected year and semester.
+                </p>
+              </div>
+
+              <div>
+                <label className={labelClass}>
+                  <GraduationCap className="h-4 w-4 text-sky-600" />
+                  Group
+                </label>
+                <select
+                  value={selectedGroup}
+                  onChange={(e) => setSelectedGroup(e.target.value)}
+                  className={inputClass}
+                  disabled={!selectedYear || !selectedSemester}
+                >
+                  {groupOptions.map((group) => (
+                    <option key={group} value={group}>
+                      {group === 'ALL' ? 'All Groups' : `Group ${group}`}
+                    </option>
+                  ))}
+                </select>
+                <p className={helperClass}>
+                  Filter available groups by selected year, semester, and specialization.
+                </p>
+              </div>
+
+              <div>
+                <label className={labelClass}>
+                  <GraduationCap className="h-4 w-4 text-sky-600" />
+                  Subgroup
+                </label>
+                <select
+                  value={selectedSubgroup}
+                  onChange={(e) => setSelectedSubgroup(e.target.value)}
+                  className={inputClass}
+                  disabled={!selectedYear || !selectedSemester}
+                >
+                  {subgroupOptions.map((subgroup) => (
+                    <option key={subgroup} value={subgroup}>
+                      {subgroup === 'ALL' ? 'All Subgroups' : `Subgroup ${subgroup}`}
+                    </option>
+                  ))}
+                </select>
+                <p className={helperClass}>
+                  Generate timetable per subgroup within the selected specialization and semester.
                 </p>
               </div>
 
               {/* Weekday Free Day */}
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <label className={labelClass}>
+                  <CalendarDays className="h-4 w-4 text-sky-600" />
                   Weekday Free Day
                 </label>
                 <select
                   value={weekdayFreeDay}
                   onChange={(e) => setWeekdayFreeDay(e.target.value)}
-                  className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={inputClass}
                 >
                   {WEEKDAY_FREE_DAY_OPTIONS.map((day) => (
                     <option key={day} value={day}>
@@ -487,14 +563,15 @@ const TimetableGenerationByYearSemester = () => {
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-xs text-gray-500">
+                <p className={helperClass}>
                   Weekday batches will not be scheduled on this day.
                 </p>
               </div>
 
               {/* Timetable Name */}
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <label className={labelClass}>
+                  <FileCheck2 className="h-4 w-4 text-sky-600" />
                   Timetable Name *
                 </label>
                 <input
@@ -502,21 +579,22 @@ const TimetableGenerationByYearSemester = () => {
                   value={timetableName}
                   onChange={(e) => setTimetableName(e.target.value)}
                   required
-                  className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={inputClass}
                   placeholder="Required: e.g., Semester1_Weekday_Final"
                 />
               </div>
 
               {/* Algorithm Selection */}
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <label className={labelClass}>
+                  <Cpu className="h-4 w-4 text-sky-600" />
                   Scheduling Algorithm(s) *
                 </label>
-                <div className="space-y-2 bg-gray-50 p-4 rounded">
+                <div className="space-y-2 rounded-xl border border-sky-100 bg-sky-50/70 p-4">
                   {availableAlgorithms.map((algo) => (
                     <label
                       key={algo.value}
-                      className="flex items-center p-2 hover:bg-white rounded"
+                      className="flex items-center rounded-lg border border-transparent bg-white p-2 transition hover:border-sky-200 hover:bg-sky-50"
                     >
                       <input
                         type="checkbox"
@@ -539,7 +617,7 @@ const TimetableGenerationByYearSemester = () => {
               <button
                 type="submit"
                 disabled={loading || !selectedYear || !selectedSemester}
-                className="w-full px-4 py-3 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 disabled:bg-gray-400"
+                className="w-full rounded-xl bg-gradient-to-r from-sky-600 via-cyan-600 to-blue-700 px-4 py-3 font-semibold text-white shadow-[0_12px_24px_rgba(8,145,178,0.25)] transition hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading ? 'Generating...' : 'Generate Timetable'}
               </button>
@@ -547,17 +625,25 @@ const TimetableGenerationByYearSemester = () => {
 
             {/* Generated Timetable Summary */}
             {generatedTimetable && (
-              <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded">
-                <h3 className="font-semibold text-green-900 mb-2">
+              <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <h3 className="mb-2 font-semibold text-emerald-900">
                   ✓ Timetable Generated Successfully
                 </h3>
-                <div className="space-y-1 text-sm text-green-800">
+                <div className="space-y-1 text-sm text-emerald-800">
                   <p>
                     <strong>Timetable ID:</strong> {generatedTimetable.timetableId}
                   </p>
                   <p>
                     <strong>Specialization:</strong>{' '}
                     {selectedSpecialization === 'ALL' ? 'All' : selectedSpecialization}
+                  </p>
+                  <p>
+                    <strong>Subgroup:</strong>{' '}
+                    {selectedSubgroup === 'ALL' ? 'All' : selectedSubgroup}
+                  </p>
+                  <p>
+                    <strong>Group:</strong>{' '}
+                    {selectedGroup === 'ALL' ? 'All' : selectedGroup}
                   </p>
                   <p>
                     <strong>Modules Scheduled:</strong>{' '}
@@ -582,7 +668,7 @@ const TimetableGenerationByYearSemester = () => {
                           []
                       )
                     }
-                    className="mt-3 px-3 py-2 bg-green-600 text-white rounded text-sm hover:bg-green-700"
+                    className="mt-3 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
                   >
                     Export to CSV
                   </button>
@@ -590,99 +676,45 @@ const TimetableGenerationByYearSemester = () => {
               </div>
             )}
 
-            <div className="mt-6 rounded border border-blue-200 bg-blue-50 p-4">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <h3 className="text-base font-semibold text-blue-900">
-                  Categorized Generation (Year + Semester + Specialization)
-                </h3>
-                <button
-                  type="button"
-                  onClick={handleGenerateAllCategories}
-                  disabled={bulkGenerating || !selectedYear || !selectedSemester || !specializationCategoryRows.length}
-                  className="rounded bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:bg-gray-400"
-                >
-                  {bulkGenerating ? 'Generating all...' : 'Generate All Categories'}
-                </button>
-              </div>
-
-              {!selectedYear || !selectedSemester ? (
-                <p className="text-sm text-blue-800">Select year and semester to show specialization categories.</p>
-              ) : specializationCategoryRows.length === 0 ? (
-                <p className="text-sm text-blue-800">No specialization categories found for this selection.</p>
-              ) : (
-                <div className="overflow-x-auto rounded border bg-white">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-blue-100">
-                      <tr>
-                        <th className="px-3 py-2 text-left font-semibold text-blue-900">Year</th>
-                        <th className="px-3 py-2 text-left font-semibold text-blue-900">Semester</th>
-                        <th className="px-3 py-2 text-left font-semibold text-blue-900">Specialization</th>
-                        <th className="px-3 py-2 text-left font-semibold text-blue-900">Modules</th>
-                        <th className="px-3 py-2 text-left font-semibold text-blue-900">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {specializationCategoryRows.map((row) => {
-                        const key = `${selectedYear}-${selectedSemester}-${row.specialization}`;
-                        return (
-                          <tr key={key} className="border-t">
-                            <td className="px-3 py-2">{selectedYear}</td>
-                            <td className="px-3 py-2">{selectedSemester}</td>
-                            <td className="px-3 py-2 font-medium">{row.specialization}</td>
-                            <td className="px-3 py-2">{row.moduleCount}</td>
-                            <td className="px-3 py-2">
-                              <button
-                                type="button"
-                                onClick={() => handleGenerateByCategory(row.specialization)}
-                                disabled={Boolean(categoryGenerating[key]) || bulkGenerating}
-                                className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:bg-gray-400"
-                              >
-                                {categoryGenerating[key] ? 'Generating...' : 'Generate'}
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
           </div>
         </div>
 
         {/* Right Panel: Existing Timetables */}
         <div className="space-y-6">
-          <div className="bg-white p-6 rounded-lg shadow">
+          <div className={`${cardClass} p-6`}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xl font-semibold">Academic Coordinator Modules</h3>
-              <span className="text-sm text-gray-600">
+              <h3 className="text-xl font-semibold text-slate-900">Academic Coordinator Modules</h3>
+              <span className="text-sm text-slate-600">
                 {loadingModules ? 'Loading...' : `${filteredAcademicModules.length} module(s)`}
               </span>
             </div>
 
             {!selectedYear ? (
-              <p className="text-gray-500 text-sm">Select year to load modules.</p>
+              <p className="text-sm text-slate-500">Select year to load modules.</p>
             ) : loadingModules ? (
-              <p className="text-gray-500 text-sm">Fetching modules from Academic Coordinator...</p>
+              <p className="text-sm text-slate-500">Fetching modules from Academic Coordinator...</p>
             ) : filteredAcademicModules.length === 0 ? (
-              <p className="text-gray-500 text-sm">No modules found for the selected filter.</p>
+              <p className="text-sm text-slate-500">No modules found for the selected filter.</p>
             ) : (
-              <div className="max-h-80 overflow-y-auto border rounded">
+              <div className="max-h-80 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-sm">
                 <table className="min-w-full text-sm">
-                  <thead className="bg-gray-50 sticky top-0">
+                  <thead className="sticky top-0 bg-slate-50">
                     <tr>
-                      <th className="px-3 py-2 text-left font-semibold text-gray-700">Code</th>
-                      <th className="px-3 py-2 text-left font-semibold text-gray-700">Module Name</th>
-                      <th className="px-3 py-2 text-left font-semibold text-gray-700">Specialization</th>
+                      <th className="px-3 py-2 text-left font-semibold text-slate-700">Code</th>
+                      <th className="px-3 py-2 text-left font-semibold text-slate-700">Module Name</th>
+                      <th className="px-3 py-2 text-left font-semibold text-slate-700">Specialization</th>
+                        <th className="px-3 py-2 text-left font-semibold text-slate-700">Preferred Hall</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredAcademicModules.map((module) => (
                       <tr key={module.id || `${module.code}-${module.name}`} className="border-t">
-                        <td className="px-3 py-2 font-medium text-gray-800">{module.code || 'N/A'}</td>
-                        <td className="px-3 py-2 text-gray-700">{module.name || 'Untitled Module'}</td>
-                        <td className="px-3 py-2 text-gray-700">{module.specialization || 'General'}</td>
+                        <td className="px-3 py-2 font-medium text-slate-800">{module.code || 'N/A'}</td>
+                        <td className="px-3 py-2 text-slate-700">{module.name || 'Untitled Module'}</td>
+                        <td className="px-3 py-2 text-slate-700">{module.specialization || 'General'}</td>
+                        <td className="px-3 py-2 text-slate-700">
+                          {parseJsonSafe(module.details, {}).preferredHallIds?.[0] || 'Auto'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -691,12 +723,12 @@ const TimetableGenerationByYearSemester = () => {
             )}
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow">
+          <div className={`${cardClass} p-6`}>
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-semibold">Existing Timetables</h3>
+            <h3 className="text-xl font-semibold text-slate-900">Existing Timetables</h3>
             <button
               onClick={() => setShowExisting(!showExisting)}
-              className="text-sm text-blue-600 hover:text-blue-700"
+              className="text-sm font-semibold text-sky-700 hover:text-sky-800"
             >
               {showExisting ? 'Hide' : 'Show'} ({existingTimetables.length})
             </button>
@@ -705,27 +737,27 @@ const TimetableGenerationByYearSemester = () => {
           {showExisting && selectedYear && selectedSemester ? (
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {existingTimetables.length === 0 ? (
-                <p className="text-gray-500 text-sm">
+                <p className="text-sm text-slate-500">
                   No timetables for {selectedYear}, Semester {selectedSemester}
                 </p>
               ) : (
                 existingTimetables.map((tt) => (
                   <div
                     key={tt.id}
-                    className="p-3 border rounded bg-gray-50 text-sm"
+                    className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm shadow-sm"
                   >
-                    <div className="font-medium text-gray-900">
+                    <div className="font-medium text-slate-900">
                       {tt.name || `Timetable #${tt.id}`}
                     </div>
-                    <div className="text-gray-600 text-xs mt-1">
+                    <div className="mt-1 text-xs text-slate-600">
                       Status:{' '}
                       <span
                         className={`font-semibold ${
                           tt.status === 'approved'
-                            ? 'text-green-600'
+                            ? 'text-emerald-700'
                             : tt.status === 'rejected'
-                            ? 'text-red-600'
-                            : 'text-yellow-600'
+                            ? 'text-rose-700'
+                            : 'text-amber-700'
                         }`}
                       >
                         {tt.status}

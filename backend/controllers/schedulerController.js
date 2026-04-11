@@ -3,7 +3,6 @@ import psoScheduler from '../scheduler/psoScheduler.js';
 import hybridScheduler from '../scheduler/hybridScheduler.js';
 import geneticScheduler from '../scheduler/geneticScheduler.js';
 import tabuScheduler from '../scheduler/tabuScheduler.js';
-import { generateTimetableWithGemini } from '../engine/geminiScheduler.js';
 import pool from '../config/db.js';
 
 const allowedTypes = ['halls', 'modules', 'lics', 'instructors', 'departments', 'batches'];
@@ -12,6 +11,8 @@ const ENGINEERING_SPECIALIZATIONS = new Set(['CS', 'ISE', 'CSNE', 'IME']);
 
 const normalizeAlgorithmKey = (value) => String(value || '').trim().toLowerCase();
 const normalizeRole = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const MAX_SUBGROUP_CAPACITY = 60;
+const MAX_GROUP_CAPACITY = 120;
 
 const HALL_ID_REGEX = /^[A-Za-z0-9][A-Za-z0-9_-]{1,39}$/;
 const HALL_TEXT_REGEX = /^[A-Za-z0-9][A-Za-z0-9 .,&()\/-]{1,79}$/;
@@ -287,7 +288,29 @@ const parseBatchSubgroupIdentity = (batchId = '') => {
       String(specializationToken).toUpperCase(),
       String(groupToken).trim(),
     ].join('.'),
+    group: String(groupToken).trim(),
     subgroup: String(subgroupToken).trim(),
+  };
+};
+
+const parseBatchSchedulingScope = (batch = {}) => {
+  const source = String(batch?.id || batch?.name || '').trim();
+  const [yearToken = '', semesterToken = '', modeToken = '', specializationToken = '', groupToken = '', subgroupToken = ''] = source.split('.');
+
+  const year = Number(String(yearToken).replace(/[^0-9]/g, ''));
+  const semester = Number(String(semesterToken).replace(/[^0-9]/g, ''));
+
+  const specialization = normalizeSpecializationCode(specializationToken);
+  const group = String(groupToken || '').trim();
+  const subgroup = String(subgroupToken || '').trim();
+
+  return {
+    year: Number.isInteger(year) && year > 0 ? year : null,
+    semester: Number.isInteger(semester) && semester > 0 ? semester : null,
+    mode: String(modeToken || '').trim().toUpperCase(),
+    specialization,
+    group,
+    subgroup,
   };
 };
 
@@ -295,6 +318,10 @@ const validateBatchSubgroupRules = async ({ batchId, ignoreId = null }) => {
   const candidate = parseBatchSubgroupIdentity(batchId);
   if (!candidate) {
     return null;
+  }
+
+  if (!/^\d+$/.test(candidate.group)) {
+    return 'Group must be numeric (for example 01, 02, 03)';
   }
 
   if (!/^\d+$/.test(candidate.subgroup)) {
@@ -337,31 +364,53 @@ const validateBatchSubgroupRules = async ({ batchId, ignoreId = null }) => {
   return null;
 };
 
+const validateBatchCapacityRules = async ({ batchId, capacity, ignoreId = null }) => {
+  const candidate = parseBatchSubgroupIdentity(batchId);
+  if (!candidate) {
+    return null;
+  }
+
+  const normalizedCapacity = Number(capacity);
+  if (!Number.isInteger(normalizedCapacity) || normalizedCapacity < 1) {
+    return 'Batch capacity must be a positive integer';
+  }
+
+  if (normalizedCapacity > MAX_SUBGROUP_CAPACITY) {
+    return `Subgroup capacity cannot exceed ${MAX_SUBGROUP_CAPACITY} students`;
+  }
+
+  const { rows } = await pool.query(
+    'SELECT id, capacity FROM batches WHERE UPPER(id) LIKE $1',
+    [`${candidate.scopeKey}.%`]
+  );
+
+  let siblingCapacity = 0;
+  for (const row of rows) {
+    if (ignoreId && row.id === ignoreId) {
+      continue;
+    }
+
+    const identity = parseBatchSubgroupIdentity(row.id);
+    if (!identity || identity.scopeKey !== candidate.scopeKey) {
+      continue;
+    }
+
+    const currentCapacity = Number(row.capacity || 0);
+    if (Number.isFinite(currentCapacity) && currentCapacity > 0) {
+      siblingCapacity += currentCapacity;
+    }
+  }
+
+  if (siblingCapacity + normalizedCapacity > MAX_GROUP_CAPACITY) {
+    return `Total students in one group cannot exceed ${MAX_GROUP_CAPACITY}. Add a new group for additional students.`;
+  }
+
+  return null;
+};
+
 const runSelectedAlgorithms = async (constraints, algorithms, options) => {
   const normalizedAlgorithms = (algorithms || []).map(normalizeAlgorithmKey);
   const results = {};
-
-  if (normalizedAlgorithms.includes('gemini')) {
-    try {
-      const assignmentsDb = await pool.query('SELECT * FROM module_assignments');
-      const geminiInput = { ...constraints, assignments: assignmentsDb.rows };
-      const geminiOutput = await generateTimetableWithGemini(geminiInput);
-      results.gemini = { schedule: geminiOutput.timetable || [], score: 100 };
-      
-      // Route constraint bottlenecks directly to the Mission Control Conflict Dashboard
-      if (geminiOutput.conflicts && geminiOutput.conflicts.length > 0) {
-        for (const conflict of geminiOutput.conflicts) {
-           await pool.query(
-            `INSERT INTO scheduling_conflicts (conflict_type, description, resolved) VALUES ($1, $2, false)`,
-            [conflict.conflict_type || 'AI Generator Halt', conflict.description || JSON.stringify(conflict)]
-           );
-        }
-      }
-    } catch (err) {
-       console.error("Gemini Failure:", err);
-       results.gemini = { schedule: [], score: 0, error: err.message };
-    }
-  }
 
   if (normalizedAlgorithms.includes('pso')) {
     results.pso = psoScheduler(constraints, options);
@@ -384,6 +433,45 @@ const runSelectedAlgorithms = async (constraints, algorithms, options) => {
   }
 
   return results;
+};
+
+const pickPrimaryScheduleFromResults = (results = {}, requestedAlgorithms = []) => {
+  const normalizedRequested = (requestedAlgorithms || []).map(normalizeAlgorithmKey);
+  const priority = [...normalizedRequested, 'hybrid', 'tabu', 'genetic', 'pso', 'ant'];
+
+  for (const key of priority) {
+    const result = results?.[key];
+    if (result && Array.isArray(result.schedule)) {
+      return { algorithm: key, schedule: result.schedule };
+    }
+  }
+
+  return { algorithm: null, schedule: [] };
+};
+
+const saveGeneratedTimetable = async ({
+  name,
+  year,
+  semester,
+  generatedBy,
+  status = 'pending',
+  data = {},
+}) => {
+  const { rows } = await pool.query(
+    `INSERT INTO timetables (name, semester, year, status, generated_by, data)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id, name, semester, year, status, generated_by, created_at, data`,
+    [
+      name,
+      semester,
+      year,
+      status,
+      generatedBy || null,
+      JSON.stringify(data || {}),
+    ]
+  );
+
+  return rows[0] || null;
 };
 
 const buildSemesterSpecializationSegments = ({ batches = [], modules = [], lics = [], instructors = [] }) => {
@@ -848,9 +936,16 @@ export const addItem = async (req, res) => {
       const { name = null, department_id = null, capacity = null } = payload;
       if (!name) return res.status(400).json({ error: 'Batch name is required' });
 
+      const normalizedCapacity = Number(capacity || MAX_SUBGROUP_CAPACITY);
+
       const batchValidationError = await validateBatchSubgroupRules({ batchId: id });
       if (batchValidationError) {
         return res.status(400).json({ error: batchValidationError });
+      }
+
+      const batchCapacityValidationError = await validateBatchCapacityRules({ batchId: id, capacity: normalizedCapacity });
+      if (batchCapacityValidationError) {
+        return res.status(400).json({ error: batchCapacityValidationError });
       }
 
       const { rows } = await pool.query(
@@ -861,7 +956,7 @@ export const addItem = async (req, res) => {
            department_id = EXCLUDED.department_id,
            capacity = EXCLUDED.capacity
          RETURNING *`,
-        [id, name, department_id, capacity]
+        [id, name, department_id, normalizedCapacity]
       );
       return res.status(201).json({ success: true, item: rows[0] });
     }
@@ -1131,15 +1226,25 @@ export const updateItem = async (req, res) => {
 
     if (type === 'batches') {
       const { name = null, department_id = null, capacity = null } = payload;
+      const normalizedCapacity = Number(capacity || MAX_SUBGROUP_CAPACITY);
 
       const batchValidationError = await validateBatchSubgroupRules({ batchId: id, ignoreId: id });
       if (batchValidationError) {
         return res.status(400).json({ error: batchValidationError });
       }
 
+      const batchCapacityValidationError = await validateBatchCapacityRules({
+        batchId: id,
+        capacity: normalizedCapacity,
+        ignoreId: id,
+      });
+      if (batchCapacityValidationError) {
+        return res.status(400).json({ error: batchCapacityValidationError });
+      }
+
       const { rows, rowCount } = await pool.query(
         `UPDATE batches SET name=$1, department_id=$2, capacity=$3 WHERE id=$4 RETURNING *`,
-        [name, department_id, capacity, id]
+        [name, department_id, normalizedCapacity, id]
       );
       if (!rowCount) return res.status(404).json({ error: 'Item not found' });
       return res.json({ success: true, item: rows[0] });
@@ -1636,7 +1741,7 @@ export const resetData = async (req, res) => {
 
 export const runScheduler = async (req, res) => {
   try {
-    const { algorithms = ['hybrid'], options = {} } = req.body;
+    const { algorithms = ['hybrid'], options = {}, timetableName = null, saveToDatabase } = req.body;
 
     const [hallsRes, modulesRes, licsRes, instructorsRes, batchesRes] = await Promise.all([
       pool.query('SELECT * FROM halls'),
@@ -1657,11 +1762,62 @@ export const runScheduler = async (req, res) => {
       return res.status(400).json({ error: 'No halls available. Please add halls before running the scheduler engine.' });
     }
 
-    const mergedOptions = await withFacultySoftConstraints(req.user, options);
+    const mergedOptions = await withFacultySoftConstraints(req.user, {
+      logicalScheduling: true,
+      enforceWeeklyLabAndTutorial: true,
+      lectureDurationHours: 3,
+      labDurationHours: 2,
+      tutorialDurationHours: 1,
+      ...options,
+    });
     const constraints = { halls, modules, lics, instructors, batches, options: mergedOptions };
     const results = await runSelectedAlgorithms(constraints, algorithms, mergedOptions);
 
-    return res.json({ success: true, results });
+    let savedTimetable = null;
+    const shouldPersist = isFacultyCoordinator(req.user)
+      ? (saveToDatabase !== false)
+      : Boolean(saveToDatabase);
+
+    if (shouldPersist) {
+      const { algorithm, schedule } = pickPrimaryScheduleFromResults(results, algorithms);
+      const nowIso = new Date().toISOString();
+
+      savedTimetable = await saveGeneratedTimetable({
+        name: timetableName || `Timetable_All_${nowIso.slice(0, 10)}`,
+        semester: String(mergedOptions.semester || 'ALL'),
+        year: String(mergedOptions.academicYear || mergedOptions.year || 'ALL'),
+        generatedBy: req.user?.id || null,
+        data: {
+          generatedAt: nowIso,
+          scope: 'all',
+          algorithms: Array.isArray(algorithms) ? algorithms : [algorithms],
+          primaryAlgorithm: algorithm,
+          modulesCount: modules.length,
+          hallsCount: halls.length,
+          schedule,
+          allResults: results,
+        },
+      });
+    }
+
+    return res.json({
+      success: true,
+      results,
+      ...(savedTimetable
+        ? {
+            timetableSaved: true,
+            timetableId: savedTimetable.id,
+            timetable: {
+              id: savedTimetable.id,
+              name: savedTimetable.name,
+              semester: savedTimetable.semester,
+              year: savedTimetable.year,
+              status: savedTimetable.status,
+              created_at: savedTimetable.created_at,
+            },
+          }
+        : { timetableSaved: false }),
+    });
   } catch (err) {
     console.error('Error running scheduler:', err);
     return res.status(500).json({ error: err.message });
@@ -1670,7 +1826,7 @@ export const runScheduler = async (req, res) => {
 
 export const runSchedulerBySegments = async (req, res) => {
   try {
-    const { algorithms = ['hybrid'], options = {} } = req.body;
+    const { algorithms = ['hybrid'], options = {}, timetableName = null, saveToDatabase } = req.body;
     const requestedYear = Number(options.year || options.academicYear || 0);
     const requestedSemester = Number(options.semester || 0);
     const requestedSpecialization = String(options.specialization || '').trim().toUpperCase();
@@ -1696,7 +1852,14 @@ export const runSchedulerBySegments = async (req, res) => {
       return res.status(400).json({ error: 'No batches available. Please add batches before running segmented scheduling.' });
     }
 
-    const mergedOptions = await withFacultySoftConstraints(req.user, options);
+    const mergedOptions = await withFacultySoftConstraints(req.user, {
+      logicalScheduling: true,
+      enforceWeeklyLabAndTutorial: true,
+      lectureDurationHours: 3,
+      labDurationHours: 2,
+      tutorialDurationHours: 1,
+      ...options,
+    });
     const segments = buildSemesterSpecializationSegments({ batches, modules: [], lics, instructors });
     const filteredSegments = segments.filter((segment) => {
       if (requestedYear && segment.year !== requestedYear) return false;
@@ -1787,6 +1950,39 @@ export const runSchedulerBySegments = async (req, res) => {
       });
     }
 
+    let savedTimetable = null;
+    const shouldPersist = isFacultyCoordinator(req.user)
+      ? (saveToDatabase !== false)
+      : Boolean(saveToDatabase);
+
+    if (shouldPersist) {
+      const nowIso = new Date().toISOString();
+      const mergedSchedule = segmentedResults.flatMap((entry) => {
+        const { schedule } = pickPrimaryScheduleFromResults(entry.results, algorithms);
+        return schedule;
+      });
+
+      savedTimetable = await saveGeneratedTimetable({
+        name: timetableName || `Timetable_Segments_${nowIso.slice(0, 10)}`,
+        semester: requestedSemester ? String(requestedSemester) : 'MULTI',
+        year: requestedYear ? String(requestedYear) : 'MULTI',
+        generatedBy: req.user?.id || null,
+        data: {
+          generatedAt: nowIso,
+          scope: 'segmented',
+          filters: {
+            year: requestedYear || null,
+            semester: requestedSemester || null,
+            specialization: requestedSpecialization || null,
+          },
+          algorithms: Array.isArray(algorithms) ? algorithms : [algorithms],
+          totalSegments: segmentedResults.length,
+          mergedSchedule,
+          segmentedResults,
+        },
+      });
+    }
+
     return res.json({
       success: true,
       totalSegments: segmentedResults.length,
@@ -1797,6 +1993,20 @@ export const runSchedulerBySegments = async (req, res) => {
         specialization: requestedSpecialization || null,
       },
       segmentedResults,
+      ...(savedTimetable
+        ? {
+            timetableSaved: true,
+            timetableId: savedTimetable.id,
+            timetable: {
+              id: savedTimetable.id,
+              name: savedTimetable.name,
+              semester: savedTimetable.semester,
+              year: savedTimetable.year,
+              status: savedTimetable.status,
+              created_at: savedTimetable.created_at,
+            },
+          }
+        : { timetableSaved: false }),
     });
   } catch (err) {
     console.error('Error running segmented scheduler:', err);
@@ -1836,7 +2046,41 @@ export const runSchedulerForYearSemester = async (req, res) => {
     const batches = batchesRes.rows;
 
     const requestedSpecialization = normalizeSpecializationCode(options.specialization || '');
-    const moduleLimitPerSpecialization = Number(options.moduleLimitPerSpecialization || 5);
+    const requestedGroup = String(options.group || '').trim();
+    const requestedSubgroup = String(options.subgroup || '').trim();
+    const rawModuleLimitPerSpecialization = Number(options.moduleLimitPerSpecialization || 0);
+    const moduleLimitPerSpecialization = Number.isFinite(rawModuleLimitPerSpecialization) && rawModuleLimitPerSpecialization > 0
+      ? Math.floor(rawModuleLimitPerSpecialization)
+      : null;
+
+    const yearNumber = Number(academicYear);
+    const semesterNumber = Number(semester);
+
+    const filteredBatches = batches.filter((batch) => {
+      const scope = parseBatchSchedulingScope(batch);
+
+      if (Number.isInteger(yearNumber) && yearNumber > 0 && (!scope.year || scope.year !== yearNumber)) {
+        return false;
+      }
+
+      if (Number.isInteger(semesterNumber) && semesterNumber > 0 && (!scope.semester || scope.semester !== semesterNumber)) {
+        return false;
+      }
+
+      if (requestedSpecialization && (!scope.specialization || scope.specialization !== requestedSpecialization)) {
+        return false;
+      }
+
+      if (requestedGroup && (!scope.group || scope.group !== requestedGroup)) {
+        return false;
+      }
+
+      if (requestedSubgroup && (!scope.subgroup || scope.subgroup !== requestedSubgroup)) {
+        return false;
+      }
+
+      return true;
+    });
 
     const specializationFilteredModules = requestedSpecialization
       ? modules.filter((module) => normalizeSpecializationCode(inferModuleSpecialization(module)) === requestedSpecialization)
@@ -1859,7 +2103,11 @@ export const runSchedulerForYearSemester = async (req, res) => {
 
     const filteredModules = [];
     specializationBuckets.forEach((bucketModules) => {
-      filteredModules.push(...bucketModules.slice(0, Math.max(1, moduleLimitPerSpecialization)));
+      if (moduleLimitPerSpecialization) {
+        filteredModules.push(...bucketModules.slice(0, Math.max(1, moduleLimitPerSpecialization)));
+      } else {
+        filteredModules.push(...bucketModules);
+      }
     });
 
     // Validation
@@ -1877,12 +2125,27 @@ export const runSchedulerForYearSemester = async (req, res) => {
       });
     }
 
+    if (!filteredBatches.length) {
+      return res.status(400).json({
+        error: requestedSubgroup
+          ? `No batches found for academic year ${academicYear}, semester ${semester}, specialization ${requestedSpecialization || 'ALL'}, group ${requestedGroup || 'ALL'}, subgroup ${requestedSubgroup}.`
+          : `No batches found for academic year ${academicYear}, semester ${semester}, specialization ${requestedSpecialization || 'ALL'}, group ${requestedGroup || 'ALL'}.`,
+      });
+    }
+
     // Load and apply hall allocations
     const hallAllocationMap = await loadCoordinatorHallAllocationMap();
     const modulesWithAllocations = applyCoordinatorHallAllocations(filteredModules, hallAllocationMap);
 
     // Load faculty soft constraints if user is faculty coordinator
-    const mergedOptions = await withFacultySoftConstraints(req.user, options);
+    const mergedOptions = await withFacultySoftConstraints(req.user, {
+      logicalScheduling: true,
+      enforceWeeklyLabAndTutorial: true,
+      lectureDurationHours: 3,
+      labDurationHours: 2,
+      tutorialDurationHours: 1,
+      ...options,
+    });
 
     // Prepare constraints for scheduler
     const constraints = {
@@ -1890,7 +2153,7 @@ export const runSchedulerForYearSemester = async (req, res) => {
       modules: modulesWithAllocations,
       lics,
       instructors,
-      batches,
+      batches: filteredBatches,
       options: mergedOptions,
     };
 
@@ -1907,12 +2170,16 @@ export const runSchedulerForYearSemester = async (req, res) => {
       data: {
         academicYear: String(academicYear),
         semester: String(semester),
+        specialization: requestedSpecialization || null,
+        group: requestedGroup || null,
+        subgroup: requestedSubgroup || null,
         generatedAt: new Date().toISOString(),
         algorithms: Array.isArray(algorithms) ? algorithms : [algorithms],
         hallAllocations: Object.fromEntries(hallAllocationMap),
         modulesCount: filteredModules.length,
         hallsCount: halls.length,
-        schedule: results.gemini?.schedule || results.hybrid?.schedule || results.pso?.schedule || results.genetic?.schedule || results.ant?.schedule || results.tabu?.schedule || [],
+        batchesCount: filteredBatches.length,
+        schedule: results.hybrid?.schedule || results.pso?.schedule || results.genetic?.schedule || results.ant?.schedule || results.tabu?.schedule || [],
         allResults: results,
       },
     };
@@ -1946,10 +2213,14 @@ export const runSchedulerForYearSemester = async (req, res) => {
         created_at: savedTimetable.created_at,
       },
       summary: {
-        modulesScheduled: modules.length,
+        modulesScheduled: filteredModules.length,
         hallsUsed: halls.length,
+        batchesUsed: filteredBatches.length,
         academicYear,
         semester,
+        specialization: requestedSpecialization || null,
+        group: requestedGroup || null,
+        subgroup: requestedSubgroup || null,
         algorithmUsed: algorithms[0] || 'hybrid',
       },
       results,
