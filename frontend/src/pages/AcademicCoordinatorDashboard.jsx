@@ -1,579 +1,165 @@
 import React, { useEffect, useState } from 'react';
-import '../styles/dashboard.css';
-import schedulerApi from '../api/scheduler.js';
-import moduleCatalog from '../data/moduleCatalog.js';
+import { Link } from 'react-router-dom';
+import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell';
+import api from '../api/scheduler';
 
-const AcademicCoordinatorDashboard = ({ user }) => {
-  const [lecturers, setLecturers] = useState([]);
-  const [lics, setLics] = useState([]);
-  const [modules, setModules] = useState([]);
-  const [campusStructures, setCampusStructures] = useState([]);
-  const [assignments, setAssignments] = useState([]);
-  const [message, setMessage] = useState({ text: '', type: '' });
+/* ── Icons ────────────────────────────────────────────────────────── */
+const IconBook = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="24" height="24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>;
+const IconUsers = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="24" height="24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
+const IconActivity = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="24" height="24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>;
+const IconCalendar = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="24" height="24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+const IconChevronRight = ({ className = '' }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} width="16" height="16"><polyline points="9 18 15 12 9 6"/></svg>;
 
-  const [lecturerForm, setLecturerForm] = useState({ name: '', department: '', email: '' });
-  const [licForm, setLicForm] = useState({ name: '', department: '' });
-  const [moduleForm, setModuleForm] = useState({ code: '', name: '' });
-  const [selectedCatalogModule, setSelectedCatalogModule] = useState('');
-  const [campusForm, setCampusForm] = useState({
-    name: '',
-    capacity: '',
-    building: '',
-    floor: '',
-    roomType: '',
-  });
-  const [assignmentForm, setAssignmentForm] = useState({
-    moduleId: '',
-    lecturerId: '',
-    licId: '',
-    academicYear: '1',
-    semester: '1',
-  });
-  const [view3d, setView3d] = useState({ rotateX: 10, rotateZ: -18, zoom: 1 });
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const showMessage = (text, type = 'success') => {
-    setMessage({ text, type });
-  };
-
-  const loadData = async () => {
-    try {
-      const [lecturerRes, licRes, moduleRes, hallRes, assignmentRes] = await Promise.all([
-        schedulerApi.listItems('instructors'),
-        schedulerApi.listItems('lics'),
-        schedulerApi.listItems('modules'),
-        schedulerApi.listItems('halls'),
-        schedulerApi.listAssignments(),
-      ]);
-
-      setLecturers(lecturerRes.items || []);
-      setLics(licRes.items || []);
-      setModules(moduleRes.items || []);
-      setCampusStructures(hallRes.items || []);
-      setAssignments(assignmentRes.items || []);
-    } catch (err) {
-      showMessage(err.message || 'Failed to load coordinator data', 'error');
-    }
-  };
-
-  const addLecturer = async (e) => {
-    e.preventDefault();
-    try {
-      await schedulerApi.addItem('instructors', lecturerForm);
-      setLecturerForm({ name: '', department: '', email: '' });
-      showMessage('Lecturer added successfully');
-      await loadData();
-    } catch (err) {
-      showMessage(err.message || 'Failed to add lecturer', 'error');
-    }
-  };
-
-  const addLic = async (e) => {
-    e.preventDefault();
-    try {
-      await schedulerApi.addItem('lics', licForm);
-      setLicForm({ name: '', department: '' });
-      showMessage('LIC added successfully');
-      await loadData();
-    } catch (err) {
-      showMessage(err.message || 'Failed to add LIC', 'error');
-    }
-  };
-
-  const addModule = async (e) => {
-    e.preventDefault();
-    try {
-      await schedulerApi.addItem('modules', moduleForm);
-      setModuleForm({ code: '', name: '' });
-      showMessage('Module added successfully');
-      await loadData();
-    } catch (err) {
-      showMessage(err.message || 'Failed to add module', 'error');
-    }
-  };
-
-  const applyCatalogModule = () => {
-    if (!selectedCatalogModule) return;
-    const [code, name] = selectedCatalogModule.split('::');
-    setModuleForm({ code, name });
-  };
-
-  const addCampusStructure = async (e) => {
-    e.preventDefault();
-    try {
-      await schedulerApi.addItem('halls', {
-        name: campusForm.name,
-        capacity: Number(campusForm.capacity) || null,
-        features: {
-          building: campusForm.building,
-          floor: campusForm.floor,
-          roomType: campusForm.roomType,
-        },
-      });
-
-      setCampusForm({
-        name: '',
-        capacity: '',
-        building: '',
-        floor: '',
-        roomType: '',
-      });
-      showMessage('Campus structure added successfully');
-      await loadData();
-    } catch (err) {
-      showMessage(err.message || 'Failed to add campus structure', 'error');
-    }
-  };
-
-  const addAssignment = async (e) => {
-    e.preventDefault();
-    try {
-      await schedulerApi.createAssignment(assignmentForm);
-      showMessage('Module assignment created');
-      await loadData();
-    } catch (err) {
-      showMessage(err.message || 'Failed to create assignment', 'error');
-    }
-  };
-
-  const removeAssignment = async (id) => {
-    try {
-      await schedulerApi.deleteAssignment(id);
-      showMessage('Assignment removed');
-      await loadData();
-    } catch (err) {
-      showMessage(err.message || 'Failed to remove assignment', 'error');
-    }
-  };
-
-  const update3dView = (key, value) => {
-    setView3d((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const reset3dView = () => {
-    setView3d({ rotateX: 10, rotateZ: -18, zoom: 1 });
-  };
-
-  const getFeatureValue = (features, key) => {
-    if (!features) return '';
-    if (typeof features === 'string') {
-      try {
-        const parsed = JSON.parse(features);
-        return parsed?.[key] || '';
-      } catch {
-        return '';
-      }
-    }
-    return features?.[key] || '';
-  };
-
-  const getCampusType = (structure) => {
-    const roomType = getFeatureValue(structure.features, 'roomType')?.toLowerCase() || '';
-    const name = (structure.name || '').toLowerCase();
-
-    if (roomType.includes('lab') || name.includes('lab')) return 'Lab';
-    if (roomType.includes('hall') || name.includes('hall')) return 'Hall';
-    return roomType ? roomType.charAt(0).toUpperCase() + roomType.slice(1) : 'Other';
-  };
-
-  const hallCount = campusStructures.filter((item) => getCampusType(item) === 'Hall').length;
-  const labCount = campusStructures.filter((item) => getCampusType(item) === 'Lab').length;
-  const uniqueFloorCount = new Set(
-    campusStructures
-      .map((item) => getFeatureValue(item.features, 'floor'))
-      .filter((value) => value !== null && value !== undefined && value !== '')
-  ).size;
-
-  return (
-    <div className="dashboard-container ac-dashboard">
-      <div className="dashboard-header">
-        <h1>Academic Coordinator Dashboard</h1>
-        <p>Welcome, {user?.name || 'User'} • Plan, assign, and track teaching ownership smoothly</p>
-        {message.text && <p className={`ac-message ${message.type === 'error' ? 'ac-message-error' : 'ac-message-success'}`}>{message.text}</p>}
-      </div>
-
-      <div className="ac-stats-grid">
-        <div className="ac-stat-card">
-          <h3>Lecturers</h3>
-          <p>{lecturers.length}</p>
-        </div>
-        <div className="ac-stat-card">
-          <h3>LICs</h3>
-          <p>{lics.length}</p>
-        </div>
-        <div className="ac-stat-card">
-          <h3>Modules</h3>
-          <p>{modules.length}</p>
-        </div>
-        <div className="ac-stat-card">
-          <h3>Campus Structures</h3>
-          <p>{campusStructures.length}</p>
-        </div>
-        <div className="ac-stat-card">
-          <h3>Assignments</h3>
-          <p>{assignments.length}</p>
-        </div>
-      </div>
-
-      <div className="dashboard-grid">
-        <div className="dashboard-card">
-          <h2>Add Lecturer</h2>
-          <p>Add professors and lecturers with department details</p>
-          <form onSubmit={addLecturer} className="ac-form">
-            <input
-              className="ac-input"
-              placeholder="Lecturer name"
-              value={lecturerForm.name}
-              onChange={(e) => setLecturerForm({ ...lecturerForm, name: e.target.value })}
-              required
-            />
-            <input
-              className="ac-input"
-              placeholder="Department"
-              value={lecturerForm.department}
-              onChange={(e) => setLecturerForm({ ...lecturerForm, department: e.target.value })}
-            />
-            <input
-              className="ac-input"
-              placeholder="Email (optional)"
-              value={lecturerForm.email}
-              onChange={(e) => setLecturerForm({ ...lecturerForm, email: e.target.value })}
-            />
-            <button className="dashboard-btn" type="submit">Add Lecturer</button>
-          </form>
-        </div>
-
-        <div className="dashboard-card">
-          <h2>Add LIC</h2>
-          <p>Create module leadership records for allocation</p>
-          <form onSubmit={addLic} className="ac-form">
-            <input
-              className="ac-input"
-              placeholder="LIC name"
-              value={licForm.name}
-              onChange={(e) => setLicForm({ ...licForm, name: e.target.value })}
-              required
-            />
-            <input
-              className="ac-input"
-              placeholder="Department"
-              value={licForm.department}
-              onChange={(e) => setLicForm({ ...licForm, department: e.target.value })}
-            />
-            <button className="dashboard-btn" type="submit">Add LIC</button>
-          </form>
-        </div>
-
-        <div className="dashboard-card">
-          <h2>Add Module</h2>
-          <p>Pick from module catalog or enter custom module details</p>
-          <form onSubmit={addModule} className="ac-form">
-            <select
-              className="ac-input"
-              value={selectedCatalogModule}
-              onChange={(e) => setSelectedCatalogModule(e.target.value)}
-            >
-              <option value="">Select module from catalog</option>
-              {moduleCatalog.map((module) => (
-                <option key={`${module.code}-${module.name}`} value={`${module.code}::${module.name}`}>
-                  {module.code} - {module.name}
-                </option>
-              ))}
-            </select>
-            <button className="dashboard-btn ac-inline-btn" type="button" onClick={applyCatalogModule}>
-              Use Selected Catalog Module
-            </button>
-            <input
-              className="ac-input"
-              placeholder="Module code (e.g. IT1120)"
-              value={moduleForm.code}
-              onChange={(e) => setModuleForm({ ...moduleForm, code: e.target.value })}
-              required
-            />
-            <input
-              className="ac-input"
-              placeholder="Module name"
-              value={moduleForm.name}
-              onChange={(e) => setModuleForm({ ...moduleForm, name: e.target.value })}
-              required
-            />
-            <button className="dashboard-btn" type="submit">Add Module</button>
-          </form>
-        </div>
-
-        <div className="dashboard-card">
-          <h2>Add Campus Structure</h2>
-          <p>Create lecture halls, labs, and rooms used by scheduling</p>
-          <form onSubmit={addCampusStructure} className="ac-form">
-            <input
-              className="ac-input"
-              placeholder="Structure name (e.g. NB-501 Lab)"
-              value={campusForm.name}
-              onChange={(e) => setCampusForm({ ...campusForm, name: e.target.value })}
-              required
-            />
-            <input
-              className="ac-input"
-              type="number"
-              placeholder="Capacity"
-              value={campusForm.capacity}
-              onChange={(e) => setCampusForm({ ...campusForm, capacity: e.target.value })}
-            />
-            <input
-              className="ac-input"
-              placeholder="Building (e.g. Main Building / NB)"
-              value={campusForm.building}
-              onChange={(e) => setCampusForm({ ...campusForm, building: e.target.value })}
-            />
-            <input
-              className="ac-input"
-              placeholder="Floor"
-              value={campusForm.floor}
-              onChange={(e) => setCampusForm({ ...campusForm, floor: e.target.value })}
-            />
-            <input
-              className="ac-input"
-              placeholder="Room type (Lecture Hall / Lab / Tutorial)"
-              value={campusForm.roomType}
-              onChange={(e) => setCampusForm({ ...campusForm, roomType: e.target.value })}
-            />
-            <button className="dashboard-btn" type="submit">Add Campus Structure</button>
-          </form>
-        </div>
-
-        <div className="dashboard-card">
-          <h2>Assign Module</h2>
-          <p>Map each module to a lecturer, LIC, year, and semester</p>
-          <form onSubmit={addAssignment} className="ac-form">
-            <select
-              className="ac-input"
-              value={assignmentForm.moduleId}
-              onChange={(e) => setAssignmentForm({ ...assignmentForm, moduleId: e.target.value })}
-              required
-            >
-              <option value="">Select module</option>
-              {modules.map((module) => (
-                <option key={module.id} value={module.id}>{module.code} - {module.name}</option>
-              ))}
-            </select>
-
-            <select
-              className="ac-input"
-              value={assignmentForm.lecturerId}
-              onChange={(e) => setAssignmentForm({ ...assignmentForm, lecturerId: e.target.value })}
-              required
-            >
-              <option value="">Select lecturer</option>
-              {lecturers.map((lecturer) => (
-                <option key={lecturer.id} value={lecturer.id}>{lecturer.name}</option>
-              ))}
-            </select>
-
-            <select
-              className="ac-input"
-              value={assignmentForm.licId}
-              onChange={(e) => setAssignmentForm({ ...assignmentForm, licId: e.target.value })}
-              required
-            >
-              <option value="">Select LIC</option>
-              {lics.map((lic) => (
-                <option key={lic.id} value={lic.id}>{lic.name}</option>
-              ))}
-            </select>
-
-            <select
-              className="ac-input"
-              value={assignmentForm.academicYear}
-              onChange={(e) => setAssignmentForm({ ...assignmentForm, academicYear: e.target.value })}
-              required
-            >
-              <option value="1">Year 1</option>
-              <option value="2">Year 2</option>
-              <option value="3">Year 3</option>
-              <option value="4">Year 4</option>
-            </select>
-
-            <select
-              className="ac-input"
-              value={assignmentForm.semester}
-              onChange={(e) => setAssignmentForm({ ...assignmentForm, semester: e.target.value })}
-            >
-              <option value="1">Semester 1</option>
-              <option value="2">Semester 2</option>
-            </select>
-
-            <button className="dashboard-btn" type="submit">Create Assignment</button>
-          </form>
-        </div>
-      </div>
-
-      <div className="dashboard-card ac-3d-card">
-        <h2>3D Campus Structure</h2>
-        <p>Live visual map of your added campus spaces (halls, labs, rooms)</p>
-        <div className="ac-3d-controls">
-          <label>
-            Rotate X
-            <input
-              type="range"
-              min="-20"
-              max="35"
-              step="1"
-              value={view3d.rotateX}
-              onChange={(e) => update3dView('rotateX', Number(e.target.value))}
-            />
-          </label>
-          <label>
-            Rotate Z
-            <input
-              type="range"
-              min="-45"
-              max="45"
-              step="1"
-              value={view3d.rotateZ}
-              onChange={(e) => update3dView('rotateZ', Number(e.target.value))}
-            />
-          </label>
-          <label>
-            Zoom
-            <input
-              type="range"
-              min="0.6"
-              max="1.8"
-              step="0.05"
-              value={view3d.zoom}
-              onChange={(e) => update3dView('zoom', Number(e.target.value))}
-            />
-          </label>
-          <button className="dashboard-btn ac-view-btn" type="button" onClick={reset3dView}>Reset View</button>
-        </div>
-        <div className="ac-3d-scene-wrap">
-          <div
-            className="ac-3d-scene"
-            style={{
-              '--rx': `${view3d.rotateX}deg`,
-              '--rz': `${view3d.rotateZ}deg`,
-              '--zoom': view3d.zoom,
-            }}
-          >
-            <div className="ac-3d-camera">
-            {campusStructures.length === 0 && (
-              <div className="ac-3d-empty">No campus structures yet. Add one to generate the 3D layout.</div>
-            )}
-            {campusStructures.map((structure, index) => {
-              const capacity = Number(structure.capacity) || 0;
-              const height = Math.max(40, Math.min(160, capacity ? 28 + Math.round(capacity / 3) : 56));
-              const x = (index % 6) * 74;
-              const z = Math.floor(index / 6) * 66;
-              const building = getFeatureValue(structure.features, 'building') || 'Building';
-              const floor = getFeatureValue(structure.features, 'floor') || '-';
-              const roomType = getFeatureValue(structure.features, 'roomType') || 'Space';
-
-              return (
-                <div
-                  key={structure.id || `${structure.name}-${index}`}
-                  className="ac-3d-block"
-                  style={{
-                    '--x': `${x}px`,
-                    '--z': `${z}px`,
-                    '--h': `${height}px`,
-                    '--hue': `${(index * 37) % 360}`,
-                  }}
-                >
-                  <div className="ac-3d-label">
-                    <strong>{structure.name}</strong>
-                    <span>{building} • Floor {floor}</span>
-                    <span>{roomType} • Cap {capacity || '-'}</span>
-                  </div>
-                </div>
-              );
-            })}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="dashboard-card ac-assignment-card">
-        <h2>Campus Structures (Halls, Labs, Floors)</h2>
-        <p>Halls: {hallCount} • Labs: {labCount} • Floors: {uniqueFloorCount}</p>
-        <div className="ac-table-wrapper">
-          <table className="ac-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Building</th>
-                <th>Floor</th>
-                <th>Capacity</th>
-              </tr>
-            </thead>
-            <tbody>
-              {campusStructures.length === 0 && (
-                <tr>
-                  <td colSpan="5" className="ac-empty-row">No halls/labs/floors added yet.</td>
-                </tr>
-              )}
-              {campusStructures.map((structure) => {
-                const building = getFeatureValue(structure.features, 'building') || '-';
-                const floor = getFeatureValue(structure.features, 'floor') || '-';
-                const type = getCampusType(structure);
-
-                return (
-                  <tr key={structure.id}>
-                    <td>{structure.name || '-'}</td>
-                    <td><span className="ac-type-pill">{type}</span></td>
-                    <td>{building}</td>
-                    <td>{floor}</td>
-                    <td>{structure.capacity || '-'}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="dashboard-card ac-assignment-card">
-        <h2>Current Module Assignments</h2>
-        <p>Review all assignments and remove outdated mappings</p>
-        <div className="ac-table-wrapper">
-          <table className="ac-table">
-            <thead>
-              <tr>
-                <th>Module</th>
-                <th>Lecturer</th>
-                <th>LIC</th>
-                <th>Year</th>
-                <th>Semester</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {assignments.length === 0 && (
-                <tr>
-                  <td colSpan="6" className="ac-empty-row">No assignments yet. Create your first mapping above.</td>
-                </tr>
-              )}
-              {assignments.map((assignment) => (
-                <tr key={assignment.id}>
-                  <td>{assignment.module_code || '-'} {assignment.module_name ? `- ${assignment.module_name}` : ''}</td>
-                  <td>{assignment.lecturer_name || '-'}</td>
-                  <td>{assignment.lic_name || '-'}</td>
-                  <td>Year {assignment.academic_year}</td>
-                  <td>{assignment.semester ? `Semester ${assignment.semester}` : '-'}</td>
-                  <td>
-                    <button className="dashboard-btn ac-remove-btn" onClick={() => removeAssignment(assignment.id)}>Remove</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+/* ── Helper Components ────────────────────────────────────────────── */
+const StatCard = ({ title, value, icon, color = '#38bdf8' }) => (
+  <div style={{
+    background: 'linear-gradient(135deg, rgba(15,23,42,0.9), rgba(7,20,43,0.95))',
+    border: `1px solid rgba(148,163,184,0.15)`,
+    borderRadius: 20, padding: 24, display: 'flex', flexDirection: 'column', gap: 14,
+    boxShadow: `0 8px 30px rgba(0,0,0,0.3)`, backdropFilter: 'blur(10px)',
+    position: 'relative', overflow: 'hidden'
+  }}>
+    <div style={{ position: 'absolute', top: -30, right: -30, width: 120, height: 120, borderRadius: '50%', background: `radial-gradient(circle, ${color}20 0%, transparent 70%)` }} />
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ width: 44, height: 44, borderRadius: 12, background: `${color}18`, color: color, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${color}30` }}>
+        {icon}
       </div>
     </div>
-  );
-};
+    <div>
+      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'rgba(148,163,184,0.8)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{title}</p>
+      <h3 style={{ margin: '8px 0 0', fontSize: 32, fontWeight: 900, color: '#f8fafc' }}>{value}</h3>
+    </div>
+  </div>
+);
 
-export default AcademicCoordinatorDashboard;
+const ActionTile = ({ to, title, desc, icon, color }) => (
+  <Link to={to} className="ac-action-tile" style={{ textDecoration: 'none' }}>
+    <div style={{
+      background: 'linear-gradient(180deg, rgba(15,23,42,0.8), rgba(2,8,23,0.85))',
+      border: '1px solid rgba(148,163,184,0.12)', borderRadius: 20, padding: 28,
+      position: 'relative', overflow: 'hidden', height: '100%',
+      display: 'flex', flexDirection: 'column',
+    }}>
+      <div className="ac-glow-bg" style={{ position: 'absolute', inset: 0, opacity: 0, background: `radial-gradient(120% 120% at 50% -20%, ${color}12 0%, transparent 70%)`, transition: 'opacity 0.3s' }} />
+      <div style={{ position: 'absolute', top: 20, right: 20, color: 'rgba(148,163,184,0.3)', transition: 'all 0.3s' }} className="ac-arrow">
+        <IconChevronRight className="w-5 h-5" />
+      </div>
+      <div style={{ width: 52, height: 52, borderRadius: 14, background: `${color}15`, color, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${color}30`, marginBottom: 20 }}>
+        {icon}
+      </div>
+      <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#f1f5f9' }}>{title}</h3>
+      <p style={{ margin: '10px 0 0', fontSize: 13, color: 'rgba(148,163,184,0.7)', lineHeight: 1.5, flex: 1 }}>{desc}</p>
+    </div>
+  </Link>
+);
+
+/* ── Page Component ───────────────────────────────────────────────── */
+export default function AcademicCoordinatorDashboard({ user }) {
+  const [stats, setStats] = useState({ modules: 0, lecturers: 0, assignments: 0 });
+  
+  useEffect(() => {
+    // Attempt to load basic stats just for flavor
+    const loadStats = async () => {
+      try {
+        const [modRes, lecRes, asgRes] = await Promise.all([
+          api.listItems('modules'),
+          api.listItems('instructors'),
+          api.listAssignments()
+        ]);
+        setStats({
+          modules: Array.isArray(modRes?.items) ? modRes.items.length : 0,
+          lecturers: Array.isArray(lecRes?.items) ? lecRes.items.length : 0,
+          assignments: Array.isArray(asgRes?.assignments) ? asgRes.assignments.length : 0,
+        });
+      } catch (err) {
+        console.warn('Could not load dashboard stats', err);
+      }
+    };
+    loadStats();
+  }, []);
+
+  return (
+    <FacultyCoordinatorShell
+      user={user}
+      title="Academic Coordinator Dashboard"
+      subtitle="Mission Control for managing modules, personnel, and academic assignments"
+      badge="Academic Workspace"
+      brandCode="AC"
+      brandTitle="Academic Coordinator"
+      brandSubtitle="Operations Console"
+    >
+      <style>{`
+        .ac-action-tile { display: block; border-radius: 20px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .ac-action-tile:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+        .ac-action-tile:hover .ac-glow-bg { opacity: 1 !important; }
+        .ac-action-tile:hover .ac-arrow { color: #f1f5f9 !important; transform: translateX(4px); }
+        .ac-greeting { animation: acFadeIn 0.8s ease-out; }
+        @keyframes acFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      `}</style>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+        
+        {/* Banner Section */}
+        <div className="ac-greeting" style={{
+          background: 'linear-gradient(135deg, rgba(56,189,248,0.1), rgba(167,139,250,0.1))',
+          border: '1px solid rgba(148,163,184,0.15)',
+          borderRadius: 24, padding: 32, position: 'relative', overflow: 'hidden'
+        }}>
+          <div style={{ position: 'absolute', top: -50, right: -50, width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(56,189,248,0.2) 0%, transparent 70%)', pointerEvents: 'none' }} />
+          <h2 style={{ margin: 0, fontSize: 26, fontWeight: 900, color: '#f8fafc' }}>
+            Welcome back, {user?.name || user?.username || 'Coordinator'}!
+          </h2>
+          <p style={{ margin: '8px 0 0', fontSize: 14, color: 'rgba(148,163,184,0.9)', maxWidth: 600, lineHeight: 1.6 }}>
+            You are now in the updated Academic Operations Console. From here, you can manage the module registry, maintain the lecturer roster, and securely map module assignments.
+          </p>
+        </div>
+
+        {/* Stats Row */}
+        <div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20 }}>
+            <StatCard title="Total Modules" value={stats.modules} icon={<IconBook />} color="#38bdf8" />
+            <StatCard title="Roster Size" value={stats.lecturers} icon={<IconUsers />} color="#a78bfa" />
+            <StatCard title="Active Assignments" value={stats.assignments} icon={<IconActivity />} color="#f59e0b" />
+          </div>
+        </div>
+
+        {/* Workspaces */}
+        <div>
+          <h3 style={{ margin: '0 0 20px', fontSize: 14, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'rgba(148,163,184,0.6)' }}>Operations Matrix</h3>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>
+            <ActionTile 
+              to="/academic/assignments" 
+              title="Module Assignments" 
+              desc="Map modules to Lecturers and LICs. Ensure all teaching loads align perfectly with the semester plan." 
+              icon={<IconActivity />} 
+              color="#f59e0b" 
+            />
+            <ActionTile 
+              to="/academic/modules" 
+              title="Module Registry" 
+              desc="Create, edit, and maintain the database of degree modules across various specializations and years." 
+              icon={<IconBook />} 
+              color="#38bdf8" 
+            />
+            <ActionTile 
+              to="/academic/personnel" 
+              title="Personnel Roster" 
+              desc="Onboard and manage teaching staff including Lecturers and Lead Instructors (LICs)." 
+              icon={<IconUsers />} 
+              color="#a78bfa" 
+            />
+            <ActionTile 
+              to="/academic/calendar" 
+              title="Academic Calendar" 
+              desc="Plan semseter key dates, exam weeks, holidays, and schedule adjustments." 
+              icon={<IconCalendar />} 
+              color="#f472b6" 
+            />
+          </div>
+        </div>
+
+      </div>
+    </FacultyCoordinatorShell>
+  );
+}

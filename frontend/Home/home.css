@@ -1,92 +1,56 @@
-html, body {
-  margin: 0;
-  padding: 0;
-  overflow-x: hidden;
-}
-.home-bg-container {
-  position: relative;
-  min-height: 100vh;
-  width: 100%;
-  overflow: hidden;
-}
-.home-bg-images {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  z-index: 1;
+@import "tailwindcss";
+
+@layer base {
+  html,
+  body {
+    @apply m-0 p-0 overflow-x-hidden;
+  }
 }
 
-.bg-image {
-  width: 50%;
-  height: 100%;
-  object-fit: cover;
-}
+@layer components {
+  .home-bg-container {
+    @apply relative min-h-screen w-full overflow-hidden;
+  }
 
-/* Dark overlay */
-.home-bg-container::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  z-index: 2;
-}
+  .home-bg-images {
+    @apply absolute inset-0 z-[1] flex;
+  }
 
-/* Overlay content */
-.home-overlay-content {
-  position: relative;
-  z-index: 3;
-  height: 100vh;
+  .bg-image {
+    @apply h-full w-1/2 object-cover;
+  }
 
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-}
+  .home-bg-container::after {
+    content: "";
+    @apply absolute inset-0 z-[2] bg-black/55;
+  }
 
-/* Hero section */
-.home-hero {
-  text-align: center;
-  color: #fff;
-  backdrop-filter: blur(40px);
-  -webkit-backdrop-filter: blur(40px);
-  padding: 30px 40px;
-  border-radius: 20px;
-  max-width: 600px;
-}
+  .home-overlay-content {
+    @apply relative z-[3] flex h-screen flex-col items-center justify-center;
+  }
 
-.home-hero h1 {
-  margin: 0;
-  font-size: 3rem;
-  font-weight: bold;
-  font-family: "Brush Script MT", "Lucida Handwriting", cursive;
-}
+  .home-hero {
+    @apply max-w-[600px] rounded-[20px] p-[30px] px-[40px] text-center text-white backdrop-blur-[40px];
+  }
 
-.home-hero p {
-  font-size: 1.3rem;
-  margin-top: 10px;
-}
+  .home-hero h1 {
+    @apply m-0 text-5xl font-bold;
+    font-family: "Brush Script MT", "Lucida Handwriting", cursive;
+  }
 
-/* CTA */
-.home-cta {
-  margin-top: 30px;
-}
+  .home-hero p {
+    @apply mt-2.5 text-[1.3rem];
+  }
 
-.cta-button {
-  padding: 15px 50px;
-  font-size: 1rem;
-  font-weight: bold;
-  color: white;
-  background: black;
-  border: none;
-  border-radius: 30px;
-  cursor: pointer;
-  transition: 0.3s ease;
-}
+  .home-cta {
+    @apply mt-[30px];
+  }
 
-.cta-button:hover {
-  background: #333;
-  transform: scale(1.05);
+  .cta-button {
+    @apply cursor-pointer rounded-full border-0 bg-black px-[50px] py-[15px] text-base font-bold text-white transition duration-300 ease-in-out;
+  }
+
+  .cta-button:hover {
+    @apply scale-105 bg-[#333333];
+  }
 }

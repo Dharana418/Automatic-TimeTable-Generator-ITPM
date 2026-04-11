@@ -1,1 +1,82 @@
-node_modules
+# Root .gitignore for Automatic-TimeTable-Generator-ITPM
+
+# Environment files
+.env
+.env.*
+
+# Node modules
+node_modules/
+
+# Build output
+dist/
+build/
+.vite/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# OS and editor files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+
+# IDE settings
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+*.iml
+*.sublime-project
+*.sublime-workspace
+
+# Cache and temporary files
+.cache/
+.tmp/
+tmp/
+temp/
+.eslintcache
+.stylelintcache
+
+# Testing/coverage
+coverage/
+.nyc_output/
+*.lcov
+test-results/
+
+# Runtime files
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Misc
+.vscode/*
+!/.vscode/extensions.json
+
+# Custom Scripts and Temporary Files
+backend_app_before.js
+backend_app_merge.js
+folder-structure.txt
+usersscript
+status.txt
+status2.txt
+status_porcelain.txt
+untracked.txt
+Gemini_Generated_Image_*
