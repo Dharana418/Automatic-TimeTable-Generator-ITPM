@@ -287,8 +287,18 @@ function getModuleSessionBlueprints(module = {}, options = {}) {
   const details = module?.details || {};
   const logicalMode = options.logicalScheduling !== false;
 
+  if (options.fixedSessionBlueprint === true) {
+    const fixedLectureDuration = parsePositiveInteger(options.lectureDurationHours, 3);
+    const fixedLabDuration = parsePositiveInteger(options.labDurationHours, 2);
+
+    return [
+      { type: 'lecture', count: 1, durationSlots: fixedLectureDuration },
+      { type: 'lab', count: 1, durationSlots: fixedLabDuration },
+    ];
+  }
+
   const lectureCount = parsePositiveInteger(
-    details.lecture_sessions_per_week || module.lecture_sessions_per_week,
+    details.lecture_sessions_per_week || module.lecture_sessions_per_week || options.lectureSessionsPerWeek,
     logicalMode ? 1 : parsePositiveInteger(module.lectures_per_week || details.lectures_per_week, 1)
   );
 
@@ -300,7 +310,7 @@ function getModuleSessionBlueprints(module = {}, options = {}) {
   const forceLabAndTutorial = logicalMode && options.enforceWeeklyLabAndTutorial !== false;
 
   const labCount = parsePositiveInteger(
-    details.lab_sessions_per_week || module.lab_sessions_per_week,
+    details.lab_sessions_per_week || module.lab_sessions_per_week || options.labSessionsPerWeek,
     forceLabAndTutorial ? 1 : 0
   );
   const labDuration = parsePositiveInteger(
@@ -309,7 +319,7 @@ function getModuleSessionBlueprints(module = {}, options = {}) {
   );
 
   const tutorialCount = parsePositiveInteger(
-    details.tutorial_sessions_per_week || module.tutorial_sessions_per_week,
+    details.tutorial_sessions_per_week || module.tutorial_sessions_per_week || options.tutorialSessionsPerWeek,
     forceLabAndTutorial ? 1 : 0
   );
   const tutorialDuration = parsePositiveInteger(
