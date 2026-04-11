@@ -26,6 +26,7 @@ import {
 } from '../api/moduleManagement.js';
 
 import { listItems } from '../api/scheduler.js';
+import seedBatches from '../data/batches.js';
 import { toast } from 'react-toastify';
 
 /* ---------------- HELPERS ---------------- */
@@ -286,7 +287,15 @@ const TimetableGenerationByYearSemester = () => {
       
       console.log('Fetching batches...');
       const res = await listItems('batches');
-      let batchList = res.data || [];
+      let batchList = Array.isArray(res?.items)
+        ? res.items
+        : Array.isArray(res?.data)
+          ? res.data
+          : [];
+
+      if (!batchList.length) {
+        batchList = seedBatches;
+      }
       
       console.log('Raw batch data:', batchList);
       console.log('Batch count:', batchList.length);
@@ -297,16 +306,13 @@ const TimetableGenerationByYearSemester = () => {
       // Extract unique specializations from batches using the helper function
       const specsSet = new Set();
       
-      if (batchList.length > 0) {
-        // Extract from actual batch data
-        batchList.forEach(batch => {
-          const spec = extractSpecializationFromBatch(batch);
-          console.log(`Batch ${batch.id} -> Specialization: ${spec}`);
-          if (spec && spec !== 'IT') { // Avoid duplicates
-            specsSet.add(spec);
-          }
-        });
-      }
+      batchList.forEach((batch) => {
+        const spec = extractSpecializationFromBatch(batch);
+        console.log(`Batch ${batch.id} -> Specialization: ${spec}`);
+        if (spec) {
+          specsSet.add(spec);
+        }
+      });
       
       // Always include the predefined specializations as fallback/default
       SPECIALIZATIONS_LIST.forEach(spec => {
@@ -327,6 +333,7 @@ const TimetableGenerationByYearSemester = () => {
     } catch (err) {
       console.error('Batch fetch error:', err);
       // Fallback: use default specializations
+      setBatches(seedBatches);
       setSpecializations(SPECIALIZATIONS_LIST.map(s => s.key));
       setError('Could not fetch batches - using defaults');
     } finally {
