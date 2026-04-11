@@ -113,49 +113,49 @@ const HallRatingsPanel = ({ hallId, apiBase }) => {
   };
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 mt-4">
+    <div className="mt-4 rounded-2xl border border-slate-300 bg-gradient-to-br from-slate-100 via-white to-slate-200 p-4 shadow-[0_12px_30px_rgba(15,23,42,0.14)]">
       <div className="flex items-center justify-between mb-3">
         <h4 className="font-semibold text-slate-800">⭐ Hall Ratings & Feedback</h4>
         <button
           onClick={() => setShowAddRating(!showAddRating)}
-          className="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          className="rounded-lg border border-sky-400/50 bg-gradient-to-r from-sky-600 to-cyan-600 px-3 py-1 text-sm font-semibold text-white transition hover:brightness-110"
         >
           {showAddRating ? 'Cancel' : '+ Add Rating'}
         </button>
       </div>
 
       {toast && (
-        <div className={`mb-3 p-2 rounded text-sm ${toast.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+        <div className={`mb-3 rounded-lg p-2 text-sm ${toast.type === 'success' ? 'border border-emerald-400/40 bg-emerald-500/20 text-emerald-100' : 'border border-rose-400/40 bg-rose-500/20 text-rose-100'}`}>
           {toast.message}
         </div>
       )}
 
       {/* Statistics */}
       {stats && (
-        <div className="mb-4 grid grid-cols-4 gap-2 p-3 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+        <div className="mb-4 grid grid-cols-4 gap-2 rounded-xl border border-slate-300 bg-gradient-to-r from-slate-200 via-white to-slate-100 p-3">
           <div className="text-center">
-            <div className="text-2xl font-bold text-blue-600">{stats.avgOverallRating}</div>
+            <div className="text-2xl font-bold text-sky-300">{stats.avgOverallRating}</div>
             <div className="text-xs text-slate-600">Avg Rating</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-green-600">{stats.avgCleanliness}</div>
+            <div className="text-2xl font-bold text-emerald-300">{stats.avgCleanliness}</div>
             <div className="text-xs text-slate-600">Cleanliness</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-purple-600">{stats.equipmentWorkingPercentage}%</div>
+            <div className="text-2xl font-bold text-violet-300">{stats.equipmentWorkingPercentage}%</div>
             <div className="text-xs text-slate-600">Equipment OK</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-slate-600">{stats.totalRatings}</div>
+            <div className="text-2xl font-bold text-slate-700">{stats.totalRatings}</div>
             <div className="text-xs text-slate-600">Total Ratings</div>
           </div>
         </div>
       )}
 
       {showAddRating && (
-        <form onSubmit={handleAddRating} className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+        <form onSubmit={handleAddRating} className="mb-4 rounded-xl border border-slate-300 bg-gradient-to-br from-slate-100 via-white to-slate-200 p-3">
           <div className="mb-3">
-            <label className="text-xs font-medium">Overall Rating</label>
+            <label className="text-xs font-medium text-slate-700">Overall Rating</label>
             <div className="mt-1 flex gap-2">
               {[1, 2, 3, 4, 5].map(star => (
                 <button
@@ -172,7 +172,7 @@ const HallRatingsPanel = ({ hallId, apiBase }) => {
 
           <div className="grid grid-cols-2 gap-2 mb-3">
             <div>
-              <label className="text-xs font-medium">Cleanliness Rating</label>
+              <label className="text-xs font-medium text-slate-700">Cleanliness Rating</label>
               <div className="mt-1 flex gap-1">
                 {[1, 2, 3, 4, 5].map(star => (
                   <button
@@ -187,11 +187,11 @@ const HallRatingsPanel = ({ hallId, apiBase }) => {
               </div>
             </div>
             <div>
-              <label className="text-xs font-medium">Facility Condition</label>
+              <label className="text-xs font-medium text-slate-700">Facility Condition</label>
               <select
                 value={ratingForm.facilityCondition}
                 onChange={(e) => setRatingForm({ ...ratingForm, facilityCondition: e.target.value })}
-                className="w-full border rounded px-2 py-1 text-sm mt-1"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-2 py-1 text-sm text-slate-900"
               >
                 <option value="excellent">Excellent</option>
                 <option value="good">Good</option>
@@ -202,28 +202,28 @@ const HallRatingsPanel = ({ hallId, apiBase }) => {
           </div>
 
           <div className="mb-3">
-            <label className="text-xs font-medium flex items-center gap-2">
+            <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
               <input
                 type="checkbox"
                 checked={ratingForm.equipmentWorking}
                 onChange={(e) => setRatingForm({ ...ratingForm, equipmentWorking: e.target.checked })}
-                className="rounded"
+                className="rounded border border-slate-400 bg-white text-sky-500"
               />
               Equipment is working properly
             </label>
           </div>
 
           <div className="mb-3">
-            <label className="text-xs font-medium">Comment</label>
+            <label className="text-xs font-medium text-slate-700">Comment</label>
             <textarea
               value={ratingForm.comment}
               onChange={(e) => setRatingForm({ ...ratingForm, comment: e.target.value })}
               placeholder="Share your feedback about this hall..."
-              className="w-full border rounded px-2 py-1 text-sm mt-1 resize-none h-20"
+              className="mt-1 h-20 w-full resize-none rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-2 py-1 text-sm text-slate-900 placeholder:text-slate-500"
             />
           </div>
 
-          <button type="submit" className="w-full px-2 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700">
+          <button type="submit" className="w-full rounded-lg border border-emerald-400/45 bg-gradient-to-r from-emerald-600 to-teal-600 px-2 py-1 text-sm font-semibold text-white transition hover:brightness-110">
             Submit Rating
           </button>
         </form>
@@ -232,20 +232,20 @@ const HallRatingsPanel = ({ hallId, apiBase }) => {
       {loading ? (
         <p className="text-sm text-slate-600">Loading ratings...</p>
       ) : ratings.length === 0 ? (
-        <p className="text-sm text-slate-500">No ratings yet. Be the first to rate this hall!</p>
+        <p className="text-sm text-slate-600">No ratings yet. Be the first to rate this hall!</p>
       ) : (
         <div className="space-y-2 max-h-96 overflow-y-auto">
           {ratings.map(rating => (
-            <div key={rating.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+            <div key={rating.id} className="rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white p-3">
               <div className="flex justify-between items-start mb-1">
-                <div className="font-medium text-slate-800 text-sm">{rating.user_name || 'Anonymous'}</div>
+                <div className="text-sm font-medium text-slate-800">{rating.user_name || 'Anonymous'}</div>
                 <div className="text-xs text-slate-600">{new Date(rating.created_at).toLocaleDateString()}</div>
               </div>
               <div className="flex gap-1 mb-1">{renderStars(rating.rating)}</div>
               {rating.comment && (
-                <p className="text-sm text-slate-700 mb-1">{rating.comment}</p>
+                <p className="mb-1 text-sm text-slate-700">{rating.comment}</p>
               )}
-              <div className="text-xs text-slate-600 space-y-0.5">
+              <div className="space-y-0.5 text-xs text-slate-600">
                 {rating.cleanliness_rating && <div>Cleanliness: {renderStars(rating.cleanliness_rating)}</div>}
                 <div>Facility: <span className="capitalize">{rating.facility_condition || 'N/A'}</span></div>
                 <div>Equipment: {rating.equipment_working ? '✓ Working' : '✗ Not Working'}</div>
