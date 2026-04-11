@@ -76,7 +76,7 @@ function App() {
   };
 
   const roleKey = normalizeRoleKey(user?.role);
-  const hasFixedSidebarOffset = false; // Disabled shifting since sidebar is under nav now
+  const hasFixedSidebarOffset = true;
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -151,7 +151,7 @@ function App() {
 
         <Route path="/scheduler/by-year" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} user={user}>
-            {roleKey === "facultycoordinator" || roleKey === "academiccoordinator" ? <FacultyCoordinatorSchedulerPage user={user} /> : <Navigate to="/dashboard" replace />}
+            {roleKey === "facultycoordinator" ? <FacultyCoordinatorSchedulerPage user={user} /> : <Navigate to="/dashboard" replace />}
           </ProtectedRoute>
         } />
 

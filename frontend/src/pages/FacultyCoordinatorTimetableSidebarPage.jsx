@@ -160,6 +160,34 @@ const parseSchedule = (timetable) => {
   return [];
 };
 
+const parseTimetableData = (rawData) => {
+  if (!rawData) return {};
+  if (typeof rawData === 'object') return rawData;
+
+  if (typeof rawData === 'string') {
+    try {
+      return JSON.parse(rawData);
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+};
+
+const extractTimetableMeta = (timetable = {}) => {
+  const data = parseTimetableData(timetable.data);
+  const year = String(timetable.year || data.academicYear || data.year || '').trim();
+  const semester = String(timetable.semester || data.semester || '').trim();
+  const specialization = String(data.specialization || 'ALL').trim() || 'ALL';
+
+  return {
+    year: year || 'ALL',
+    semester: semester || 'ALL',
+    specialization: specialization.toUpperCase(),
+  };
+};
+
 const buildBatchTable = (scheduleRows = []) => {
   const batchMap = new Map();
 
@@ -270,6 +298,9 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
   const [generateSemester, setGenerateSemester] = useState('1');
   const [generateName, setGenerateName] = useState('');
   const [generatePending, setGeneratePending] = useState(false);
+  const [filterYear, setFilterYear] = useState('ALL');
+  const [filterSemester, setFilterSemester] = useState('ALL');
+  const [filterSpecialization, setFilterSpecialization] = useState('ALL');
   const [dayModeFilter, setDayModeFilter] = useState('ALL');
   const [layoutMode, setLayoutMode] = useState('unified');
 
@@ -318,6 +349,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
         algorithms: ['hybrid'],
         options: {
           moduleLimitPerSpecialization: 5,
+          specialization: filterSpecialization !== 'ALL' ? filterSpecialization : undefined,
         },
         timetableName: name,
       });
@@ -341,10 +373,63 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
     }
   };
 
+  const yearOptions = useMemo(() => {
+    const values = [...new Set(timetables.map((tt) => extractTimetableMeta(tt).year).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    return ['ALL', ...values];
+  }, [timetables]);
+
+  const semesterOptions = useMemo(() => {
+    const scoped = timetables.filter((tt) => {
+      if (filterYear === 'ALL') return true;
+      return extractTimetableMeta(tt).year === filterYear;
+    });
+    const values = [...new Set(scoped.map((tt) => extractTimetableMeta(tt).semester).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    return ['ALL', ...values];
+  }, [timetables, filterYear]);
+
+  const specializationOptions = useMemo(() => {
+    const scoped = timetables.filter((tt) => {
+      const meta = extractTimetableMeta(tt);
+      if (filterYear !== 'ALL' && meta.year !== filterYear) return false;
+      if (filterSemester !== 'ALL' && meta.semester !== filterSemester) return false;
+      return true;
+    });
+    const values = [...new Set(scoped.map((tt) => extractTimetableMeta(tt).specialization).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    return ['ALL', ...values];
+  }, [timetables, filterYear, filterSemester]);
+
+  const filteredTimetables = useMemo(() => {
+    return timetables.filter((tt) => {
+      const meta = extractTimetableMeta(tt);
+      if (filterYear !== 'ALL' && meta.year !== filterYear) return false;
+      if (filterSemester !== 'ALL' && meta.semester !== filterSemester) return false;
+      if (filterSpecialization !== 'ALL' && meta.specialization !== filterSpecialization) return false;
+      return true;
+    });
+  }, [timetables, filterYear, filterSemester, filterSpecialization]);
+
+  useEffect(() => {
+    if (!yearOptions.includes(filterYear)) {
+      setFilterYear('ALL');
+    }
+  }, [yearOptions, filterYear]);
+
+  useEffect(() => {
+    if (!semesterOptions.includes(filterSemester)) {
+      setFilterSemester('ALL');
+    }
+  }, [semesterOptions, filterSemester]);
+
+  useEffect(() => {
+    if (!specializationOptions.includes(filterSpecialization)) {
+      setFilterSpecialization('ALL');
+    }
+  }, [specializationOptions, filterSpecialization]);
+
   const selectedTimetable = useMemo(() => {
     if (!selectedId) return null;
-    return timetables.find((tt) => String(tt.id) === String(selectedId)) || null;
-  }, [selectedId, timetables]);
+    return filteredTimetables.find((tt) => String(tt.id) === String(selectedId)) || null;
+  }, [selectedId, filteredTimetables]);
 
   const schedule = useMemo(() => parseSchedule(selectedTimetable), [selectedTimetable]);
 
@@ -370,6 +455,33 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
 
   const activeTimeline = useMemo(() => buildCampusTimeline(dayModeFilter), [dayModeFilter]);
 
+  const insightMetrics = useMemo(() => {
+    const uniqueModules = new Set(schedule.map((row) => row.moduleName || row.moduleId || 'Module')).size;
+    const uniqueGroups = new Set(filteredBatchTables.map((batch) => batch.batchKey)).size;
+    const generatedAt = selectedTimetable?.created_at
+      ? new Date(selectedTimetable.created_at).toLocaleString()
+      : 'Not selected';
+
+    return {
+      timetables: filteredTimetables.length,
+      modules: uniqueModules,
+      groups: uniqueGroups,
+      generatedAt,
+    };
+  }, [filteredTimetables.length, filteredBatchTables, schedule, selectedTimetable]);
+
+  useEffect(() => {
+    if (!filteredTimetables.length) {
+      setSelectedId('');
+      return;
+    }
+
+    const found = filteredTimetables.some((tt) => String(tt.id) === String(selectedId));
+    if (!found) {
+      setSelectedId(String(filteredTimetables[0].id));
+    }
+  }, [filteredTimetables, selectedId]);
+
   useEffect(() => {
     if (!schedule.length) return;
     if (!filteredBatchTables.length && dayModeFilter !== 'ALL') {
@@ -387,7 +499,40 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
       footerNote="Faculty Coordinator timetable report view"
     >
       <div id="top" className="flex flex-col gap-6">
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <section className="relative overflow-hidden rounded-3xl border border-sky-200/80 bg-gradient-to-br from-sky-50 via-white to-cyan-50 p-6 shadow-[0_20px_45px_rgba(14,116,144,0.12)]">
+          <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.25),transparent_70%)]" />
+          <div className="pointer-events-none absolute -bottom-24 -left-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(14,165,233,0.16),transparent_70%)]" />
+          <div className="relative grid grid-cols-1 gap-4 lg:grid-cols-[1.35fr_1fr]">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Creative Timetable Studio</p>
+              <h2 className="mt-2 text-2xl font-extrabold text-slate-900">Timetable View Intelligence Panel</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-700">
+                Explore generated timetables by year, semester, and specialization with a dynamic master grid and grouped academic layouts.
+              </p>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-sky-300 bg-white px-3 py-1 text-xs font-semibold text-sky-700">{insightMetrics.timetables} filtered timetable(s)</span>
+                <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700">{dayModeFilter === 'WD' ? 'Weekday Mode' : dayModeFilter === 'WE' ? 'Weekend Mode' : 'All Batch Modes'}</span>
+                <span className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs text-emerald-700">Layout: {layoutMode === 'unified' ? 'Master View' : 'Grouped View'}</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl border border-sky-200 bg-white/95 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Modules</p>
+                <p className="mt-1 text-2xl font-extrabold text-slate-900">{insightMetrics.modules}</p>
+              </div>
+              <div className="rounded-2xl border border-sky-200 bg-white/95 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Groups</p>
+                <p className="mt-1 text-2xl font-extrabold text-slate-900">{insightMetrics.groups}</p>
+              </div>
+              <div className="col-span-2 rounded-2xl border border-sky-200 bg-white/95 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Last Generated</p>
+                <p className="mt-1 text-sm font-semibold text-slate-800">{insightMetrics.generatedAt}</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_35px_rgba(15,23,42,0.06)]">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">Institution Name</h2>
@@ -406,10 +551,10 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                 className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                 value={selectedId}
                 onChange={(e) => setSelectedId(e.target.value)}
-                disabled={loading || !timetables.length}
+                disabled={loading || !filteredTimetables.length}
               >
-                {!timetables.length && <option value="">No timetables available</option>}
-                {timetables.map((tt) => (
+                {!filteredTimetables.length && <option value="">No filtered timetables available</option>}
+                {filteredTimetables.map((tt) => (
                   <option key={tt.id} value={String(tt.id)}>
                     {tt.name || `Timetable #${tt.id}`} - {tt.status || 'pending'}
                   </option>
@@ -419,7 +564,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              className="rounded-xl border border-sky-300 bg-white px-4 py-2 text-sm font-semibold text-sky-800 transition hover:-translate-y-0.5 hover:bg-sky-50"
             >
               Refresh
             </button>
@@ -456,10 +601,76 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                 type="button"
                 onClick={generateTimetableNow}
                 disabled={generatePending}
-                className="rounded-lg border border-blue-600 bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+                className="rounded-xl border border-sky-600 bg-gradient-to-r from-sky-600 to-cyan-600 px-3 py-2 text-sm font-semibold text-white transition hover:shadow-lg disabled:bg-slate-400"
               >
                 {generatePending ? 'Generating...' : 'Generate Timetable'}
               </button>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-cyan-200/80 bg-gradient-to-r from-cyan-50 via-white to-sky-50 p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Display Generated Timetables</p>
+            <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+              <select
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                value={filterYear}
+                onChange={(e) => setFilterYear(e.target.value)}
+              >
+                {yearOptions.map((year) => (
+                  <option key={year} value={year}>{year === 'ALL' ? 'All Years' : `Year ${year}`}</option>
+                ))}
+              </select>
+              <select
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                value={filterSemester}
+                onChange={(e) => setFilterSemester(e.target.value)}
+              >
+                {semesterOptions.map((semester) => (
+                  <option key={semester} value={semester}>{semester === 'ALL' ? 'All Semesters' : `Semester ${semester}`}</option>
+                ))}
+              </select>
+              <select
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                value={filterSpecialization}
+                onChange={(e) => setFilterSpecialization(e.target.value)}
+              >
+                {specializationOptions.map((spec) => (
+                  <option key={spec} value={spec}>{spec === 'ALL' ? 'All Specializations' : spec}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-sky-300 bg-white px-3 py-1 text-xs font-semibold text-sky-700">
+                {filteredTimetables.length} timetable(s)
+              </span>
+              {filterYear !== 'ALL' && <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700">Year {filterYear}</span>}
+              {filterSemester !== 'ALL' && <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700">Semester {filterSemester}</span>}
+              {filterSpecialization !== 'ALL' && <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700">{filterSpecialization}</span>}
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-3">
+              {filteredTimetables.slice(0, 9).map((tt) => {
+                const meta = extractTimetableMeta(tt);
+                const active = String(selectedId) === String(tt.id);
+                return (
+                  <button
+                    key={tt.id}
+                    type="button"
+                    onClick={() => setSelectedId(String(tt.id))}
+                    className={`rounded-xl border px-3 py-3 text-left transition ${active ? 'border-sky-500 bg-sky-100/70 shadow-sm' : 'border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50'}`}
+                  >
+                    <p className="truncate text-sm font-semibold text-slate-900">{tt.name || `Timetable #${tt.id}`}</p>
+                    <p className="mt-1 text-xs text-slate-600">Y{meta.year} • S{meta.semester} • {meta.specialization}</p>
+                    <p className="mt-1 text-[11px] uppercase tracking-[0.08em] text-slate-500">{tt.status || 'pending'}</p>
+                  </button>
+                );
+              })}
+              {!filteredTimetables.length && (
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-4 text-sm text-slate-600">
+                  No generated timetables match this filter.
+                </div>
+              )}
             </div>
           </div>
 
@@ -521,10 +732,19 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
 
           {loading && <p className="mt-4 text-sm text-slate-600">Loading timetable data...</p>}
           {!loading && error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+
+          {!loading && !!selectedTimetable && (
+            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">Active Timetable Context</p>
+              <p className="mt-1 text-sm text-slate-800">
+                {selectedTimetable.name || `Timetable #${selectedTimetable.id}`} • Year {extractTimetableMeta(selectedTimetable).year} • Semester {extractTimetableMeta(selectedTimetable).semester} • {extractTimetableMeta(selectedTimetable).specialization}
+              </p>
+            </div>
+          )}
         </section>
 
         {!loading && !!selectedTimetable && layoutMode === 'unified' && (
-          <section className="overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50/30 p-4 shadow-sm">
+          <section className="overflow-hidden rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50/80 via-white to-cyan-50/70 p-4 shadow-[0_16px_40px_rgba(5,150,105,0.14)]">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h4 className="text-base font-bold text-slate-900">Unified Timetable (All Modules)</h4>
               <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
@@ -610,7 +830,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
         )}
 
         {!loading && !!selectedTimetable && layoutMode === 'grouped' && (
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_35px_rgba(15,23,42,0.06)]">
             <h3 className="text-lg font-bold text-slate-900">Table of Contents</h3>
             {!groupedByYearSemester.length ? (
               <p className="mt-3 text-sm text-slate-600">
@@ -648,7 +868,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
             <section
               id={tableId}
               key={batch.batchKey}
-              className={`overflow-hidden rounded-2xl border ${isOdd ? 'border-blue-200 bg-blue-50/30' : 'border-slate-200 bg-slate-50/30'} p-4 shadow-sm`}
+              className={`overflow-hidden rounded-3xl border ${isOdd ? 'border-blue-200 bg-gradient-to-br from-blue-50/70 via-white to-sky-50/60' : 'border-slate-200 bg-gradient-to-br from-slate-50/80 via-white to-cyan-50/50'} p-4 shadow-[0_12px_30px_rgba(15,23,42,0.08)]`}
             >
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h4 className="text-base font-bold text-slate-900">{batch.batchKey}</h4>

@@ -61,9 +61,9 @@ router.post('/assignments', authorize('admin', 'academiccoordinator', 'facultyco
 router.put('/assignments/:id', authorize('admin', 'academiccoordinator', 'facultycoordinator', 'lic', 'Admin', 'Academic Coordinator', 'Faculty Coordinator', 'LIC'), updateModuleAssignment);
 router.delete('/assignments/:id', authorize('admin', 'academiccoordinator', 'facultycoordinator', 'lic', 'Admin', 'Academic Coordinator', 'Faculty Coordinator', 'LIC'), deleteModuleAssignment);
 
-router.post('/run', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), runScheduler);
-router.post('/run-by-segments', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), runSchedulerBySegments);
-router.post('/run-for-year-semester', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), runSchedulerForYearSemester);
+router.post('/run', authorize('facultycoordinator', 'Faculty Coordinator'), runScheduler);
+router.post('/run-by-segments', authorize('facultycoordinator', 'Faculty Coordinator'), runSchedulerBySegments);
+router.post('/run-for-year-semester', authorize('facultycoordinator', 'Faculty Coordinator'), runSchedulerForYearSemester);
 router.post('/reset', authorize('admin', 'facultycoordinator', 'academiccoordinator', 'Admin', 'Faculty Coordinator', 'Academic Coordinator'), resetData);
 
 // CRUD operations
