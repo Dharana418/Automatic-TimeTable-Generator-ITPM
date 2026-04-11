@@ -221,10 +221,10 @@ const TimetableGenerationByYearSemester = () => {
         <div className="mb-8">
           <h2 className="mb-6 text-2xl font-bold text-slate-900">Configure Your Schedule</h2>
           
-          {/* FORM GRID */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6 mb-6">
+          {/* FORM LIST - VERTICAL LAYOUT */}
+          <div className="space-y-4 mb-6">
             {/* YEAR SELECT */}
-            <div className="sm:col-span-1 lg:col-span-1.5">
+            <div className="w-full">
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">
                 <CalendarDays size={16} className="inline mr-2" /> Academic Year
               </label>
@@ -243,7 +243,7 @@ const TimetableGenerationByYearSemester = () => {
             </div>
 
             {/* SEMESTER SELECT */}
-            <div className="sm:col-span-1 lg:col-span-1.5">
+            <div className="w-full">
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">
                 <GraduationCap size={16} className="inline mr-2" /> Semester
               </label>
@@ -259,7 +259,7 @@ const TimetableGenerationByYearSemester = () => {
             </div>
 
             {/* TIMETABLE NAME */}
-            <div className="sm:col-span-1 lg:col-span-1.5">
+            <div className="w-full">
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">
                 <FileCheck2 size={16} className="inline mr-2" /> Schedule Name
               </label>
@@ -272,7 +272,7 @@ const TimetableGenerationByYearSemester = () => {
             </div>
 
             {/* FREE DAY SELECT */}
-            <div className="sm:col-span-1 lg:col-span-1.5">
+            <div className="w-full">
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">
                 <Wand2 size={16} className="inline mr-2" /> Free Day
               </label>
@@ -288,15 +288,15 @@ const TimetableGenerationByYearSemester = () => {
             </div>
 
             {/* GENERATE BUTTON */}
-            <div className="sm:col-span-1 lg:col-span-1.5 flex flex-col justify-end">
+            <div className="w-full pt-4">
               <button
                 type="submit"
                 disabled={loading}
-                className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 px-6 py-3 font-bold uppercase tracking-wider text-white shadow-lg transition-all duration-300 hover:shadow-2xl hover:from-sky-600 hover:to-blue-700 disabled:from-slate-400 disabled:to-slate-500 disabled:shadow-none disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full group relative overflow-hidden rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 px-6 py-4 font-bold uppercase tracking-wider text-white shadow-lg transition-all duration-300 hover:shadow-2xl hover:from-sky-600 hover:to-blue-700 disabled:from-slate-400 disabled:to-slate-500 disabled:shadow-none disabled:cursor-not-allowed flex items-center justify-center gap-3 text-lg"
               >
                 <div className="absolute inset-0 bg-white/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-                <Cpu size={18} className="relative" />
-                <span className="relative">{loading ? 'Generating...' : 'Generate'}</span>
+                <Cpu size={22} className="relative" />
+                <span className="relative">{loading ? 'Generating...' : 'Generate Schedule'}</span>
               </button>
             </div>
           </div>
