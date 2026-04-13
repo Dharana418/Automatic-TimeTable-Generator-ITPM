@@ -350,6 +350,7 @@ router.get('/modules/year/:academicYear', async (req, res) => {
   try {
     const { academicYear } = req.params;
     const { semester, specialization } = req.query;
+    const moduleLimitPerSpecialization = 5;
     
     let query = `
       SELECT m.*
@@ -383,8 +384,20 @@ router.get('/modules/year/:academicYear', async (req, res) => {
         return moduleSpecialization === requestedSpecialization;
       });
     }
+
+    const limited = filtered.slice(0, moduleLimitPerSpecialization);
     
-    return res.json({ success: true, data: filtered });
+    return res.json({
+      success: true,
+      data: limited,
+      total: limited.length,
+      limit: moduleLimitPerSpecialization,
+      filters: {
+        year: academicYear,
+        semester: semester || null,
+        specialization: specialization || null,
+      },
+    });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
