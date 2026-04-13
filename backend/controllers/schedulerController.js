@@ -1907,10 +1907,13 @@ export const runScheduler = async (req, res) => {
 
     const mergedOptions = await withFacultySoftConstraints(req.user, {
       logicalScheduling: true,
-      enforceWeeklyLabAndTutorial: true,
+      fixedSessionBlueprint: true,
+      lectureSessionsPerWeek: 1,
+      labSessionsPerWeek: 1,
       lectureDurationHours: 3,
       labDurationHours: 2,
-      tutorialDurationHours: 1,
+      tutorialSessionsPerWeek: 0,
+      tutorialDurationHours: 0,
       ...options,
     });
     const constraints = { halls, modules, lics, instructors, batches, options: mergedOptions };
@@ -2008,10 +2011,13 @@ export const runSchedulerBySegments = async (req, res) => {
 
     const mergedOptions = await withFacultySoftConstraints(req.user, {
       logicalScheduling: true,
-      enforceWeeklyLabAndTutorial: true,
+      fixedSessionBlueprint: true,
+      lectureSessionsPerWeek: 1,
+      labSessionsPerWeek: 1,
       lectureDurationHours: 3,
       labDurationHours: 2,
-      tutorialDurationHours: 1,
+      tutorialSessionsPerWeek: 0,
+      tutorialDurationHours: 0,
       ...options,
     });
     const segments = buildSemesterSpecializationSegments({ batches, modules: [], lics, instructors });
@@ -2194,7 +2200,12 @@ export const runSchedulerForYearSemester = async (req, res) => {
     const [hallsRes, modulesRes, licsRes, instructorsRes, batchesRes] = await Promise.all([
       pool.query('SELECT * FROM halls WHERE status IN ($1, $2)', ['available', 'occupied']),
       pool.query(
-        'SELECT * FROM modules WHERE academic_year = $1 AND semester = $2',
+        `SELECT m.*
+         FROM modules m
+         JOIN users u ON u.id = m.created_by
+         WHERE m.academic_year = $1
+           AND m.semester = $2
+           AND regexp_replace(lower(COALESCE(u.role, '')), '[^a-z0-9]', '', 'g') = 'academiccoordinator'`,
         [academicYear, semester]
       ),
       pool.query('SELECT * FROM lics'),
