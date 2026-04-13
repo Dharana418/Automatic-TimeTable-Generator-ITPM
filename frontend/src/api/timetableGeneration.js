@@ -80,9 +80,19 @@ export const getAllTimetables = async () => {
  * @param {string} semester - Semester
  * @returns {Promise} Filtered timetables
  */
-export const getTimetablesForYearSemester = async (year, semester) => {
+export const getTimetablesForYearSemester = async (year, semester, filters = {}) => {
   try {
-    const response = await fetchFromAPI(`/api/scheduler/timetables?year=${encodeURIComponent(year)}&semester=${encodeURIComponent(semester)}`);
+    const params = new URLSearchParams({
+      year: String(year),
+      semester: String(semester),
+    });
+
+    Object.entries(filters || {}).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === '') return;
+      params.set(key, String(value));
+    });
+
+    const response = await fetchFromAPI(`/api/academic-coordinator/timetables?${params.toString()}`);
     const timetables = response.data || [];
 
     return {
@@ -252,15 +262,17 @@ const extractEntryGroupRecords = (entry = {}) => {
  * @param {string} year - Academic year
  * @param {string} semester - Semester
  */
-export const downloadTimetableAsCSV = (schedule, year, semester) => {
+export const downloadTimetableAsCSV = (schedule, year, semester, group = '', subgroup = '') => {
   if (!Array.isArray(schedule) || schedule.length === 0) {
     const csv = exportTimetableToCSV(schedule);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
 
+    const scopeSuffix = [group, subgroup].filter(Boolean).join('_');
+
     link.setAttribute('href', url);
-    link.setAttribute('download', `timetable_${year}_sem${semester}.csv`);
+    link.setAttribute('download', `timetable_${year}_sem${semester}${scopeSuffix ? `_${scopeSuffix}` : ''}.csv`);
     link.style.visibility = 'hidden';
 
     document.body.appendChild(link);
@@ -316,7 +328,8 @@ export const downloadTimetableAsCSV = (schedule, year, semester) => {
     const url = URL.createObjectURL(blob);
 
     link.setAttribute('href', url);
-    link.setAttribute('download', `timetable_${year}_sem${semester}_${safeGroupKey}.csv`);
+    const scopeSuffix = [group, subgroup].filter(Boolean).join('_');
+    link.setAttribute('download', `timetable_${year}_sem${semester}${scopeSuffix ? `_${scopeSuffix}` : ''}_${safeGroupKey}.csv`);
     link.style.visibility = 'hidden';
 
     document.body.appendChild(link);

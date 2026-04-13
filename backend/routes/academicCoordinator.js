@@ -36,6 +36,8 @@ const parseJsonSafe = (value, fallback = {}) => {
   }
 };
 
+const normalizeScopeValue = (value = '') => String(value || '').trim().toUpperCase();
+
 const inferModuleSpecialization = (module = {}) => {
   const details = parseJsonSafe(module.details, {});
   const explicit =
@@ -87,8 +89,32 @@ router.use(
 
 router.get('/timetables', async (req, res) => {
   try {
+    const requestedYear = String(req.query.year || req.query.academicYear || '').trim();
+    const requestedSemester = String(req.query.semester || '').trim();
+    const requestedSpecialization = normalizeScopeValue(req.query.specialization || '');
+    const requestedGroup = String(req.query.group || '').trim();
+    const requestedSubgroup = String(req.query.subgroup || '').trim();
+
     const { rows } = await pool.query('SELECT * FROM timetables ORDER BY created_at DESC');
-    return res.json({ success: true, data: rows });
+
+    const filtered = rows.filter((row) => {
+      const data = parseJsonSafe(row.data, {});
+      const scope = parseJsonSafe(data.scope, {});
+      const dataYear = String(scope.year || data.year || data.academicYear || row.year || '').trim();
+      const dataSemester = String(scope.semester || data.semester || row.semester || '').trim();
+      const dataSpecialization = normalizeScopeValue(scope.specialization || data.specialization || '');
+      const dataGroup = String(scope.group || data.group || '').trim();
+      const dataSubgroup = String(scope.subgroup || data.subgroup || '').trim();
+
+      if (requestedYear && dataYear !== requestedYear) return false;
+      if (requestedSemester && dataSemester !== requestedSemester) return false;
+      if (requestedSpecialization && dataSpecialization !== requestedSpecialization) return false;
+      if (requestedGroup && dataGroup !== requestedGroup) return false;
+      if (requestedSubgroup && dataSubgroup !== requestedSubgroup) return false;
+      return true;
+    });
+
+    return res.json({ success: true, data: filtered });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
