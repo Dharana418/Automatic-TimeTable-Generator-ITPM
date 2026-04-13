@@ -351,22 +351,37 @@ router.get('/modules/year/:academicYear', async (req, res) => {
     const { academicYear } = req.params;
     const { semester, specialization } = req.query;
     
-    let query = `SELECT * FROM modules WHERE academic_year = $1`;
+    let query = `
+      SELECT m.*
+      FROM modules m
+      JOIN users u ON u.id = m.created_by
+      WHERE m.academic_year = $1
+        AND regexp_replace(lower(COALESCE(u.role, '')), '[^a-z0-9]', '', 'g') = 'academiccoordinator'
+    `;
     const params = [academicYear];
     
     if (semester) {
       params.push(semester);
-      query += ` AND semester = $${params.length}`;
+      query += ` AND m.semester = $${params.length}`;
     }
     
-    query += ` ORDER BY created_at DESC`;
+    query += ` ORDER BY m.created_at DESC`;
     
     const { rows } = await pool.query(query, params);
     
     let filtered = rows;
     if (specialization && specialization.toUpperCase() !== 'ALL') {
-      const spec = specialization.toUpperCase();
-      filtered = rows.filter(m => inferModuleSpecialization(m) === spec);
+      const requestedSpecialization = normalizeSpecializationCode(specialization);
+      filtered = rows.filter((module) => {
+        const moduleSpecialization = normalizeSpecializationCode(inferModuleSpecialization(module));
+        if (requestedSpecialization === 'ENGINEERING') {
+          return ['CS', 'ISE', 'CSNE', 'IME', 'IM'].includes(moduleSpecialization);
+        }
+        if (requestedSpecialization === 'IM') {
+          return moduleSpecialization === 'IM' || moduleSpecialization === 'IME';
+        }
+        return moduleSpecialization === requestedSpecialization;
+      });
     }
     
     return res.json({ success: true, data: filtered });
