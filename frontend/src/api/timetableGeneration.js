@@ -152,16 +152,24 @@ export const rejectTimetable = async (timetableId, comments = '') => {
 export const formatTimetable = (timetable) => {
   if (!timetable) return null;
 
+  const timetableScope = timetable.data?.scope || timetable.data?.timetableScope || {};
+  const groupedScheduleCount = Array.isArray(timetable.data?.groupedSchedules)
+    ? timetable.data.groupedSchedules.reduce((total, group) => total + (Array.isArray(group?.entries) ? group.entries.length : 0), 0)
+    : 0;
+
   return {
     id: timetable.id,
     name: timetable.name || 'Unnamed',
     year: timetable.year || 'N/A',
     semester: timetable.semester || 'N/A',
+    specialization: timetableScope.specialization || timetable.data?.specialization || 'N/A',
+    group: timetableScope.group || timetable.data?.group || 'N/A',
+    subgroup: timetableScope.subgroup || timetable.data?.subgroup || 'N/A',
     status: timetable.status || 'pending',
     created_at: timetable.created_at
       ? new Date(timetable.created_at).toLocaleDateString()
       : 'N/A',
-    schedule_count: timetable.data?.schedule?.length || 0,
+    schedule_count: timetable.data?.schedule?.length || groupedScheduleCount || 0,
   };
 };
 

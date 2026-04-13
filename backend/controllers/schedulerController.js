@@ -474,6 +474,126 @@ const saveGeneratedTimetable = async ({
   return rows[0] || null;
 };
 
+const extractScheduleEntryBatchKeys = (entry = {}) => {
+  const rawKeys = [];
+
+  if (Array.isArray(entry.batchKeys) && entry.batchKeys.length) {
+    rawKeys.push(...entry.batchKeys);
+  } else if (entry.batchKey) {
+    rawKeys.push(entry.batchKey);
+  } else if (entry.batch) {
+    rawKeys.push(entry.batch);
+  }
+
+  return [...new Set(rawKeys.map((key) => String(key || '').trim()).filter(Boolean))];
+};
+
+const parseScheduleBatchScope = (batchKey = '') => {
+  const [yearToken = '', semesterToken = '', modeToken = '', specializationToken = '', groupToken = '', subgroupToken = ''] = String(batchKey || '')
+    .trim()
+    .split('.');
+
+  if (!yearToken || !semesterToken || !modeToken || !specializationToken || !groupToken || !subgroupToken) {
+    return null;
+  }
+
+  const year = Number(String(yearToken).replace(/[^0-9]/g, ''));
+  const semester = Number(String(semesterToken).replace(/[^0-9]/g, ''));
+  if (!Number.isInteger(year) || year < 1 || !Number.isInteger(semester) || semester < 1) {
+    return null;
+  }
+
+  const group = String(groupToken).trim();
+  const subgroup = String(subgroupToken).trim();
+  if (!group || !subgroup) {
+    return null;
+  }
+
+  return {
+    year,
+    semester,
+    mode: String(modeToken).trim().toUpperCase(),
+    specialization: normalizeSpecializationCode(specializationToken),
+    group,
+    subgroup,
+    scopeKey: [
+      String(yearToken).toUpperCase(),
+      String(semesterToken).toUpperCase(),
+      String(modeToken).toUpperCase(),
+      String(specializationToken).toUpperCase(),
+      group,
+      subgroup,
+    ].join('.'),
+  };
+};
+
+const buildTimetableScope = ({ year = null, semester = null, specialization = null, group = null, subgroup = null } = {}) => ({
+  year: year != null && year !== '' ? String(year) : 'ALL',
+  semester: semester != null && semester !== '' ? String(semester) : 'ALL',
+  specialization: specialization ? String(specialization).toUpperCase() : null,
+  group: group != null && group !== '' ? String(group) : null,
+  subgroup: subgroup != null && subgroup !== '' ? String(subgroup) : null,
+});
+
+const buildGroupedSchedulePayload = (schedule = [], fallbackScope = {}) => {
+  const grouped = new Map();
+  const fallbackScopeKey = [
+    fallbackScope.year || 'ALL',
+    fallbackScope.semester || 'ALL',
+    fallbackScope.specialization || 'ALL',
+    fallbackScope.group || 'ALL',
+    fallbackScope.subgroup || 'ALL',
+  ].join('.');
+
+  const addEntryToGroup = (scope, entry, batchKeys = []) => {
+    const scopeKey = scope?.scopeKey || fallbackScopeKey;
+    if (!grouped.has(scopeKey)) {
+      grouped.set(scopeKey, {
+        scope: {
+          year: scope?.year != null ? String(scope.year) : fallbackScope.year || 'ALL',
+          semester: scope?.semester != null ? String(scope.semester) : fallbackScope.semester || 'ALL',
+          specialization: scope?.specialization || fallbackScope.specialization || null,
+          group: scope?.group || fallbackScope.group || null,
+          subgroup: scope?.subgroup || fallbackScope.subgroup || null,
+        },
+        scopeKey,
+        batchKeys: new Set(),
+        subgroupSet: new Set(),
+        entries: [],
+      });
+    }
+
+    const bucket = grouped.get(scopeKey);
+    batchKeys.forEach((batchKey) => bucket.batchKeys.add(batchKey));
+    if (scope?.subgroup) {
+      bucket.subgroupSet.add(scope.subgroup);
+    }
+    bucket.entries.push(entry);
+  };
+
+  schedule.forEach((entry) => {
+    const batchKeys = extractScheduleEntryBatchKeys(entry);
+    const scopes = batchKeys.map(parseScheduleBatchScope).filter(Boolean);
+
+    if (!scopes.length) {
+      addEntryToGroup({ ...fallbackScope, scopeKey: fallbackScopeKey }, entry, batchKeys);
+      return;
+    }
+
+    scopes.forEach((scope) => {
+      addEntryToGroup(scope, entry, batchKeys);
+    });
+  });
+
+  return Array.from(grouped.values()).map((bucket) => ({
+    scope: bucket.scope,
+    scopeKey: bucket.scopeKey,
+    batchKeys: Array.from(bucket.batchKeys).sort((left, right) => left.localeCompare(right)),
+    subgroups: Array.from(bucket.subgroupSet).sort((left, right) => left.localeCompare(right)),
+    entries: bucket.entries,
+  }));
+};
+
 const buildSemesterSpecializationSegments = ({ batches = [], modules = [], lics = [], instructors = [] }) => {
   const segmentMap = new Map();
 
@@ -1804,6 +1924,14 @@ export const runScheduler = async (req, res) => {
     if (shouldPersist) {
       const { algorithm, schedule } = pickPrimaryScheduleFromResults(results, algorithms);
       const nowIso = new Date().toISOString();
+      const timetableScope = buildTimetableScope({
+        year: mergedOptions.academicYear || mergedOptions.year || 'ALL',
+        semester: mergedOptions.semester || 'ALL',
+        specialization: mergedOptions.specialization || null,
+        group: mergedOptions.group || null,
+        subgroup: mergedOptions.subgroup || null,
+      });
+      const groupedSchedules = buildGroupedSchedulePayload(schedule, timetableScope);
 
       savedTimetable = await saveGeneratedTimetable({
         name: timetableName || `Timetable_All_${nowIso.slice(0, 10)}`,
@@ -1812,12 +1940,15 @@ export const runScheduler = async (req, res) => {
         generatedBy: req.user?.id || null,
         data: {
           generatedAt: nowIso,
-          scope: 'all',
+          scope: timetableScope,
+          generationScope: 'all',
+          timetableScope,
           algorithms: Array.isArray(algorithms) ? algorithms : [algorithms],
           primaryAlgorithm: algorithm,
           modulesCount: modules.length,
           hallsCount: halls.length,
           schedule,
+          groupedSchedules,
           allResults: results,
         },
       });
@@ -1984,6 +2115,12 @@ export const runSchedulerBySegments = async (req, res) => {
         const { schedule } = pickPrimaryScheduleFromResults(entry.results, algorithms);
         return schedule;
       });
+      const timetableScope = buildTimetableScope({
+        year: requestedYear || 'MULTI',
+        semester: requestedSemester || 'MULTI',
+        specialization: requestedSpecialization || null,
+      });
+      const groupedSchedules = buildGroupedSchedulePayload(mergedSchedule, timetableScope);
 
       savedTimetable = await saveGeneratedTimetable({
         name: timetableName || `Timetable_Segments_${nowIso.slice(0, 10)}`,
@@ -1992,15 +2129,18 @@ export const runSchedulerBySegments = async (req, res) => {
         generatedBy: req.user?.id || null,
         data: {
           generatedAt: nowIso,
-          scope: 'segmented',
+          scope: timetableScope,
+          generationScope: 'segmented',
           filters: {
             year: requestedYear || null,
             semester: requestedSemester || null,
             specialization: requestedSpecialization || null,
           },
+          timetableScope,
           algorithms: Array.isArray(algorithms) ? algorithms : [algorithms],
           totalSegments: segmentedResults.length,
           mergedSchedule,
+          groupedSchedules,
           segmentedResults,
         },
       });
@@ -2232,6 +2372,19 @@ export const runSchedulerForYearSemester = async (req, res) => {
         allResults: results,
       },
     };
+
+    generatedTimetable.data.timetableScope = buildTimetableScope({
+      year: academicYear,
+      semester,
+      specialization: normalizedScope.specialization,
+      group: normalizedScope.group,
+      subgroup: normalizedScope.subgroup,
+    });
+    generatedTimetable.data.generationScope = 'year-semester';
+    generatedTimetable.data.groupedSchedules = buildGroupedSchedulePayload(
+      generatedTimetable.data.schedule,
+      generatedTimetable.data.timetableScope
+    );
 
     // Save timetable to database
     const { rows } = await pool.query(

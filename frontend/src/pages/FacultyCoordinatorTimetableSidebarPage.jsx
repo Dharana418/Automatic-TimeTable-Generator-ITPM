@@ -125,6 +125,14 @@ const parseSchedule = (timetable) => {
 
     if (Array.isArray(obj.schedule)) return obj.schedule;
 
+    if (Array.isArray(obj.groupedSchedules)) {
+      return obj.groupedSchedules.flatMap((group) => {
+        if (Array.isArray(group?.entries)) return group.entries;
+        if (Array.isArray(group?.schedule)) return group.schedule;
+        return [];
+      });
+    }
+
     const allResults = obj.allResults || obj.results || null;
     if (allResults && typeof allResults === 'object') {
       const prioritizedKeys = ['hybrid', 'pso', 'genetic', 'ant', 'tabu'];
@@ -177,14 +185,19 @@ const parseTimetableData = (rawData) => {
 
 const extractTimetableMeta = (timetable = {}) => {
   const data = parseTimetableData(timetable.data);
-  const year = String(timetable.year || data.academicYear || data.year || '').trim();
-  const semester = String(timetable.semester || data.semester || '').trim();
-  const specialization = String(data.specialization || 'ALL').trim() || 'ALL';
+  const scope = data.scope || data.timetableScope || {};
+  const year = String(timetable.year || scope.year || data.academicYear || data.year || '').trim();
+  const semester = String(timetable.semester || scope.semester || data.semester || '').trim();
+  const specialization = String(scope.specialization || data.specialization || 'ALL').trim() || 'ALL';
+  const group = String(scope.group || data.group || '').trim();
+  const subgroup = String(scope.subgroup || data.subgroup || '').trim();
 
   return {
     year: year || 'ALL',
     semester: semester || 'ALL',
     specialization: specialization.toUpperCase(),
+    group: group || 'ALL',
+    subgroup: subgroup || 'ALL',
   };
 };
 
@@ -662,7 +675,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                     className={`rounded-xl border px-3 py-3 text-left transition ${active ? 'border-sky-500 bg-sky-100/70 shadow-sm' : 'border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50'}`}
                   >
                     <p className="truncate text-sm font-semibold text-slate-900">{tt.name || `Timetable #${tt.id}`}</p>
-                    <p className="mt-1 text-xs text-slate-600">Y{meta.year} • S{meta.semester} • {meta.specialization}</p>
+                    <p className="mt-1 text-xs text-slate-600">Y{meta.year} • S{meta.semester} • {meta.specialization} • G{meta.group} • SG{meta.subgroup}</p>
                     <p className="mt-1 text-[11px] uppercase tracking-[0.08em] text-slate-500">{tt.status || 'pending'}</p>
                   </button>
                 );
@@ -738,7 +751,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
             <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">Active Timetable Context</p>
               <p className="mt-1 text-sm text-slate-800">
-                {selectedTimetable.name || `Timetable #${selectedTimetable.id}`} • Year {extractTimetableMeta(selectedTimetable).year} • Semester {extractTimetableMeta(selectedTimetable).semester} • {extractTimetableMeta(selectedTimetable).specialization}
+                  {selectedTimetable.name || `Timetable #${selectedTimetable.id}`} • Year {extractTimetableMeta(selectedTimetable).year} • Semester {extractTimetableMeta(selectedTimetable).semester} • {extractTimetableMeta(selectedTimetable).specialization} • Group {extractTimetableMeta(selectedTimetable).group} • Subgroup {extractTimetableMeta(selectedTimetable).subgroup}
               </p>
             </div>
           )}
