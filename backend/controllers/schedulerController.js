@@ -2071,6 +2071,22 @@ export const runSchedulerForYearSemester = async (req, res) => {
     const requestedSpecialization = normalizeSpecializationCode(options.specialization || '');
     const requestedGroup = String(options.group || '').trim();
     const requestedSubgroup = String(options.subgroup || '').trim();
+    const normalizedYear = String(academicYear).trim();
+    const normalizedSemester = String(semester).trim();
+    const normalizedScope = {
+      year: normalizedYear,
+      semester: normalizedSemester,
+      specialization: requestedSpecialization || null,
+      group: requestedGroup || null,
+      subgroup: requestedSubgroup || null,
+    };
+    const scopeKey = [
+      normalizedYear,
+      normalizedSemester,
+      requestedSpecialization || 'ALL',
+      requestedGroup || 'ALL',
+      requestedSubgroup || 'ALL',
+    ].join('.');
     const scopeSuffix = [requestedSpecialization, requestedGroup, requestedSubgroup].filter(Boolean).join('_');
     const defaultTimetableName = scopeSuffix
       ? `Timetable_${academicYear}_S${semester}_${scopeSuffix}`
@@ -2199,11 +2215,13 @@ export const runSchedulerForYearSemester = async (req, res) => {
       status: 'pending',
       generated_by: req.user?.id || null,
       data: {
-        academicYear: String(academicYear),
-        semester: String(semester),
-        specialization: requestedSpecialization || null,
-        group: requestedGroup || null,
-        subgroup: requestedSubgroup || null,
+        academicYear: normalizedYear,
+        semester: normalizedSemester,
+        specialization: normalizedScope.specialization,
+        group: normalizedScope.group,
+        subgroup: normalizedScope.subgroup,
+        scope: normalizedScope,
+        scopeKey,
         generatedAt: new Date().toISOString(),
         algorithms: Array.isArray(algorithms) ? algorithms : [algorithms],
         hallAllocations: Object.fromEntries(hallAllocationMap),

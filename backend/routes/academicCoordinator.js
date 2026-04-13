@@ -99,11 +99,12 @@ router.get('/timetables', async (req, res) => {
 
     const filtered = rows.filter((row) => {
       const data = parseJsonSafe(row.data, {});
-      const dataYear = String(data.year || data.academicYear || row.year || '').trim();
-      const dataSemester = String(data.semester || row.semester || '').trim();
-      const dataSpecialization = normalizeScopeValue(data.specialization || '');
-      const dataGroup = String(data.group || '').trim();
-      const dataSubgroup = String(data.subgroup || '').trim();
+      const scope = parseJsonSafe(data.scope, {});
+      const dataYear = String(scope.year || data.year || data.academicYear || row.year || '').trim();
+      const dataSemester = String(scope.semester || data.semester || row.semester || '').trim();
+      const dataSpecialization = normalizeScopeValue(scope.specialization || data.specialization || '');
+      const dataGroup = String(scope.group || data.group || '').trim();
+      const dataSubgroup = String(scope.subgroup || data.subgroup || '').trim();
 
       if (requestedYear && dataYear !== requestedYear) return false;
       if (requestedSemester && dataSemester !== requestedSemester) return false;
