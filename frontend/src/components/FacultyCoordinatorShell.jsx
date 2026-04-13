@@ -71,7 +71,7 @@ export default function FacultyCoordinatorShell({
         />
 
         {/* SIDEBAR */}
-        <aside className={`fixed left-4 top-6 z-40 flex h-[calc(100vh-3rem)] flex-col overflow-y-auto rounded-[28px] border border-white/10 bg-slate-950/80 shadow-[0_24px_80px_rgba(2,6,23,0.48)] backdrop-blur-2xl transition-all duration-300 lg:top-6 lg:bottom-24 lg:h-[calc(100vh-7.5rem)]
+        <aside className={`fixed left-4 top-10 z-40 flex h-[calc(100vh-5rem)] flex-col overflow-y-auto rounded-[28px] border border-white/10 bg-slate-950/80 shadow-[0_24px_80px_rgba(2,6,23,0.48)] backdrop-blur-2xl transition-all duration-300 lg:top-10 lg:bottom-24 lg:h-[calc(100vh-8.5rem)]
           ${collapsed ? 'w-20' : 'w-72'}
           ${mobileOpen ? 'translate-x-0' : '-translate-x-[110%]'}
           lg:translate-x-0`}>
