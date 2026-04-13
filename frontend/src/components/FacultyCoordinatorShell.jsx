@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 /* ---------------- ICONS ---------------- */
 const Icon = {
   grid: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>,
-  calendar: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><rect x="3" y="4" width="18" height="18"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+  calendar: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
   users: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><circle cx="9" cy="7" r="4"/><path d="M17 21v-2a4 4 0 0 0-4-4H5"/></svg>,
   book: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/></svg>,
   chevronLeft: <svg viewBox="0 0 24 24" stroke="currentColor" className="h-4 w-4"><polyline points="15 18 9 12 15 6"/></svg>,
@@ -31,6 +31,9 @@ export default function FacultyCoordinatorShell({
   brandCode = 'FC',
   brandTitle = 'Faculty Coordinator',
   brandSubtitle = 'Scheduling Console',
+  badge = 'Faculty Workspace',
+  backgroundImage = null,
+  footerNote = 'Faculty coordinator workspace',
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -57,111 +60,162 @@ export default function FacultyCoordinatorShell({
   }, []);
 
   return (
-    <div className="flex min-h-screen bg-slate-900 text-slate-100">
+    <div className="relative min-h-screen overflow-hidden bg-[#07111f] text-slate-100">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.22),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(99,102,241,0.22),_transparent_25%),linear-gradient(180deg,_rgba(15,23,42,0.92),_rgba(2,6,23,0.98))]" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:72px_72px] opacity-20" />
 
-      {/* SIDEBAR */}
-      <aside className={`fixed top-0 left-0 h-full z-40 bg-slate-950 border-r border-slate-800 transition-all duration-300
-        ${collapsed ? 'w-16' : 'w-64'}
-        ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
-        lg:translate-x-0`}>
+      <div className="relative flex min-h-screen">
+        <div
+          className={`fixed inset-0 z-30 bg-black/55 backdrop-blur-sm transition-opacity duration-300 lg:hidden ${mobileOpen ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+          onClick={() => setMobileOpen(false)}
+        />
 
-        {/* MOBILE OVERLAY */}
-        {mobileOpen && (
-          <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm lg:hidden"
-            onClick={() => setMobileOpen(false)}
-          />
-        )}
+        {/* SIDEBAR */}
+        <aside className={`fixed left-4 top-10 z-40 flex h-[calc(100vh-5rem)] flex-col overflow-y-auto rounded-[28px] border border-white/10 bg-slate-950/80 shadow-[0_24px_80px_rgba(2,6,23,0.48)] backdrop-blur-2xl transition-all duration-300 lg:top-10 lg:bottom-24 lg:h-[calc(100vh-8.5rem)]
+          ${collapsed ? 'w-20' : 'w-72'}
+          ${mobileOpen ? 'translate-x-0' : '-translate-x-[110%]'}
+          lg:translate-x-0`}>
 
-        {/* BRAND */}
-        <div className="p-4 border-b border-slate-800 flex items-center gap-3">
-          <div className="bg-indigo-600 w-10 h-10 rounded flex items-center justify-center font-bold">
-            {brandCode}
-          </div>
-          {!collapsed && (
-            <div>
-              <p className="text-xs text-slate-400">{brandTitle}</p>
-              <p className="font-bold">{brandSubtitle}</p>
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(59,130,246,0.18),_transparent_34%),radial-gradient(circle_at_bottom_left,_rgba(14,165,233,0.16),_transparent_30%)]" />
+
+          <div className="relative flex items-center gap-3 border-b border-white/10 p-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400 via-sky-500 to-indigo-600 text-sm font-black text-white shadow-[0_10px_24px_rgba(8,145,178,0.32)]">
+              {brandCode}
             </div>
-          )}
-        </div>
-
-        {/* NAV */}
-        <nav className="p-2 space-y-1">
-          {NAV.map(item => {
-            const active = location.pathname === item.to;
-            return (
-              <button
-                key={item.id}
-                onClick={() => {
-                  navigate(item.to);
-                  setMobileOpen(false);
-                }}
-                className={`flex items-center gap-3 w-full p-2 rounded-lg transition ${
-                  active ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800'
-                }`}
-              >
-                {item.icon}
-                {!collapsed && item.label}
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* USER */}
-        <div className="absolute bottom-0 w-full p-4 border-t border-slate-800 flex items-center gap-3">
-          <div className="bg-indigo-500 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold">
-            {initials}
-          </div>
-          {!collapsed && (
-            <div>
-              <p className="text-sm">{displayName}</p>
-              <p className="text-xs text-slate-400">Active</p>
-            </div>
-          )}
-        </div>
-
-        {/* COLLAPSE BUTTON */}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="absolute -right-3 top-6 bg-indigo-600 w-6 h-6 rounded-full flex items-center justify-center"
-        >
-          {collapsed ? Icon.chevronRight : Icon.chevronLeft}
-        </button>
-      </aside>
-
-      {/* MAIN */}
-      <div className={`flex-1 flex flex-col transition-all duration-300 ${collapsed ? 'lg:ml-16' : 'lg:ml-64'}`}>
-
-        {/* HEADER */}
-        <header className="h-16 flex items-center justify-between px-6 border-b border-slate-800 bg-slate-900 sticky top-0 z-30">
-
-          <div className="flex items-center gap-3">
-            <button className="lg:hidden" onClick={() => setMobileOpen(true)}>
-              {Icon.menu}
-            </button>
-
-            <div>
-              <h1 className="font-bold">{title}</h1>
-              <p className="text-xs text-slate-400">{subtitle}</p>
-            </div>
+            {!collapsed && (
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-200/80">{brandTitle}</p>
+                <p className="truncate text-sm font-bold text-white">{brandSubtitle}</p>
+              </div>
+            )}
           </div>
 
-          <button className="relative">
-            {Icon.bell}
-            <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
+          <nav className="relative space-y-1 p-3">
+            {NAV.map((item) => {
+              const active = location.pathname === item.to;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    navigate(item.to);
+                    setMobileOpen(false);
+                  }}
+                  className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition duration-200 ${
+                    active
+                      ? 'bg-gradient-to-r from-cyan-500/20 via-sky-500/18 to-indigo-500/20 text-white shadow-[0_10px_20px_rgba(8,145,178,0.14)] ring-1 ring-cyan-400/25'
+                      : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                  }`}
+                >
+                  <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${active ? 'bg-white/10 text-cyan-100' : 'bg-white/5 text-slate-300'}`}>
+                    {item.icon}
+                  </span>
+                  {!collapsed && <span className="text-sm font-semibold">{item.label}</span>}
+                </button>
+              );
+            })}
+          </nav>
+
+          <div className="mt-auto flex items-center gap-3 border-t border-white/10 bg-slate-950/60 p-4 backdrop-blur-xl">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400 to-cyan-500 text-sm font-bold text-white shadow-lg shadow-cyan-950/20">
+              {initials}
+            </div>
+            {!collapsed && (
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-white">{displayName}</p>
+                <p className="text-xs text-slate-400">Active session</p>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="absolute -right-3 top-6 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-slate-900 text-cyan-100 shadow-[0_10px_24px_rgba(2,6,23,0.35)] transition hover:scale-105"
+          >
+            {collapsed ? Icon.chevronRight : Icon.chevronLeft}
           </button>
-        </header>
+        </aside>
 
-        {/* CONTENT */}
-        <main className="flex-1 p-6 bg-slate-900">
-          {children}
-        </main>
+        {/* MAIN */}
+        <div className={`relative flex flex-1 flex-col transition-all duration-300 ${collapsed ? 'lg:ml-24' : 'lg:ml-[19rem]'}`}>
+          <header className="sticky top-4 z-30 mx-4 mb-4 rounded-[28px] border border-white/10 bg-slate-950/70 px-5 py-4 shadow-[0_18px_40px_rgba(2,6,23,0.35)] backdrop-blur-2xl lg:mx-6">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <button className="rounded-xl border border-white/10 bg-white/5 p-2 text-white lg:hidden" onClick={() => setMobileOpen(true)}>
+                  {Icon.menu}
+                </button>
 
-        {/* FOOTER */}
-        <footer className="p-4 text-center text-xs text-slate-500 border-t border-slate-800">
-          © {new Date().getFullYear()} SLIIT Scheduler
-        </footer>
+                <div className="min-w-0">
+                  <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-100">
+                    <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" />
+                    {badge}
+                  </div>
+                  <h1 className="truncate text-lg font-bold text-white sm:text-2xl">{title}</h1>
+                  <p className="truncate text-xs text-slate-300 sm:text-sm">{subtitle}</p>
+                </div>
+              </div>
+
+              <button className="relative rounded-2xl border border-white/10 bg-white/5 p-3 text-white transition hover:bg-white/10">
+                {Icon.bell}
+                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-500 shadow-[0_0_0_4px_rgba(244,63,94,0.18)]" />
+              </button>
+            </div>
+          </header>
+
+          <main className="flex-1 px-4 pb-12 lg:px-6 lg:pb-16">
+            <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+              <section className="relative overflow-hidden rounded-[32px] border border-white/10 bg-white/5 p-6 shadow-[0_18px_50px_rgba(2,6,23,0.24)] backdrop-blur-xl lg:p-8">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(34,211,238,0.18),_transparent_26%),radial-gradient(circle_at_bottom_left,_rgba(99,102,241,0.18),_transparent_30%)]" />
+                <div className="relative grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
+                  <div className="space-y-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-cyan-100/80">Faculty Coordinator Dashboard</p>
+                    <h2 className="max-w-3xl text-3xl font-black leading-tight text-white sm:text-4xl">
+                      {title || 'Faculty Coordinator Workspace'}
+                    </h2>
+                    <p className="max-w-3xl text-sm leading-7 text-slate-200/90 sm:text-base">
+                      {subtitle || 'Plan, generate, and manage timetables with a streamlined academic workflow.'}
+                    </p>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-100">Academic scheduling</span>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-100">Coordinator tools</span>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-100">Live module sync</span>
+                    </div>
+                  </div>
+
+                  <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/50 p-4 shadow-[0_16px_40px_rgba(2,6,23,0.3)]">
+                    <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/12 via-transparent to-indigo-500/18" />
+                    <div className="relative grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <p className="text-[11px] uppercase tracking-[0.2em] text-slate-300">Workspace</p>
+                        <p className="mt-2 text-lg font-bold text-white">Faculty Coordinator</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <p className="text-[11px] uppercase tracking-[0.2em] text-slate-300">Status</p>
+                        <p className="mt-2 text-lg font-bold text-white">Ready</p>
+                      </div>
+                      <div className="sm:col-span-2 rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <p className="text-[11px] uppercase tracking-[0.2em] text-slate-300">User</p>
+                        <p className="mt-2 text-sm font-semibold text-white">{displayName}</p>
+                      </div>
+                      {backgroundImage && (
+                        <div className="sm:col-span-2 overflow-hidden rounded-2xl border border-white/10">
+                          <img src={backgroundImage} alt="Faculty coordinator backdrop" className="h-40 w-full object-cover opacity-90" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="rounded-[32px] border border-white/10 bg-slate-950/55 p-4 shadow-[0_18px_50px_rgba(2,6,23,0.2)] backdrop-blur-xl sm:p-6">
+                {children}
+              </section>
+            </div>
+          </main>
+
+          <footer className="mx-4 mb-8 rounded-[24px] border border-white/10 bg-slate-950/70 px-4 py-3 text-center text-xs text-slate-300 shadow-[0_12px_30px_rgba(2,6,23,0.24)] backdrop-blur-xl lg:mx-6 lg:mb-10">
+            {footerNote} · © {new Date().getFullYear()} SLIIT Scheduler
+          </footer>
+        </div>
       </div>
     </div>
   );

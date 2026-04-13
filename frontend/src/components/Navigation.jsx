@@ -98,10 +98,10 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
 
         const result = await Swal.fire({
             icon: 'warning',
-            title: 'Are you sure?',
-            text: 'Do you want to logout now?',
+            title: 'Are you sure you want to log out?',
+            text: 'You will be signed out of the system.',
             showCancelButton: true,
-            confirmButtonText: 'Yes, logout',
+            confirmButtonText: 'Log out',
             cancelButtonText: 'Cancel',
             confirmButtonColor: '#dc2626',
             cancelButtonColor: '#64748b',
@@ -211,7 +211,7 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
 
                             {/* Logout Action */}
                             <button
-                                onClick={handleLogout} 
+                                onClick={requestLogoutConfirmation} 
                                 className="group ml-1 flex items-center justify-center rounded-xl bg-white/10 p-2 text-white transition-all duration-200 hover:bg-white/20 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:ring-offset-2"
                                 aria-label="Logout"
                                 title="Logout"
