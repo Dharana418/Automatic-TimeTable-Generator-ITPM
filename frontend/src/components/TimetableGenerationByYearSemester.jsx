@@ -854,7 +854,7 @@ const TimetableGenerationByYearSemester = () => {
                     : 'border-slate-300 bg-slate-100/50'
                 }`}>
                   <h3 className="text-lg font-bold text-slate-900">{t.name}</h3>
-                  <p className="text-xs text-slate-600 mt-1">ID: {t.id.slice(0, 8)}...</p>
+                  <p className="text-xs text-slate-600 mt-1">ID: {String(t.id ?? '').slice(0, 8)}...</p>
                 </div>
 
                 <div className="p-6">
