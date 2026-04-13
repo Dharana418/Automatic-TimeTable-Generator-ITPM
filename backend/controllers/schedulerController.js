@@ -2071,6 +2071,10 @@ export const runSchedulerForYearSemester = async (req, res) => {
     const requestedSpecialization = normalizeSpecializationCode(options.specialization || '');
     const requestedGroup = String(options.group || '').trim();
     const requestedSubgroup = String(options.subgroup || '').trim();
+    const scopeSuffix = [requestedSpecialization, requestedGroup, requestedSubgroup].filter(Boolean).join('_');
+    const defaultTimetableName = scopeSuffix
+      ? `Timetable_${academicYear}_S${semester}_${scopeSuffix}`
+      : `Timetable_${academicYear}_S${semester}`;
     const rawModuleLimitPerSpecialization = Number(options.moduleLimitPerSpecialization || 0);
     const moduleLimitPerSpecialization = Number.isFinite(rawModuleLimitPerSpecialization) && rawModuleLimitPerSpecialization > 0
       ? Math.floor(rawModuleLimitPerSpecialization)
@@ -2189,7 +2193,7 @@ export const runSchedulerForYearSemester = async (req, res) => {
 
     // Prepare timetable metadata
     const generatedTimetable = {
-      name: timetableName || `Timetable_${academicYear}_S${semester}`,
+      name: timetableName || defaultTimetableName,
       semester: String(semester),
       year: String(academicYear),
       status: 'pending',
