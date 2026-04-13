@@ -71,7 +71,7 @@ export default function FacultyCoordinatorShell({
         />
 
         {/* SIDEBAR */}
-        <aside className={`fixed top-4 left-4 bottom-4 z-40 overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/80 shadow-[0_24px_80px_rgba(2,6,23,0.48)] backdrop-blur-2xl transition-all duration-300
+        <aside className={`fixed left-4 top-6 z-40 flex h-[calc(100vh-3rem)] flex-col overflow-y-auto rounded-[28px] border border-white/10 bg-slate-950/80 shadow-[0_24px_80px_rgba(2,6,23,0.48)] backdrop-blur-2xl transition-all duration-300 lg:top-6 lg:bottom-24 lg:h-[calc(100vh-7.5rem)]
           ${collapsed ? 'w-20' : 'w-72'}
           ${mobileOpen ? 'translate-x-0' : '-translate-x-[110%]'}
           lg:translate-x-0`}>
@@ -115,7 +115,7 @@ export default function FacultyCoordinatorShell({
             })}
           </nav>
 
-          <div className="absolute bottom-0 left-0 right-0 flex items-center gap-3 border-t border-white/10 bg-slate-950/60 p-4 backdrop-blur-xl">
+          <div className="mt-auto flex items-center gap-3 border-t border-white/10 bg-slate-950/60 p-4 backdrop-blur-xl">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400 to-cyan-500 text-sm font-bold text-white shadow-lg shadow-cyan-950/20">
               {initials}
             </div>
@@ -161,7 +161,7 @@ export default function FacultyCoordinatorShell({
             </div>
           </header>
 
-          <main className="flex-1 px-4 pb-8 lg:px-6">
+          <main className="flex-1 px-4 pb-12 lg:px-6 lg:pb-16">
             <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
               <section className="relative overflow-hidden rounded-[32px] border border-white/10 bg-white/5 p-6 shadow-[0_18px_50px_rgba(2,6,23,0.24)] backdrop-blur-xl lg:p-8">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(34,211,238,0.18),_transparent_26%),radial-gradient(circle_at_bottom_left,_rgba(99,102,241,0.18),_transparent_30%)]" />
@@ -212,7 +212,7 @@ export default function FacultyCoordinatorShell({
             </div>
           </main>
 
-          <footer className="mx-4 mb-4 rounded-[24px] border border-white/10 bg-slate-950/70 px-4 py-3 text-center text-xs text-slate-300 shadow-[0_12px_30px_rgba(2,6,23,0.24)] backdrop-blur-xl lg:mx-6">
+          <footer className="mx-4 mb-8 rounded-[24px] border border-white/10 bg-slate-950/70 px-4 py-3 text-center text-xs text-slate-300 shadow-[0_12px_30px_rgba(2,6,23,0.24)] backdrop-blur-xl lg:mx-6 lg:mb-10">
             {footerNote} · © {new Date().getFullYear()} SLIIT Scheduler
           </footer>
         </div>
