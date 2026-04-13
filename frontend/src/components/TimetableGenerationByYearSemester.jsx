@@ -164,6 +164,21 @@ const buildBatchIdFromSelection = (year, semester, specialization, group, subgro
   return `Y${yearToken}.S${semesterToken}.${modeToken}.${specializationToken}.${groupToken}.${subgroupToken}`;
 };
 
+const buildTimetableNameFromSelection = (year, semester, specialization, group, subgroup) => {
+  const yearToken = normalizeYearToken(year);
+  const semesterToken = String(semester || '').trim();
+  const specializationToken = normalizeSpecialization(specialization);
+  const groupToken = String(group || '').trim().padStart(2, '0');
+  const subgroupToken = String(subgroup || '').trim().padStart(2, '0');
+  const scopeSuffix = [specializationToken, groupToken, subgroupToken].filter(Boolean).join('_');
+
+  if (!yearToken || !semesterToken || !scopeSuffix) {
+    return '';
+  }
+
+  return `Timetable_Y${yearToken}_S${semesterToken}_${scopeSuffix}`;
+};
+
 /* ---------------- CONSTANTS ---------------- */
 
 const DEFAULT_SPECIALIZATIONS = ['SE', 'IT', 'CS', 'General'];
@@ -275,10 +290,15 @@ const TimetableGenerationByYearSemester = () => {
 
     const res = await getTimetablesForYearSemester(
       selectedYear,
-      selectedSemester
+      selectedSemester,
+      {
+        specialization: selectedSpecialization || null,
+        group: selectedGroup || null,
+        subgroup: selectedSubGroup || null,
+      }
     );
     setExistingTimetables(res.data || []);
-  }, [selectedYear, selectedSemester]);
+  }, [selectedYear, selectedSemester, selectedSpecialization, selectedGroup, selectedSubGroup]);
 
   const fetchBatches = useCallback(async () => {
     try {
@@ -446,8 +466,15 @@ const TimetableGenerationByYearSemester = () => {
     e.preventDefault();
 
     const batchId = selectedBatch || resolvedBatchId;
+    const resolvedTimetableName = (timetableName || '').trim() || buildTimetableNameFromSelection(
+      selectedYear,
+      selectedSemester,
+      selectedSpecialization,
+      selectedGroup,
+      selectedSubGroup
+    );
 
-    if (!selectedYear || !selectedSemester || !timetableName || !selectedSpecialization || !selectedGroup || !selectedSubGroup || !batchId) {
+    if (!selectedYear || !selectedSemester || !selectedSpecialization || !selectedGroup || !selectedSubGroup || !batchId) {
       setError('Fill all required fields');
       return;
     }
@@ -460,7 +487,7 @@ const TimetableGenerationByYearSemester = () => {
         selectedSemester,
         {
           algorithms,
-          timetableName,
+          timetableName: resolvedTimetableName,
           weekdayFreeDay,
           specialization: selectedSpecialization,
           group: selectedGroup,
@@ -662,14 +689,17 @@ const TimetableGenerationByYearSemester = () => {
             {/* TIMETABLE NAME */}
             <div className="w-full">
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">
-                <FileCheck2 size={16} className="inline mr-2" /> Schedule Name
+                <FileCheck2 size={16} className="inline mr-2" /> Schedule Name (optional)
               </label>
               <input
                 value={timetableName}
                 onChange={(e) => setTimetableName(e.target.value)}
-                placeholder="e.g., Y1-Sem1-IT"
+                placeholder="Leave blank to auto-name by group and subgroup"
                 className="w-full rounded-xl border-2 border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50 px-4 py-3 font-semibold text-slate-900 placeholder-slate-500 shadow-md transition-all duration-200 hover:border-violet-300 hover:shadow-lg focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-300/50"
               />
+              <p className="mt-2 text-xs text-slate-500">
+                Auto-generated names include year, semester, specialization, group, and subgroup.
+              </p>
             </div>
 
             {/* FREE DAY SELECT */}
@@ -781,7 +811,9 @@ const TimetableGenerationByYearSemester = () => {
                 downloadTimetableAsCSV(
                   generatedTimetable.results?.hybrid?.schedule || [],
                   selectedYear,
-                  selectedSemester
+                  selectedSemester,
+                  selectedGroup,
+                  selectedSubGroup
                 )
               }
               className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 px-6 py-3 font-bold uppercase tracking-wider text-white shadow-lg transition-all duration-300 hover:shadow-xl hover:from-green-600 hover:to-emerald-700"
