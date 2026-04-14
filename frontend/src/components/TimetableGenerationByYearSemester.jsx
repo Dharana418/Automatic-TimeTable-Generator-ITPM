@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Wand2,
   CalendarDays,
@@ -15,8 +16,6 @@ import {
 import {
   generateTimetableForYearSemester,
   getTimetablesForYearSemester,
-  approveTimetable,
-  rejectTimetable,
   downloadTimetableAsCSV,
 } from '../api/timetableGeneration.js';
 
@@ -179,6 +178,56 @@ const buildTimetableNameFromSelection = (year, semester, specialization, group, 
   return `Timetable_Y${yearToken}_S${semesterToken}_${scopeSuffix}`;
 };
 
+const parseTimetableSchedule = (timetable) => {
+  const rawData = timetable?.data;
+  if (!rawData) return [];
+
+  const pickScheduleFromObject = (obj) => {
+    if (!obj || typeof obj !== 'object') return [];
+    if (Array.isArray(obj.schedule)) return obj.schedule;
+
+    if (Array.isArray(obj.groupedSchedules)) {
+      return obj.groupedSchedules.flatMap((group) => {
+        if (Array.isArray(group?.entries)) return group.entries;
+        if (Array.isArray(group?.schedule)) return group.schedule;
+        return [];
+      });
+    }
+
+    const allResults = obj.allResults || obj.results || null;
+    if (allResults && typeof allResults === 'object') {
+      const prioritizedKeys = ['hybrid', 'pso', 'genetic', 'ant', 'tabu'];
+      for (const key of prioritizedKeys) {
+        if (Array.isArray(allResults?.[key]?.schedule)) {
+          return allResults[key].schedule;
+        }
+      }
+
+      for (const value of Object.values(allResults)) {
+        if (Array.isArray(value?.schedule)) {
+          return value.schedule;
+        }
+      }
+    }
+
+    return [];
+  };
+
+  if (typeof rawData === 'string') {
+    try {
+      return pickScheduleFromObject(JSON.parse(rawData));
+    } catch {
+      return [];
+    }
+  }
+
+  if (typeof rawData === 'object' && rawData !== null) {
+    return pickScheduleFromObject(rawData);
+  }
+
+  return [];
+};
+
 /* ---------------- CONSTANTS ---------------- */
 
 const DEFAULT_SPECIALIZATIONS = ['SE', 'IT', 'CS', 'General'];
@@ -198,6 +247,7 @@ const MODULE_LIMIT_PER_SPECIALIZATION = 5;
 /* ---------------- COMPONENT ---------------- */
 
 const TimetableGenerationByYearSemester = () => {
+  const navigate = useNavigate();
   const [academicYears, setAcademicYears] = useState([]);
   const [selectedYear, setSelectedYear] = useState('');
   const [selectedSemester, setSelectedSemester] = useState('');
@@ -558,14 +608,9 @@ const TimetableGenerationByYearSemester = () => {
     }
   };
 
-  const handleApprove = async (id) => {
-    await approveTimetable(id);
-    fetchExisting();
-  };
-
-  const handleReject = async (id) => {
-    await rejectTimetable(id);
-    fetchExisting();
+  const openTimetableReport = (timetableId = '') => {
+    const idQuery = timetableId ? `?timetableId=${encodeURIComponent(String(timetableId))}` : '';
+    navigate(`/faculty/timetable-report${idQuery}`);
   };
 
   /* ---------------- UI ---------------- */
@@ -902,23 +947,34 @@ const TimetableGenerationByYearSemester = () => {
           </div>
           <div className="p-6">
             <div className="mb-4 inline-block rounded-full bg-green-200 px-4 py-2 text-sm font-bold text-green-800">
-              Ready for review and export
+              Saved successfully. Open report page to view or download.
             </div>
-            <button
-              onClick={() =>
-                downloadTimetableAsCSV(
-                  generatedTimetable.results?.hybrid?.schedule || [],
-                  selectedYear,
-                  selectedSemester,
-                  selectedGroup,
-                  selectedSubGroup
-                )
-              }
-              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 px-6 py-3 font-bold uppercase tracking-wider text-white shadow-lg transition-all duration-300 hover:shadow-xl hover:from-green-600 hover:to-emerald-700"
-            >
-              <FileCheck2 size={18} />
-              Download as CSV
-            </button>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => openTimetableReport(generatedTimetable.timetableId)}
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 px-6 py-3 font-bold uppercase tracking-wider text-white shadow-lg transition-all duration-300 hover:shadow-xl hover:from-sky-600 hover:to-blue-700"
+              >
+                <CalendarDays size={18} />
+                View in Report Page
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  downloadTimetableAsCSV(
+                    generatedTimetable.results?.hybrid?.schedule || [],
+                    selectedYear,
+                    selectedSemester,
+                    selectedGroup,
+                    selectedSubGroup
+                  )
+                }
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 px-6 py-3 font-bold uppercase tracking-wider text-white shadow-lg transition-all duration-300 hover:shadow-xl hover:from-green-600 hover:to-emerald-700"
+              >
+                <FileCheck2 size={18} />
+                Download as CSV
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -936,60 +992,45 @@ const TimetableGenerationByYearSemester = () => {
             {existingTimetables.map((t) => (
               <div
                 key={t.id}
-                className={`overflow-hidden rounded-2xl border-2 shadow-md transition-all duration-300 ${
-                  t.status === 'pending'
-                    ? 'border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50'
-                    : t.status === 'approved'
-                    ? 'border-green-300 bg-gradient-to-br from-green-50 to-emerald-50'
-                    : 'border-slate-300 bg-gradient-to-br from-slate-50 to-slate-100'
-                }`}
+                className="overflow-hidden rounded-2xl border-2 border-slate-300 bg-gradient-to-br from-slate-50 to-slate-100 shadow-md transition-all duration-300"
               >
-                <div className={`border-b-2 px-6 py-4 ${
-                  t.status === 'pending'
-                    ? 'border-amber-300 bg-amber-100/50'
-                    : t.status === 'approved'
-                    ? 'border-green-300 bg-green-100/50'
-                    : 'border-slate-300 bg-slate-100/50'
-                }`}>
+                <div className="border-b-2 border-slate-300 bg-slate-100/50 px-6 py-4">
                   <h3 className="text-lg font-bold text-slate-900">{t.name}</h3>
                   <p className="text-xs text-slate-600 mt-1">ID: {String(t.id ?? '').slice(0, 8)}...</p>
                 </div>
 
                 <div className="p-6">
                   <div className="mb-4 flex items-center gap-2">
-                    {t.status === 'pending' && (
-                      <span className="rounded-full bg-amber-200 px-3 py-1 text-xs font-bold text-amber-800">
-                        ⏱ Pending Review
-                      </span>
-                    )}
-                    {t.status === 'approved' && (
-                      <span className="rounded-full bg-green-200 px-3 py-1 text-xs font-bold text-green-800">
-                        ✓ Approved
-                      </span>
-                    )}
-                    {t.status === 'rejected' && (
-                      <span className="rounded-full bg-red-200 px-3 py-1 text-xs font-bold text-red-800">
-                        ✗ Rejected
-                      </span>
-                    )}
+                    <span className="rounded-full bg-sky-200 px-3 py-1 text-xs font-bold text-sky-800">
+                      Saved Timetable
+                    </span>
                   </div>
 
-                  {t.status === 'pending' && (
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => handleApprove(t.id)}
-                        className="flex-1 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 px-4 py-2 font-semibold text-white shadow-md transition-all duration-200 hover:shadow-lg hover:from-green-600 hover:to-emerald-700"
-                      >
-                        ✓ Approve
-                      </button>
-                      <button
-                        onClick={() => handleReject(t.id)}
-                        className="flex-1 rounded-lg bg-gradient-to-br from-red-500 to-orange-600 px-4 py-2 font-semibold text-white shadow-md transition-all duration-200 hover:shadow-lg hover:from-red-600 hover:to-orange-700"
-                      >
-                        ✗ Reject
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => openTimetableReport(t.id)}
+                      className="flex-1 rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 px-4 py-2 font-semibold text-white shadow-md transition-all duration-200 hover:shadow-lg hover:from-sky-600 hover:to-blue-700"
+                    >
+                      View
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const schedule = parseTimetableSchedule(t);
+                        downloadTimetableAsCSV(
+                          schedule,
+                          t.year || selectedYear,
+                          t.semester || selectedSemester,
+                          t.group || selectedGroup,
+                          t.subgroup || selectedSubGroup
+                        );
+                      }}
+                      className="flex-1 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 px-4 py-2 font-semibold text-white shadow-md transition-all duration-200 hover:shadow-lg hover:from-green-600 hover:to-emerald-700"
+                    >
+                      Download
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}

@@ -1,10 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 import schedulerApi from '../api/scheduler.js';
+import { downloadTimetableAsCSV } from '../api/timetableGeneration.js';
 import facultyDashboardBg from '../assets/Gemini_Generated_Image_hqfdrqhqfdrqhqfd.png';
 
 const DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const INSTITUTION_NAME = 'Sri Lanka Institute of Information Technology';
+const FILTER_PRESET_STORAGE_KEY = 'faculty_timetable_filter_presets_v1';
+const FAVORITES_STORAGE_KEY = 'faculty_timetable_favorites_v1';
 const WEEKDAY_CLASS_SLOTS = [
   '09:00-10:00',
   '10:00-11:00',
@@ -201,6 +205,17 @@ const extractTimetableMeta = (timetable = {}) => {
   };
 };
 
+const safeReadStorageJson = (key, fallback) => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    return parsed ?? fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 const buildBatchTable = (scheduleRows = []) => {
   const batchMap = new Map();
 
@@ -303,6 +318,8 @@ const buildUnifiedTable = (scheduleRows = [], dayModeFilter = 'WD') => {
 };
 
 const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [timetables, setTimetables] = useState([]);
@@ -316,6 +333,24 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
   const [filterSpecialization, setFilterSpecialization] = useState('ALL');
   const [dayModeFilter, setDayModeFilter] = useState('ALL');
   const [layoutMode, setLayoutMode] = useState('unified');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [presetName, setPresetName] = useState('');
+  const [filterPresets, setFilterPresets] = useState([]);
+  const [favoriteIds, setFavoriteIds] = useState([]);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+
+  useEffect(() => {
+    setFilterPresets(safeReadStorageJson(FILTER_PRESET_STORAGE_KEY, []));
+    setFavoriteIds(safeReadStorageJson(FAVORITES_STORAGE_KEY, []));
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(FILTER_PRESET_STORAGE_KEY, JSON.stringify(filterPresets));
+  }, [filterPresets]);
+
+  useEffect(() => {
+    localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favoriteIds));
+  }, [favoriteIds]);
 
   useEffect(() => {
     let mounted = true;
@@ -412,14 +447,35 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
   }, [timetables, filterYear, filterSemester]);
 
   const filteredTimetables = useMemo(() => {
+    const query = String(searchQuery || '').trim().toLowerCase();
+
     return timetables.filter((tt) => {
       const meta = extractTimetableMeta(tt);
       if (filterYear !== 'ALL' && meta.year !== filterYear) return false;
       if (filterSemester !== 'ALL' && meta.semester !== filterSemester) return false;
       if (filterSpecialization !== 'ALL' && meta.specialization !== filterSpecialization) return false;
+      if (favoritesOnly && !favoriteIds.includes(String(tt.id))) return false;
+
+      if (query) {
+        const haystack = [
+          tt.name,
+          tt.status,
+          tt.id,
+          meta.year,
+          meta.semester,
+          meta.specialization,
+          meta.group,
+          meta.subgroup,
+        ]
+          .map((item) => String(item || '').toLowerCase())
+          .join(' ');
+
+        if (!haystack.includes(query)) return false;
+      }
+
       return true;
     });
-  }, [timetables, filterYear, filterSemester, filterSpecialization]);
+  }, [timetables, filterYear, filterSemester, filterSpecialization, favoritesOnly, favoriteIds, searchQuery]);
 
   useEffect(() => {
     if (!yearOptions.includes(filterYear)) {
@@ -483,6 +539,101 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
     };
   }, [filteredTimetables.length, filteredBatchTables, schedule, selectedTimetable]);
 
+  const planningInsights = useMemo(() => {
+    if (!Array.isArray(schedule) || !schedule.length) {
+      return {
+        busiestDay: 'N/A',
+        peakSlot: 'N/A',
+        busiestHall: 'N/A',
+        overlapCells: 0,
+      };
+    }
+
+    const dayMap = new Map();
+    const slotMap = new Map();
+    const hallMap = new Map();
+    const cellMap = new Map();
+
+    schedule.forEach((row) => {
+      const day = normalizeDay(row.day);
+      const slot = normalizeSlot(row);
+      const hall = String(row.hallName || row.hallId || 'Hall TBA').trim();
+
+      dayMap.set(day, (dayMap.get(day) || 0) + 1);
+      slotMap.set(slot, (slotMap.get(slot) || 0) + 1);
+      hallMap.set(hall, (hallMap.get(hall) || 0) + 1);
+
+      const cellKey = `${slot}::${day}`;
+      cellMap.set(cellKey, (cellMap.get(cellKey) || 0) + 1);
+    });
+
+    const pickTop = (sourceMap) => {
+      let label = 'N/A';
+      let count = 0;
+      sourceMap.forEach((value, key) => {
+        if (value > count) {
+          label = key;
+          count = value;
+        }
+      });
+      return `${label} (${count})`;
+    };
+
+    const overlapCells = Array.from(cellMap.values()).filter((count) => count > 1).length;
+
+    return {
+      busiestDay: pickTop(dayMap),
+      peakSlot: pickTop(slotMap),
+      busiestHall: pickTop(hallMap),
+      overlapCells,
+    };
+  }, [schedule]);
+
+  const applyFilterPreset = (preset) => {
+    const filters = preset?.filters || {};
+    setFilterYear(filters.filterYear || 'ALL');
+    setFilterSemester(filters.filterSemester || 'ALL');
+    setFilterSpecialization(filters.filterSpecialization || 'ALL');
+    setDayModeFilter(filters.dayModeFilter || 'ALL');
+    setLayoutMode(filters.layoutMode || 'unified');
+    setFavoritesOnly(Boolean(filters.favoritesOnly));
+    setSearchQuery(filters.searchQuery || '');
+  };
+
+  const saveFilterPreset = () => {
+    const name = String(presetName || '').trim();
+    if (!name) return;
+
+    const newPreset = {
+      id: `${Date.now()}`,
+      name,
+      filters: {
+        filterYear,
+        filterSemester,
+        filterSpecialization,
+        dayModeFilter,
+        layoutMode,
+        favoritesOnly,
+        searchQuery,
+      },
+    };
+
+    setFilterPresets((prev) => [newPreset, ...prev].slice(0, 10));
+    setPresetName('');
+  };
+
+  const removeFilterPreset = (presetId) => {
+    setFilterPresets((prev) => prev.filter((item) => item.id !== presetId));
+  };
+
+  const toggleFavorite = (timetableId) => {
+    const key = String(timetableId);
+    setFavoriteIds((prev) => {
+      if (prev.includes(key)) return prev.filter((item) => item !== key);
+      return [key, ...prev];
+    });
+  };
+
   useEffect(() => {
     if (!filteredTimetables.length) {
       setSelectedId('');
@@ -494,6 +645,16 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
       setSelectedId(String(filteredTimetables[0].id));
     }
   }, [filteredTimetables, selectedId]);
+
+  useEffect(() => {
+    const requestedTimetableId = String(searchParams.get('timetableId') || '').trim();
+    if (!requestedTimetableId || !filteredTimetables.length) return;
+
+    const found = filteredTimetables.some((tt) => String(tt.id) === requestedTimetableId);
+    if (found && String(selectedId) !== requestedTimetableId) {
+      setSelectedId(requestedTimetableId);
+    }
+  }, [searchParams, filteredTimetables, selectedId]);
 
   useEffect(() => {
     if (!schedule.length) return;
@@ -542,7 +703,30 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Last Generated</p>
                 <p className="mt-1 text-sm font-semibold text-slate-800">{insightMetrics.generatedAt}</p>
               </div>
+              <div className="col-span-2 rounded-2xl border border-amber-200 bg-amber-50/90 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-700">Planning Alerts</p>
+                <p className="mt-1 text-sm font-semibold text-amber-900">Overlapping cells: {planningInsights.overlapCells}</p>
+              </div>
             </div>
+          </div>
+        </section>
+
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Busiest Day</p>
+            <p className="mt-2 text-base font-bold text-slate-900">{planningInsights.busiestDay}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Peak Slot</p>
+            <p className="mt-2 text-base font-bold text-slate-900">{planningInsights.peakSlot}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Most Used Hall</p>
+            <p className="mt-2 text-base font-bold text-slate-900">{planningInsights.busiestHall}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Favorite Timetables</p>
+            <p className="mt-2 text-base font-bold text-slate-900">{favoriteIds.length}</p>
           </div>
         </section>
 
@@ -575,13 +759,39 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                 ))}
               </select>
             </div>
-            <button
-              type="button"
-              onClick={() => window.location.reload()}
-              className="rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:from-slate-200 hover:to-slate-50"
-            >
-              Refresh
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!selectedTimetable) return;
+                  downloadTimetableAsCSV(
+                    schedule,
+                    extractTimetableMeta(selectedTimetable).year,
+                    extractTimetableMeta(selectedTimetable).semester,
+                    extractTimetableMeta(selectedTimetable).group,
+                    extractTimetableMeta(selectedTimetable).subgroup
+                  );
+                }}
+                disabled={!selectedTimetable || !schedule.length}
+                className="rounded-xl border border-emerald-500 bg-gradient-to-r from-emerald-500 to-green-600 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:border-slate-300 disabled:from-slate-300 disabled:to-slate-400"
+              >
+                Download CSV
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/scheduler/by-year')}
+                className="rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:from-slate-200 hover:to-slate-50"
+              >
+                View Generator
+              </button>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:from-slate-200 hover:to-slate-50"
+              >
+                Refresh
+              </button>
+            </div>
           </div>
 
           <div className="mt-4 rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 via-white to-slate-200 p-3">
@@ -625,6 +835,33 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
           <div className="mt-4 rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 via-white to-slate-200 p-4 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Display Generated Timetables</p>
             <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+              <input
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500"
+                placeholder="Search by name, ID, specialization, status"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <div className="md:col-span-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFavoritesOnly((prev) => !prev)}
+                  className={`rounded-lg border px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] ${favoritesOnly ? 'border-amber-600 bg-amber-600 text-white' : 'border-slate-300 bg-white text-slate-700'}`}
+                >
+                  {favoritesOnly ? 'Showing Favorites' : 'Show Favorites Only'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setFavoritesOnly(false);
+                  }}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-700"
+                >
+                  Clear Search
+                </button>
+              </div>
+            </div>
+            <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
               <select
                 className="rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-2 text-sm text-slate-900"
                 value={filterYear}
@@ -663,10 +900,53 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
               {filterSpecialization !== 'ALL' && <span className="rounded-full border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-1 text-xs text-slate-700">{filterSpecialization}</span>}
             </div>
 
+            <div className="mt-3 rounded-xl border border-slate-300 bg-white p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Saved Filter Presets</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <input
+                  className="min-w-[220px] rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500"
+                  placeholder="Preset name"
+                  value={presetName}
+                  onChange={(e) => setPresetName(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={saveFilterPreset}
+                  className="rounded-lg border border-blue-600 bg-blue-600 px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-white"
+                >
+                  Save Preset
+                </button>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {!filterPresets.length && (
+                  <span className="text-xs text-slate-500">No presets saved yet.</span>
+                )}
+                {filterPresets.map((preset) => (
+                  <div key={preset.id} className="flex items-center gap-1 rounded-full border border-slate-300 bg-slate-50 px-2 py-1">
+                    <button
+                      type="button"
+                      onClick={() => applyFilterPreset(preset)}
+                      className="text-xs font-semibold text-slate-700"
+                    >
+                      {preset.name}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeFilterPreset(preset.id)}
+                      className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700"
+                    >
+                      X
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-3">
               {filteredTimetables.slice(0, 9).map((tt) => {
                 const meta = extractTimetableMeta(tt);
                 const active = String(selectedId) === String(tt.id);
+                const isFavorite = favoriteIds.includes(String(tt.id));
                 return (
                   <button
                     key={tt.id}
@@ -674,9 +954,33 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                     onClick={() => setSelectedId(String(tt.id))}
                     className={`rounded-xl border px-3 py-3 text-left transition ${active ? 'border-sky-500 bg-sky-100/70 shadow-sm' : 'border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50'}`}
                   >
-                    <p className="truncate text-sm font-semibold text-slate-900">{tt.name || `Timetable #${tt.id}`}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate text-sm font-semibold text-slate-900">{tt.name || `Timetable #${tt.id}`}</p>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${isFavorite ? 'bg-amber-200 text-amber-800' : 'bg-slate-200 text-slate-600'}`}>
+                        {isFavorite ? 'STAR' : 'SAVE'}
+                      </span>
+                    </div>
                     <p className="mt-1 text-xs text-slate-600">Y{meta.year} • S{meta.semester} • {meta.specialization} • G{meta.group} • SG{meta.subgroup}</p>
                     <p className="mt-1 text-[11px] uppercase tracking-[0.08em] text-slate-500">{tt.status || 'pending'}</p>
+                    <div className="mt-2">
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleFavorite(tt.id);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter' && event.key !== ' ') return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          toggleFavorite(tt.id);
+                        }}
+                        className="inline-flex rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-700"
+                      >
+                        {isFavorite ? 'Remove Favorite' : 'Mark Favorite'}
+                      </span>
+                    </div>
                   </button>
                 );
               })}

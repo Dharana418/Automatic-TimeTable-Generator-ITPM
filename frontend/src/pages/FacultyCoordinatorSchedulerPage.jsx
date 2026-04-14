@@ -14,7 +14,7 @@ const workflow = [
   { step: 1, title: 'Configure Parameters', desc: 'Select academic year, semester, and specialization filters' },
   { step: 2, title: 'Preview Modules', desc: 'Review Academic Coordinator module set with constraints' },
   { step: 3, title: 'Generate Schedule', desc: 'Run advanced scheduling algorithms with real-time optimization' },
-  { step: 4, title: 'Review & Export', desc: 'Approve, reject, or export final timetable for distribution' },
+  { step: 4, title: 'Save, View & Export', desc: 'Open saved timetable report and view or download final output' },
 ];
 
 const capabilities = [
@@ -198,8 +198,8 @@ const FacultyCoordinatorSchedulerPage = ({ user }) => {
                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-100 text-violet-600">{Icons.check}</div>
                   </div>
                   <div className="text-sm">
-                    <p className="font-semibold text-slate-900">Approval Workflow</p>
-                    <p className="text-xs text-slate-500">Accept, reject, or export</p>
+                    <p className="font-semibold text-slate-900">Report Workflow</p>
+                    <p className="text-xs text-slate-500">Save, view, and download</p>
                   </div>
                 </li>
               </ul>
