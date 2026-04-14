@@ -77,6 +77,7 @@ export default function AcademicModulesPage({ user }) {
   const [sortBy, setSortBy] = useState('code');
   const [sortDirection, setSortDirection] = useState('asc');
   const [showDataQualityOnly, setShowDataQualityOnly] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingModuleId, setEditingModuleId] = useState(null);
   const [editingForm, setEditingForm] = useState({
     code: '',
@@ -120,13 +121,13 @@ export default function AcademicModulesPage({ user }) {
 
   useEffect(() => {
     const onEscape = (event) => {
-      if (event.key === 'Escape' && editingModuleId) {
+      if (event.key === 'Escape' && isEditModalOpen) {
         cancelEditModule();
       }
     };
     window.addEventListener('keydown', onEscape);
     return () => window.removeEventListener('keydown', onEscape);
-  }, [editingModuleId]);
+  }, [isEditModalOpen]);
 
   const handleAddModule = async (e) => {
     e.preventDefault();
@@ -341,7 +342,9 @@ export default function AcademicModulesPage({ user }) {
   };
 
   const startEditModule = (module) => {
-    setEditingModuleId(module.id);
+    const moduleId = module?.id ?? module?.module_id ?? null;
+    setEditingModuleId(moduleId);
+    setIsEditModalOpen(true);
     setEditingForm({
       code: String(module.code || '').toUpperCase(),
       name: String(module.name || ''),
@@ -354,6 +357,7 @@ export default function AcademicModulesPage({ user }) {
   };
 
   const cancelEditModule = () => {
+    setIsEditModalOpen(false);
     setEditingModuleId(null);
     setUpdatingModuleId(null);
     setEditingForm({
@@ -368,6 +372,10 @@ export default function AcademicModulesPage({ user }) {
   };
 
   const saveEditedModule = async (moduleId) => {
+    if (!moduleId) {
+      toast.error('Unable to update: module id is missing for this record.');
+      return;
+    }
     if (!editingForm.code.trim() || !editingForm.name.trim()) {
       toast.warn('Module code and name are mandatory for update.');
       return;
@@ -417,6 +425,8 @@ export default function AcademicModulesPage({ user }) {
     () => modules.find((m) => m.id === editingModuleId) || null,
     [modules, editingModuleId]
   );
+
+  const isActionLocked = isEditModalOpen || Boolean(updatingModuleId) || Boolean(deletingModuleId);
 
   return (
     <FacultyCoordinatorShell
@@ -799,7 +809,7 @@ export default function AcademicModulesPage({ user }) {
                             type="button"
                             className="ac-action-btn"
                             onClick={() => startEditModule(m)}
-                            disabled={Boolean(editingModuleId && editingModuleId !== m.id)}
+                            disabled={isActionLocked && editingModuleId !== m.id}
                             style={{ color: '#93c5fd', borderColor: 'rgba(147,197,253,0.35)' }}
                           >
                             Edit
@@ -808,7 +818,7 @@ export default function AcademicModulesPage({ user }) {
                             type="button"
                             className="ac-action-btn"
                             onClick={() => deleteModule(m)}
-                            disabled={deletingModuleId === m.id || Boolean(editingModuleId)}
+                            disabled={deletingModuleId === m.id || isEditModalOpen}
                             style={{ color: '#fca5a5', borderColor: 'rgba(252,165,165,0.35)' }}
                           >
                             {deletingModuleId === m.id ? 'Deleting...' : 'Delete'}
@@ -828,7 +838,7 @@ export default function AcademicModulesPage({ user }) {
           )}
         </section>
 
-        {editingModuleId && (
+        {isEditModalOpen && (
           <div className="ac-edit-overlay" onClick={cancelEditModule}>
             <div className="ac-edit-modal" onClick={(e) => e.stopPropagation()}>
               <div style={{ padding: 20, borderBottom: '1px solid rgba(148,163,184,0.18)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
@@ -931,7 +941,7 @@ export default function AcademicModulesPage({ user }) {
                   type="button"
                   className="ac-action-btn"
                   onClick={() => saveEditedModule(editingModuleId)}
-                  disabled={updatingModuleId === editingModuleId}
+                  disabled={!editingModuleId || updatingModuleId === editingModuleId}
                   style={{ color: '#86efac', borderColor: 'rgba(134,239,172,0.4)' }}
                 >
                   {updatingModuleId === editingModuleId ? 'Saving Changes...' : 'Save Module Changes'}
