@@ -74,6 +74,9 @@ export default function AcademicModulesPage({ user }) {
   const [specializationFilter, setSpecializationFilter] = useState('ALL');
   const [yearFilter, setYearFilter] = useState('ALL');
   const [semesterFilter, setSemesterFilter] = useState('ALL');
+  const [sortBy, setSortBy] = useState('code');
+  const [sortDirection, setSortDirection] = useState('asc');
+  const [showDataQualityOnly, setShowDataQualityOnly] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Form State
@@ -162,9 +165,57 @@ export default function AcademicModulesPage({ user }) {
       const yearMatched = yearFilter === 'ALL' || yearStr === yearFilter;
       const semesterMatched = semesterFilter === 'ALL' || semStr === semesterFilter;
 
-      return textMatched && specializationMatched && yearMatched && semesterMatched;
+      const hasPlanningGaps =
+        !m.code || !m.name ||
+        !m.academic_year || !m.semester ||
+        m.credits === null || m.credits === undefined || m.credits === '' ||
+        m.lectures_per_week === null || m.lectures_per_week === undefined || m.lectures_per_week === '';
+      const qualityMatched = !showDataQualityOnly || hasPlanningGaps;
+
+      return textMatched && specializationMatched && yearMatched && semesterMatched && qualityMatched;
     });
-  }, [modules, search, specializationFilter, yearFilter, semesterFilter]);
+  }, [modules, search, specializationFilter, yearFilter, semesterFilter, showDataQualityOnly]);
+
+  const duplicateCodeSet = useMemo(() => {
+    const counts = {};
+    modules.forEach((m) => {
+      const code = String(m.code || '').trim().toUpperCase();
+      if (!code) return;
+      counts[code] = (counts[code] || 0) + 1;
+    });
+    return new Set(Object.keys(counts).filter((code) => counts[code] > 1));
+  }, [modules]);
+
+  const governanceStats = useMemo(() => {
+    const withCredits = filteredModules.filter((m) => Number(m.credits) > 0);
+    const withLectures = filteredModules.filter((m) => Number(m.lectures_per_week) > 0);
+    const qualityIssues = filteredModules.filter(
+      (m) =>
+        !m.code || !m.name ||
+        !m.academic_year || !m.semester ||
+        m.credits === null || m.credits === undefined || m.credits === '' ||
+        m.lectures_per_week === null || m.lectures_per_week === undefined || m.lectures_per_week === '' ||
+        duplicateCodeSet.has(String(m.code || '').trim().toUpperCase())
+    ).length;
+
+    const uniqueSpecializations = new Set(
+      filteredModules.map((m) => String(m.specialization || m.department || 'GENERAL').toUpperCase())
+    ).size;
+
+    return {
+      totalRegistry: modules.length,
+      visibleRecords: filteredModules.length,
+      uniqueSpecializations,
+      avgCredits: withCredits.length
+        ? (withCredits.reduce((acc, m) => acc + Number(m.credits || 0), 0) / withCredits.length).toFixed(1)
+        : '0.0',
+      avgLectures: withLectures.length
+        ? (withLectures.reduce((acc, m) => acc + Number(m.lectures_per_week || 0), 0) / withLectures.length).toFixed(1)
+        : '0.0',
+      qualityIssues,
+      duplicateCodes: duplicateCodeSet.size
+    };
+  }, [filteredModules, modules.length, duplicateCodeSet]);
 
   const specializationOptions = useMemo(() => {
     const set = new Set(
@@ -201,6 +252,72 @@ export default function AcademicModulesPage({ user }) {
 
   const barColors = ['#38bdf8', '#22d3ee', '#818cf8', '#f59e0b', '#34d399', '#f87171', '#c084fc'];
 
+  const sortedModules = useMemo(() => {
+    const arr = [...filteredModules];
+    const getSortableValue = (m) => {
+      if (sortBy === 'code') return String(m.code || '').toUpperCase();
+      if (sortBy === 'name') return String(m.name || '').toUpperCase();
+      if (sortBy === 'specialization') return String(m.specialization || m.department || 'GENERAL').toUpperCase();
+      if (sortBy === 'yearSemester') return Number(m.academic_year || 0) * 10 + Number(m.semester || 0);
+      if (sortBy === 'credits') return Number(m.credits || 0);
+      if (sortBy === 'lectures') return Number(m.lectures_per_week || 0);
+      return String(m.code || '').toUpperCase();
+    };
+
+    arr.sort((a, b) => {
+      const aVal = getSortableValue(a);
+      const bVal = getSortableValue(b);
+      let comp = 0;
+      if (typeof aVal === 'number' && typeof bVal === 'number') comp = aVal - bVal;
+      else comp = String(aVal).localeCompare(String(bVal));
+      return sortDirection === 'asc' ? comp : -comp;
+    });
+
+    return arr;
+  }, [filteredModules, sortBy, sortDirection]);
+
+  const resetViewControls = () => {
+    setSearch('');
+    setSpecializationFilter('ALL');
+    setYearFilter('ALL');
+    setSemesterFilter('ALL');
+    setSortBy('code');
+    setSortDirection('asc');
+    setShowDataQualityOnly(false);
+  };
+
+  const exportFilteredToCsv = () => {
+    if (!sortedModules.length) {
+      toast.info('No modules available in current view to export.');
+      return;
+    }
+
+    const header = ['Code', 'Name', 'Specialization', 'Academic Year', 'Semester', 'Credits', 'Lectures Per Week'];
+    const rows = sortedModules.map((m) => [
+      m.code || '',
+      m.name || '',
+      m.specialization || m.department || 'GENERAL',
+      m.academic_year || '',
+      m.semester || '',
+      m.credits ?? '',
+      m.lectures_per_week ?? ''
+    ]);
+
+    const csv = [header, ...rows]
+      .map((cols) => cols.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.setAttribute('download', `academic-modules-${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <FacultyCoordinatorShell
       user={user}
@@ -227,6 +344,12 @@ export default function AcademicModulesPage({ user }) {
         .ac-select-filter:focus {
           border-color: rgba(56,189,248,0.5);
           box-shadow: 0 0 0 3px rgba(56,189,248,0.12);
+        }
+        .ac-card-kpi {
+          border: 1px solid rgba(148,163,184,0.16);
+          border-radius: 14px;
+          padding: 14px;
+          background: linear-gradient(160deg, rgba(2,6,23,0.78), rgba(15,23,42,0.82));
         }
       `}</style>
       
@@ -295,7 +418,7 @@ export default function AcademicModulesPage({ user }) {
              </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr repeat(3, minmax(140px, 1fr))', gap: 12, marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
             <input
               type="text"
               placeholder="Search by module code, name, or specialization"
@@ -329,6 +452,82 @@ export default function AcademicModulesPage({ user }) {
               <option value="1" style={{ background: '#0f172a', color: '#e2e8f0' }}>Semester 1</option>
               <option value="2" style={{ background: '#0f172a', color: '#e2e8f0' }}>Semester 2</option>
             </select>
+
+            <select className="ac-select-filter" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+              <option value="code" style={{ background: '#0f172a', color: '#e2e8f0' }}>Sort: Code</option>
+              <option value="name" style={{ background: '#0f172a', color: '#e2e8f0' }}>Sort: Name</option>
+              <option value="specialization" style={{ background: '#0f172a', color: '#e2e8f0' }}>Sort: Specialization</option>
+              <option value="yearSemester" style={{ background: '#0f172a', color: '#e2e8f0' }}>Sort: Year and Semester</option>
+              <option value="credits" style={{ background: '#0f172a', color: '#e2e8f0' }}>Sort: Credits</option>
+              <option value="lectures" style={{ background: '#0f172a', color: '#e2e8f0' }}>Sort: Lectures per Week</option>
+            </select>
+
+            <select className="ac-select-filter" value={sortDirection} onChange={(e) => setSortDirection(e.target.value)}>
+              <option value="asc" style={{ background: '#0f172a', color: '#e2e8f0' }}>Order: Ascending</option>
+              <option value="desc" style={{ background: '#0f172a', color: '#e2e8f0' }}>Order: Descending</option>
+            </select>
+
+            <button
+              type="button"
+              className="ac-select-filter"
+              onClick={() => setShowDataQualityOnly((prev) => !prev)}
+              style={{
+                textAlign: 'center',
+                cursor: 'pointer',
+                fontWeight: 800,
+                color: showDataQualityOnly ? '#0f172a' : '#fde68a',
+                background: showDataQualityOnly ? '#facc15' : 'rgba(15,23,42,0.72)',
+                borderColor: showDataQualityOnly ? '#fde68a' : 'rgba(148,163,184,0.22)'
+              }}
+            >
+              {showDataQualityOnly ? 'Quality View: ON' : 'Show Data Quality Gaps'}
+            </button>
+
+            <button
+              type="button"
+              className="ac-select-filter"
+              onClick={resetViewControls}
+              style={{ textAlign: 'center', cursor: 'pointer' }}
+            >
+              Reset Filters
+            </button>
+
+            <button
+              type="button"
+              className="ac-select-filter"
+              onClick={exportFilteredToCsv}
+              style={{ textAlign: 'center', cursor: 'pointer', color: '#86efac' }}
+            >
+              Export View (CSV)
+            </button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10, marginBottom: 16 }}>
+            <div className="ac-card-kpi">
+              <p style={{ margin: 0, fontSize: 10, color: 'rgba(148,163,184,0.8)', textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 700 }}>Registry Total</p>
+              <p style={{ margin: '6px 0 0', fontSize: 24, color: '#e2e8f0', fontWeight: 900 }}>{governanceStats.totalRegistry}</p>
+            </div>
+            <div className="ac-card-kpi">
+              <p style={{ margin: 0, fontSize: 10, color: 'rgba(148,163,184,0.8)', textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 700 }}>Visible Records</p>
+              <p style={{ margin: '6px 0 0', fontSize: 24, color: '#bae6fd', fontWeight: 900 }}>{governanceStats.visibleRecords}</p>
+            </div>
+            <div className="ac-card-kpi">
+              <p style={{ margin: 0, fontSize: 10, color: 'rgba(148,163,184,0.8)', textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 700 }}>Specializations</p>
+              <p style={{ margin: '6px 0 0', fontSize: 24, color: '#c7d2fe', fontWeight: 900 }}>{governanceStats.uniqueSpecializations}</p>
+            </div>
+            <div className="ac-card-kpi">
+              <p style={{ margin: 0, fontSize: 10, color: 'rgba(148,163,184,0.8)', textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 700 }}>Average Credits</p>
+              <p style={{ margin: '6px 0 0', fontSize: 24, color: '#86efac', fontWeight: 900 }}>{governanceStats.avgCredits}</p>
+            </div>
+            <div className="ac-card-kpi">
+              <p style={{ margin: 0, fontSize: 10, color: 'rgba(148,163,184,0.8)', textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 700 }}>Avg Lectures / Week</p>
+              <p style={{ margin: '6px 0 0', fontSize: 24, color: '#fcd34d', fontWeight: 900 }}>{governanceStats.avgLectures}</p>
+            </div>
+            <div className="ac-card-kpi">
+              <p style={{ margin: 0, fontSize: 10, color: 'rgba(148,163,184,0.8)', textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 700 }}>Quality Alerts</p>
+              <p style={{ margin: '6px 0 0', fontSize: 24, color: '#fca5a5', fontWeight: 900 }}>{governanceStats.qualityIssues}</p>
+              <p style={{ margin: '4px 0 0', fontSize: 11, color: 'rgba(252,165,165,0.82)' }}>Duplicate codes: {governanceStats.duplicateCodes}</p>
+            </div>
           </div>
 
           <div
@@ -412,13 +611,27 @@ export default function AcademicModulesPage({ user }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredModules.length > 0 ? filteredModules.map(m => {
+                  {sortedModules.length > 0 ? sortedModules.map(m => {
                     const dep = String(m.specialization || m.department || 'GENERAL').toUpperCase();
                     const s = getBadgeStyle(dep);
+                    const isDuplicateCode = duplicateCodeSet.has(String(m.code || '').trim().toUpperCase());
+                    const hasDataGap =
+                      !m.academic_year || !m.semester ||
+                      m.credits === null || m.credits === undefined || m.credits === '' ||
+                      m.lectures_per_week === null || m.lectures_per_week === undefined || m.lectures_per_week === '';
                     return (
-                    <tr key={m.id} style={{ borderBottom: '1px solid rgba(148,163,184,0.1)' }}>
+                    <tr key={m.id} style={{ borderBottom: '1px solid rgba(148,163,184,0.1)', background: isDuplicateCode ? 'rgba(239,68,68,0.06)' : 'transparent' }}>
                       <td style={{ padding: '14px', color: '#f8fafc', fontWeight: 700, fontSize: 13 }}>{m.code || '—'}</td>
-                      <td style={{ padding: '14px', color: '#e2e8f0', fontSize: 13 }}>{m.name || '—'}</td>
+                      <td style={{ padding: '14px', color: '#e2e8f0', fontSize: 13 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <span>{m.name || '—'}</span>
+                          {isDuplicateCode && (
+                            <span style={{ fontSize: 10, color: '#fca5a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                              Duplicate module code
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td style={{ padding: '14px' }}>
                         <span style={{ padding: '4px 10px', borderRadius: 16, fontSize: 11, fontWeight: 700, background: s.bg, border: `1px solid ${s.border}`, color: s.color }}>
                           {dep}
@@ -429,8 +642,8 @@ export default function AcademicModulesPage({ user }) {
                           Y{m.academic_year || '?'} S{m.semester || '?'}
                         </span>
                       </td>
-                      <td style={{ padding: '14px', color: '#94a3b8', fontSize: 13 }}>{m.credits || '—'}</td>
-                      <td style={{ padding: '14px', color: '#94a3b8', fontSize: 13 }}>{m.lectures_per_week || '—'}</td>
+                      <td style={{ padding: '14px', color: hasDataGap ? '#fda4af' : '#94a3b8', fontSize: 13 }}>{m.credits || '—'}</td>
+                      <td style={{ padding: '14px', color: hasDataGap ? '#fda4af' : '#94a3b8', fontSize: 13 }}>{m.lectures_per_week || '—'}</td>
                     </tr>
                     );
                   }) : (
