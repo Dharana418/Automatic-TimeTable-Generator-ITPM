@@ -2,6 +2,17 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { toast } from 'react-toastify';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell';
 import api from '../api/scheduler';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  Cell
+} from 'recharts';
 
 /* ── UI Components ──────────────────────────────────────────────── */
 const DarkInput = ({ label, val, onChange, type = 'text', placeholder = '', help = '', min, max }) => (
@@ -60,6 +71,9 @@ export default function AcademicModulesPage({ user }) {
   const [loading, setLoading] = useState(true);
   const [modules, setModules] = useState([]);
   const [search, setSearch] = useState('');
+  const [specializationFilter, setSpecializationFilter] = useState('ALL');
+  const [yearFilter, setYearFilter] = useState('ALL');
+  const [semesterFilter, setSemesterFilter] = useState('ALL');
   const [saving, setSaving] = useState(false);
 
   // Form State
@@ -138,9 +152,54 @@ export default function AcademicModulesPage({ user }) {
       const codeStr = String(m.code || '').toLowerCase();
       const nameStr = String(m.name || '').toLowerCase();
       const depStr = String(m.specialization || m.department || '').toLowerCase();
-      return codeStr.includes(q) || nameStr.includes(q) || depStr.includes(q);
+      const yearStr = String(m.academic_year || '');
+      const semStr = String(m.semester || '');
+
+      const textMatched = !q || codeStr.includes(q) || nameStr.includes(q) || depStr.includes(q);
+      const specializationMatched =
+        specializationFilter === 'ALL' ||
+        String(m.specialization || m.department || 'GENERAL').toUpperCase() === specializationFilter;
+      const yearMatched = yearFilter === 'ALL' || yearStr === yearFilter;
+      const semesterMatched = semesterFilter === 'ALL' || semStr === semesterFilter;
+
+      return textMatched && specializationMatched && yearMatched && semesterMatched;
     });
-  }, [modules, search]);
+  }, [modules, search, specializationFilter, yearFilter, semesterFilter]);
+
+  const specializationOptions = useMemo(() => {
+    const set = new Set(
+      modules
+        .map((m) => String(m.specialization || m.department || 'GENERAL').toUpperCase())
+        .filter(Boolean)
+    );
+    return ['ALL', ...Array.from(set).sort((a, b) => a.localeCompare(b))];
+  }, [modules]);
+
+  const chartData = useMemo(() => {
+    const rows = {};
+    filteredModules.forEach((m) => {
+      const specialization = String(m.specialization || m.department || 'GENERAL').toUpperCase();
+      const yearNum = Number(m.academic_year || 0);
+      if (!rows[specialization]) {
+        rows[specialization] = {
+          specialization,
+          y1: 0,
+          y2: 0,
+          y3: 0,
+          y4: 0,
+          total: 0
+        };
+      }
+      if (yearNum >= 1 && yearNum <= 4) {
+        rows[specialization][`y${yearNum}`] += 1;
+      }
+      rows[specialization].total += 1;
+    });
+
+    return Object.values(rows).sort((a, b) => b.total - a.total || a.specialization.localeCompare(b.specialization));
+  }, [filteredModules]);
+
+  const barColors = ['#38bdf8', '#22d3ee', '#818cf8', '#f59e0b', '#34d399', '#f87171', '#c084fc'];
 
   return (
     <FacultyCoordinatorShell
@@ -154,6 +213,21 @@ export default function AcademicModulesPage({ user }) {
         .ac-input-hover:focus { border-color: rgba(56,189,248,0.5) !important; box-shadow: 0 0 0 3px rgba(56,189,248,0.1) !important; }
         .ac-btn-primary { transition: all 0.2s; }
         .ac-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(56,189,248,0.3); }
+        .ac-select-filter {
+          padding: 10px 14px;
+          border-radius: 12px;
+          border: 1px solid rgba(148,163,184,0.22);
+          background: rgba(15,23,42,0.72);
+          color: #e2e8f0;
+          font-size: 12px;
+          font-weight: 600;
+          outline: none;
+          min-width: 130px;
+        }
+        .ac-select-filter:focus {
+          border-color: rgba(56,189,248,0.5);
+          box-shadow: 0 0 0 3px rgba(56,189,248,0.12);
+        }
       `}</style>
       
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -217,19 +291,112 @@ export default function AcademicModulesPage({ user }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
              <div>
                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#f8fafc' }}>Module Matrix</h3>
-               <p style={{ margin: '4px 0 0', fontSize: 12, color: 'rgba(148,163,184,0.7)' }}>{filteredModules.length} exact records found</p>
+               <p style={{ margin: '4px 0 0', fontSize: 12, color: 'rgba(148,163,184,0.7)' }}>{filteredModules.length} added modules in current view</p>
              </div>
-             <input
-                type="text"
-                placeholder="Find by code, name, or Dept..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                style={{
-                  padding: '10px 16px', borderRadius: 20, width: 260,
-                  background: 'rgba(15,23,42,0.8)', border: '1px solid rgba(148,163,184,0.2)',
-                  color: '#f1f5f9', fontSize: 13, outline: 'none'
-                }}
-              />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr repeat(3, minmax(140px, 1fr))', gap: 12, marginBottom: 16 }}>
+            <input
+              type="text"
+              placeholder="Search by module code, name, or specialization"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                padding: '10px 16px', borderRadius: 12,
+                background: 'rgba(15,23,42,0.8)', border: '1px solid rgba(148,163,184,0.2)',
+                color: '#f1f5f9', fontSize: 13, outline: 'none', width: '100%'
+              }}
+            />
+
+            <select className="ac-select-filter" value={specializationFilter} onChange={(e) => setSpecializationFilter(e.target.value)}>
+              {specializationOptions.map((option) => (
+                <option key={option} value={option} style={{ background: '#0f172a', color: '#e2e8f0' }}>
+                  {option === 'ALL' ? 'All Specializations' : option}
+                </option>
+              ))}
+            </select>
+
+            <select className="ac-select-filter" value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}>
+              <option value="ALL" style={{ background: '#0f172a', color: '#e2e8f0' }}>All Years</option>
+              <option value="1" style={{ background: '#0f172a', color: '#e2e8f0' }}>Year 1</option>
+              <option value="2" style={{ background: '#0f172a', color: '#e2e8f0' }}>Year 2</option>
+              <option value="3" style={{ background: '#0f172a', color: '#e2e8f0' }}>Year 3</option>
+              <option value="4" style={{ background: '#0f172a', color: '#e2e8f0' }}>Year 4</option>
+            </select>
+
+            <select className="ac-select-filter" value={semesterFilter} onChange={(e) => setSemesterFilter(e.target.value)}>
+              <option value="ALL" style={{ background: '#0f172a', color: '#e2e8f0' }}>All Semesters</option>
+              <option value="1" style={{ background: '#0f172a', color: '#e2e8f0' }}>Semester 1</option>
+              <option value="2" style={{ background: '#0f172a', color: '#e2e8f0' }}>Semester 2</option>
+            </select>
+          </div>
+
+          <div
+            style={{
+              marginBottom: 18,
+              border: '1px solid rgba(148,163,184,0.12)',
+              borderRadius: 16,
+              background: 'radial-gradient(circle at 0% 0%, rgba(56,189,248,0.15), rgba(15,23,42,0.88) 38%)',
+              padding: '16px 14px 8px'
+            }}
+          >
+            <p style={{ margin: '0 0 8px', color: '#93c5fd', fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', fontWeight: 800 }}>
+              Added Module Distribution
+            </p>
+            <h4 style={{ margin: 0, color: '#f8fafc', fontSize: 16, fontWeight: 800 }}>
+              Specialization Load by Academic Year
+            </h4>
+            <p style={{ margin: '4px 0 12px', color: 'rgba(148,163,184,0.85)', fontSize: 12 }}>
+              Stacked bars show how registered modules are spread across Year 1-4.
+            </p>
+
+            <div style={{ width: '100%', height: 320 }}>
+              <ResponsiveContainer>
+                <BarChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 12 }}>
+                  <defs>
+                    <linearGradient id="yearOneBar" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.95} />
+                      <stop offset="95%" stopColor="#0891b2" stopOpacity={0.7} />
+                    </linearGradient>
+                    <linearGradient id="yearTwoBar" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.95} />
+                      <stop offset="95%" stopColor="#0f766e" stopOpacity={0.7} />
+                    </linearGradient>
+                    <linearGradient id="yearThreeBar" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#a78bfa" stopOpacity={0.95} />
+                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0.7} />
+                    </linearGradient>
+                    <linearGradient id="yearFourBar" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.95} />
+                      <stop offset="95%" stopColor="#d97706" stopOpacity={0.7} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="4 4" stroke="rgba(148,163,184,0.2)" vertical={false} />
+                  <XAxis dataKey="specialization" tick={{ fill: '#cbd5e1', fontSize: 11, fontWeight: 600 }} axisLine={{ stroke: 'rgba(148,163,184,0.35)' }} tickLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fill: '#cbd5e1', fontSize: 11 }} axisLine={{ stroke: 'rgba(148,163,184,0.35)' }} tickLine={false} />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(148,163,184,0.09)' }}
+                    contentStyle={{
+                      background: 'rgba(2,6,23,0.94)',
+                      border: '1px solid rgba(148,163,184,0.35)',
+                      borderRadius: 12,
+                      color: '#e2e8f0',
+                      boxShadow: '0 10px 25px rgba(0,0,0,0.35)'
+                    }}
+                    labelStyle={{ color: '#f8fafc', fontWeight: 700 }}
+                  />
+                  <Legend wrapperStyle={{ color: '#cbd5e1', fontSize: 11, paddingTop: 8 }} />
+                  <Bar name="Year 1" dataKey="y1" stackId="years" fill="url(#yearOneBar)" radius={[4, 4, 0, 0]} animationDuration={900} />
+                  <Bar name="Year 2" dataKey="y2" stackId="years" fill="url(#yearTwoBar)" radius={[4, 4, 0, 0]} animationDuration={1100} />
+                  <Bar name="Year 3" dataKey="y3" stackId="years" fill="url(#yearThreeBar)" radius={[4, 4, 0, 0]} animationDuration={1300} />
+                  <Bar name="Year 4" dataKey="y4" stackId="years" fill="url(#yearFourBar)" radius={[4, 4, 0, 0]} animationDuration={1500}>
+                    {chartData.map((entry, index) => (
+                      <Cell key={`cell-${entry.specialization}-${index}`} fill={barColors[index % barColors.length]} fillOpacity={0.18} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
           {loading ? (
