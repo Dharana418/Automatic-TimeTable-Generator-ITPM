@@ -17,6 +17,7 @@ const AcademicHallAllocationPage = ({ user }) => {
       brandCode="AC"
       brandTitle="Academic Coordinator"
       brandSubtitle="Resource Allocation Console"
+      themeVariant="academic"
     >
       <HallAllocation apiBase={API_BASE} />
     </FacultyCoordinatorShell>

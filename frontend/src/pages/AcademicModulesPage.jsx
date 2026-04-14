@@ -148,6 +148,7 @@ export default function AcademicModulesPage({ user }) {
       title="Module Registry"
       subtitle="Register, update, and manage degree modules across all specializations."
       badge="Modules"
+      themeVariant="academic"
     >
       <style>{`
         .ac-input-hover:focus { border-color: rgba(56,189,248,0.5) !important; box-shadow: 0 0 0 3px rgba(56,189,248,0.1) !important; }
