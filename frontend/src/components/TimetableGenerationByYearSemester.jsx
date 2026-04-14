@@ -264,7 +264,10 @@ const TimetableGenerationByYearSemester = () => {
   }, []);
 
   const fetchModules = useCallback(async () => {
-    if (!selectedYear) return;
+    if (!selectedYear || !selectedSemester || !selectedSpecialization) {
+      setModules([]);
+      return;
+    }
 
     try {
       setLoadingModules(true);
@@ -276,8 +279,11 @@ const TimetableGenerationByYearSemester = () => {
         specialization: inferSpecializationFromModule(m),
       }));
 
-      setModules(mapped.slice(0, MODULE_LIMIT_PER_SPECIALIZATION));
-      toast.success(`Loaded ${mapped.length} modules`);
+      const limitedModules = mapped.slice(0, MODULE_LIMIT_PER_SPECIALIZATION);
+      setModules(limitedModules);
+      const message = `${limitedModules.length} modules has been fetched successfully`;
+      setSuccess(message);
+      toast.success(message);
     } catch {
       setError('Failed to fetch modules');
     } finally {
