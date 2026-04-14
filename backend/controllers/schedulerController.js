@@ -13,6 +13,7 @@ const normalizeAlgorithmKey = (value) => String(value || '').trim().toLowerCase(
 const normalizeRole = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const MAX_SUBGROUP_CAPACITY = 60;
 const MAX_GROUP_CAPACITY = 120;
+const MAX_MODULES_PER_SPECIALIZATION_SCOPE = 5;
 
 const HALL_ID_REGEX = /^[A-Za-z0-9][A-Za-z0-9_-]{1,39}$/;
 const HALL_TEXT_REGEX = /^[A-Za-z0-9][A-Za-z0-9 .,&()\/-]{1,79}$/;
@@ -830,6 +831,59 @@ const inferAcademicYearFromModuleCode = (code = '') => {
   return String(year);
 };
 
+const enforceAcademicCoordinatorScopeModuleLimit = async ({
+  specialization = '',
+  academicYear = null,
+  semester = null,
+  excludeModuleId = null,
+} = {}) => {
+  const normalizedSpecialization = normalizeSpecializationCode(specialization);
+  const normalizedYear = Number(academicYear || 0);
+  const normalizedSemester = Number(semester || 0);
+
+  if (!normalizedSpecialization || ![1, 2, 3, 4].includes(normalizedYear) || ![1, 2].includes(normalizedSemester)) {
+    return null;
+  }
+
+  const { rows } = await pool.query('SELECT id, code, details, academic_year, semester FROM modules');
+
+  const currentCount = rows.reduce((count, module) => {
+    if (excludeModuleId && String(module.id) === String(excludeModuleId)) {
+      return count;
+    }
+
+    const moduleSpecialization = normalizeSpecializationCode(inferModuleSpecialization(module));
+    const moduleYear = inferModuleYear(module);
+    const moduleSemester = inferModuleSemester(module);
+
+    if (
+      moduleSpecialization === normalizedSpecialization
+      && moduleYear === normalizedYear
+      && moduleSemester === normalizedSemester
+    ) {
+      return count + 1;
+    }
+
+    return count;
+  }, 0);
+
+  if (currentCount >= MAX_MODULES_PER_SPECIALIZATION_SCOPE) {
+    return {
+      error: `Maximum ${MAX_MODULES_PER_SPECIALIZATION_SCOPE} modules are allowed for specialization ${normalizedSpecialization} in Year ${normalizedYear}, Semester ${normalizedSemester}. Update an existing module or move one to another scope.`,
+      code: 'MODULE_SCOPE_LIMIT_REACHED',
+      scope: {
+        specialization: normalizedSpecialization,
+        academicYear: normalizedYear,
+        semester: normalizedSemester,
+        maxAllowed: MAX_MODULES_PER_SPECIALIZATION_SCOPE,
+        currentCount,
+      },
+    };
+  }
+
+  return null;
+};
+
 export const addItem = async (req, res) => {
   try {
     const { type } = req.params;
@@ -954,6 +1008,20 @@ export const addItem = async (req, res) => {
         ...(effectiveAcademicYear ? { academic_year: Number(effectiveAcademicYear) } : {}),
         ...(semester ? { semester: Number(semester) } : {}),
       };
+
+      if (isAcademicCoordinator(req.user)) {
+        const targetSpecialization = normalizeSpecializationCode(
+          specialization || mergedDetails.specialization || inferModuleSpecialization({ code, details: mergedDetails })
+        );
+        const limitError = await enforceAcademicCoordinatorScopeModuleLimit({
+          specialization: targetSpecialization,
+          academicYear: effectiveAcademicYear,
+          semester,
+        });
+        if (limitError) {
+          return res.status(409).json(limitError);
+        }
+      }
 
       const { rows } = await pool.query(
         `INSERT INTO modules(id, code, name, batch_size, day_type, credits, lectures_per_week, details, lic_id, academic_year, semester, created_by)
@@ -1286,7 +1354,7 @@ export const updateItem = async (req, res) => {
         semester = null,
       } = payload;
 
-      const existingModuleResult = await pool.query('SELECT details, academic_year, semester FROM modules WHERE id = $1', [id]);
+      const existingModuleResult = await pool.query('SELECT id, code, details, academic_year, semester FROM modules WHERE id = $1', [id]);
       if (!existingModuleResult.rowCount) return res.status(404).json({ error: 'Item not found' });
 
       const existingModule = existingModuleResult.rows[0];
@@ -1304,6 +1372,23 @@ export const updateItem = async (req, res) => {
       const nextSemester = semester || existingModule.semester || null;
       if (nextAcademicYear) mergedDetails.academic_year = Number(nextAcademicYear);
       if (nextSemester) mergedDetails.semester = Number(nextSemester);
+
+      if (isAcademicCoordinator(req.user)) {
+        const targetSpecialization = normalizeSpecializationCode(
+          specialization
+          || mergedDetails.specialization
+          || inferModuleSpecialization({ ...existingModule, code: code || existingModule.code, details: mergedDetails })
+        );
+        const limitError = await enforceAcademicCoordinatorScopeModuleLimit({
+          specialization: targetSpecialization,
+          academicYear: nextAcademicYear,
+          semester: nextSemester,
+          excludeModuleId: id,
+        });
+        if (limitError) {
+          return res.status(409).json(limitError);
+        }
+      }
 
       const { rows, rowCount } = await pool.query(
         `UPDATE modules

@@ -15,6 +15,42 @@ import {
   Cell
 } from 'recharts';
 
+const MAX_MODULES_PER_SCOPE = 5;
+
+const normalizeSpecializationCode = (value = '') => {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (!normalized) return 'GENERAL';
+
+  const aliases = {
+    SOFTWAREENGINEERING: 'SE',
+    SOFTWARE_ENG: 'SE',
+    INFORMATIONTECHNOLOGY: 'IT',
+    INTERACTIVEMEDIA: 'IME',
+    COMPUTERSCIENCE: 'CS',
+    INFORMATIONSYSTEMSENGINEERING: 'ISE',
+    COMPUTER_SYSTEMS_NETWORK_ENGINEERING: 'CSNE',
+    INFORMATICS: 'IM',
+    IM: 'IME',
+    IE: 'IME',
+    CYBERSECURITY: 'CYBER SECURITY',
+    CYBER: 'CYBER SECURITY',
+    GENERAL: 'GENERAL',
+  };
+
+  const compact = normalized.replace(/[^A-Z0-9]/g, '');
+  return aliases[compact] || normalized;
+};
+
+const buildScopeKey = (specialization, academicYear, semester) => {
+  const normalizedSpecialization = normalizeSpecializationCode(specialization);
+  const year = Number(academicYear || 0);
+  const sem = Number(semester || 0);
+  if (!normalizedSpecialization || ![1, 2, 3, 4].includes(year) || ![1, 2].includes(sem)) {
+    return '';
+  }
+  return `${normalizedSpecialization}::${year}::${sem}`;
+};
+
 const normalizeModuleRecord = (module = {}) => {
   let details = module.details;
   if (typeof details === 'string') {
@@ -174,6 +210,19 @@ export default function AcademicModulesPage({ user }) {
       return toast.warn('Module code and name are mandatory.');
     }
 
+    const yearValue = Number(form.academic_year || 0);
+    const semesterValue = Number(form.semester || 0);
+    const specializationValue = normalizeSpecializationCode(form.department || 'GENERAL');
+    const scopeKey = buildScopeKey(specializationValue, yearValue, semesterValue);
+
+    if (!scopeKey) {
+      return toast.warn('Select a valid specialization, academic year (1-4), and semester (1-2).');
+    }
+
+    if ((moduleScopeCounts[scopeKey] || 0) >= MAX_MODULES_PER_SCOPE) {
+      return toast.warn(`Scope limit reached: ${specializationValue} Year ${yearValue} Semester ${semesterValue} already has ${MAX_MODULES_PER_SCOPE} modules.`);
+    }
+
     try {
       setSaving(true);
       await api.addItem('modules', {
@@ -237,6 +286,27 @@ export default function AcademicModulesPage({ user }) {
       return textMatched && specializationMatched && yearMatched && semesterMatched && qualityMatched;
     });
   }, [modules, search, specializationFilter, yearFilter, semesterFilter, showDataQualityOnly]);
+
+  const moduleScopeCounts = useMemo(() => {
+    return modules.reduce((acc, module) => {
+      const key = buildScopeKey(
+        module.specialization || module.department || 'GENERAL',
+        module.academic_year,
+        module.semester
+      );
+      if (!key) return acc;
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+  }, [modules]);
+
+  const activeFormScopeKey = useMemo(
+    () => buildScopeKey(form.department, form.academic_year, form.semester),
+    [form.department, form.academic_year, form.semester]
+  );
+
+  const activeFormScopeCount = activeFormScopeKey ? (moduleScopeCounts[activeFormScopeKey] || 0) : 0;
+  const isAddScopeAtLimit = activeFormScopeKey && activeFormScopeCount >= MAX_MODULES_PER_SCOPE;
 
   const duplicateCodeSet = useMemo(() => {
     const counts = {};
@@ -466,6 +536,22 @@ export default function AcademicModulesPage({ user }) {
     if (Object.keys(validationErrors).length) {
       setEditErrors(validationErrors);
       toast.warn('Please fix validation errors before saving.');
+      return;
+    }
+
+    const targetSpecialization = normalizeSpecializationCode(editingForm.specialization || 'GENERAL');
+    const matchingScopeCount = modules.filter((module) => {
+      if (String(module.id) === String(resolvedId)) return false;
+      const moduleSpecialization = normalizeSpecializationCode(module.specialization || module.department || 'GENERAL');
+      const moduleYear = Number(module.academic_year || 0);
+      const moduleSemester = Number(module.semester || 0);
+      return moduleSpecialization === targetSpecialization
+        && moduleYear === yearValue
+        && moduleSemester === semesterValue;
+    }).length;
+
+    if (matchingScopeCount >= MAX_MODULES_PER_SCOPE) {
+      toast.warn(`Scope limit reached: ${targetSpecialization} Year ${yearValue} Semester ${semesterValue} already has ${MAX_MODULES_PER_SCOPE} modules.`);
       return;
     }
 
@@ -715,19 +801,34 @@ export default function AcademicModulesPage({ user }) {
               <DarkInput label="Lectures / Week" val={form.lectures_per_week} onChange={v => setForm(p => ({...p, lectures_per_week: v}))} type="number" min="1" max="10" />
             </div>
 
+            <div
+              style={{
+                borderRadius: 12,
+                border: `1px solid ${isAddScopeAtLimit ? 'rgba(248,113,113,0.45)' : 'rgba(56,189,248,0.35)'}`,
+                background: isAddScopeAtLimit ? 'rgba(127,29,29,0.24)' : 'rgba(14,116,144,0.14)',
+                color: isAddScopeAtLimit ? '#fecaca' : '#bae6fd',
+                padding: '10px 12px',
+                fontSize: 12,
+                fontWeight: 700,
+              }}
+            >
+              Scope capacity: {normalizeSpecializationCode(form.department || 'GENERAL')} · Year {Number(form.academic_year || 0) || '-'} · Semester {Number(form.semester || 0) || '-'} = {activeFormScopeCount}/{MAX_MODULES_PER_SCOPE}
+              {isAddScopeAtLimit ? ' (limit reached, update existing modules to make changes)' : ''}
+            </div>
+
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
               <button 
                 type="submit" 
-                disabled={saving}
+                disabled={saving || isAddScopeAtLimit}
                 className="ac-btn-primary"
                 style={{
                   padding: '12px 24px', borderRadius: 12, border: 'none',
                   background: 'linear-gradient(135deg, #0ea5e9, #3b82f6)',
-                  color: '#fff', fontSize: 13, fontWeight: 800, cursor: saving ? 'not-allowed' : 'pointer',
-                  opacity: saving ? 0.7 : 1
+                  color: '#fff', fontSize: 13, fontWeight: 800, cursor: (saving || isAddScopeAtLimit) ? 'not-allowed' : 'pointer',
+                  opacity: (saving || isAddScopeAtLimit) ? 0.7 : 1
                 }}
               >
-                {saving ? 'Registering...' : 'Register Module'}
+                {saving ? 'Registering...' : isAddScopeAtLimit ? 'Scope Limit Reached' : 'Register Module'}
               </button>
             </div>
           </form>
