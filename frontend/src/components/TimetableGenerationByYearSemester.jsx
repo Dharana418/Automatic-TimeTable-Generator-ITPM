@@ -224,6 +224,8 @@ const TimetableGenerationByYearSemester = () => {
   const [loading, setLoading] = useState(false);
   const [loadingModules, setLoadingModules] = useState(false);
   const [loadingBatches, setLoadingBatches] = useState(false);
+  const [loadingSpecializationGraph, setLoadingSpecializationGraph] = useState(false);
+  const [specializationModuleCounts, setSpecializationModuleCounts] = useState([]);
 
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -288,6 +290,49 @@ const TimetableGenerationByYearSemester = () => {
       setError('Failed to fetch modules');
     } finally {
       setLoadingModules(false);
+    }
+  }, [selectedYear, selectedSemester, selectedSpecialization]);
+
+  const fetchSpecializationModuleCounts = useCallback(async () => {
+    if (!selectedYear || !selectedSemester || !selectedSpecialization) {
+      setSpecializationModuleCounts([]);
+      return;
+    }
+
+    try {
+      setLoadingSpecializationGraph(true);
+      const res = await getModulesByYear(selectedYear, selectedSemester, null);
+      const allModules = Array.isArray(res?.data) ? res.data : [];
+
+      const countsMap = allModules.reduce((acc, module) => {
+        const specialization = normalizeSpecialization(inferSpecializationFromModule(module));
+        acc[specialization] = (acc[specialization] || 0) + 1;
+        return acc;
+      }, {});
+
+      const knownSpecializations = Array.from(
+        new Set([
+          ...SPECIALIZATIONS_LIST.map((item) => normalizeSpecialization(item.key)),
+          ...Object.keys(countsMap),
+        ])
+      );
+
+      const graphRows = knownSpecializations
+        .map((specialization) => {
+          const count = countsMap[specialization] || 0;
+          return {
+            specialization,
+            count,
+            atLimit: count >= MODULE_LIMIT_PER_SPECIALIZATION,
+          };
+        })
+        .sort((left, right) => right.count - left.count || left.specialization.localeCompare(right.specialization));
+
+      setSpecializationModuleCounts(graphRows);
+    } catch {
+      setSpecializationModuleCounts([]);
+    } finally {
+      setLoadingSpecializationGraph(false);
     }
   }, [selectedYear, selectedSemester, selectedSpecialization]);
 
@@ -463,8 +508,9 @@ const TimetableGenerationByYearSemester = () => {
 
   useEffect(() => {
     fetchModules();
+    fetchSpecializationModuleCounts();
     fetchExisting();
-  }, [fetchModules, fetchExisting]);
+  }, [fetchModules, fetchSpecializationModuleCounts, fetchExisting]);
 
   /* ---------------- HANDLERS ---------------- */
 
@@ -796,6 +842,52 @@ const TimetableGenerationByYearSemester = () => {
               <p className="text-sm font-semibold text-emerald-700">
                 ✓ {modules.length} modules loaded from Academic Coordinator
               </p>
+            </div>
+          )}
+
+          {selectedYear && selectedSemester && selectedSpecialization && (
+            <div className="rounded-2xl border-2 border-indigo-200 bg-gradient-to-r from-indigo-50 to-blue-50 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-sm font-bold text-indigo-900">
+                  Specialization Module Capacity (Max {MODULE_LIMIT_PER_SPECIALIZATION})
+                </p>
+                <p className="text-xs font-semibold text-indigo-700">
+                  Year {selectedYear} • Semester {selectedSemester}
+                </p>
+              </div>
+
+              {loadingSpecializationGraph ? (
+                <p className="text-sm font-semibold text-slate-600">Loading specialization graph...</p>
+              ) : specializationModuleCounts.length === 0 ? (
+                <p className="text-sm font-semibold text-slate-600">No specialization module data available.</p>
+              ) : (
+                <div className="space-y-2">
+                  {specializationModuleCounts.map((row) => {
+                    const width = Math.min(100, (row.count / MODULE_LIMIT_PER_SPECIALIZATION) * 100);
+                    const isSelected = normalizeSpecialization(selectedSpecialization) === row.specialization;
+
+                    return (
+                      <div
+                        key={row.specialization}
+                        className={`rounded-xl border p-2 ${isSelected ? 'border-indigo-400 bg-indigo-100/60' : 'border-slate-200 bg-white/80'}`}
+                      >
+                        <div className="mb-1 flex items-center justify-between text-xs font-semibold">
+                          <span className={`${row.atLimit ? 'text-rose-700' : 'text-slate-700'}`}>{row.specialization}</span>
+                          <span className={`${row.atLimit ? 'text-rose-700' : 'text-indigo-800'}`}>
+                            {row.count}/{MODULE_LIMIT_PER_SPECIALIZATION}
+                          </span>
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                          <div
+                            className={`h-full rounded-full ${row.atLimit ? 'bg-rose-500' : 'bg-indigo-500'}`}
+                            style={{ width: `${width}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
