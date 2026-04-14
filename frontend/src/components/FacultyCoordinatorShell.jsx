@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+const normalizeRoleKey = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
 /* ---------------- ICONS ---------------- */
 const Icon = {
   grid: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>,
   calendar: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
   users: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><circle cx="9" cy="7" r="4"/><path d="M17 21v-2a4 4 0 0 0-4-4H5"/></svg>,
   book: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/></svg>,
+  shield: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><path d="M12 3l7 4v5c0 5-3.5 8-7 9-3.5-1-7-4-7-9V7l7-4z"/></svg>,
+  warning: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
   chevronLeft: <svg viewBox="0 0 24 24" stroke="currentColor" className="h-4 w-4"><polyline points="15 18 9 12 15 6"/></svg>,
   chevronRight: <svg viewBox="0 0 24 24" stroke="currentColor" className="h-4 w-4"><polyline points="9 18 15 12 9 6"/></svg>,
   menu: <svg viewBox="0 0 24 24" stroke="currentColor" className="h-5 w-5"><line x1="3" y1="12" x2="21"/><line x1="3" y1="6" x2="21"/><line x1="3" y1="18" x2="21"/></svg>,
@@ -14,12 +18,52 @@ const Icon = {
 };
 
 /* ---------------- NAV ---------------- */
-const NAV = [
-  { id: 'dashboard', label: 'Dashboard', to: '/dashboard', icon: Icon.grid },
-  { id: 'timetable', label: 'Timetables', to: '/scheduler/by-year', icon: Icon.calendar },
-  { id: 'modules', label: 'Modules', to: '/faculty/modules', icon: Icon.book },
-  { id: 'batches', label: 'Batches', to: '/faculty/batches', icon: Icon.users },
-];
+const getRoleNav = (roleKey) => {
+  const common = [{ id: 'dashboard', label: 'Dashboard', to: '/dashboard', icon: Icon.grid }];
+
+  if (roleKey === 'academiccoordinator') {
+    return [
+      ...common,
+      { id: 'academic-modules', label: 'Module Registry', to: '/academic/modules', icon: Icon.book },
+      { id: 'academic-personnel', label: 'Personnel', to: '/academic/personnel', icon: Icon.users },
+      { id: 'academic-assignments', label: 'Assignments', to: '/academic/assignments', icon: Icon.calendar },
+      { id: 'academic-calendar', label: 'Calendar', to: '/academic/calendar', icon: Icon.calendar },
+      { id: 'academic-conflicts', label: 'Conflicts', to: '/academic/conflicts', icon: Icon.warning },
+      { id: 'academic-halls', label: 'Hall Allocation', to: '/academic/hall-allocation', icon: Icon.grid },
+      { id: 'shared-added-modules', label: 'Added Modules', to: '/faculty/modules/added', icon: Icon.book },
+    ];
+  }
+
+  if (roleKey === 'facultycoordinator') {
+    return [
+      ...common,
+      { id: 'scheduler', label: 'Scheduler', to: '/scheduler/by-year', icon: Icon.calendar },
+      { id: 'faculty-modules', label: 'Modules', to: '/faculty/modules', icon: Icon.book },
+      { id: 'faculty-added-modules', label: 'Added Modules', to: '/faculty/modules/added', icon: Icon.book },
+      { id: 'faculty-batches', label: 'Batches', to: '/faculty/batches', icon: Icon.users },
+      { id: 'faculty-halls', label: 'Hall Allocation', to: '/faculty/hall-allocations', icon: Icon.grid },
+      { id: 'faculty-report', label: 'Timetable Report', to: '/faculty/timetable-report', icon: Icon.calendar },
+    ];
+  }
+
+  if (roleKey === 'admin') {
+    return [
+      ...common,
+      { id: 'admin-role-history', label: 'Role History', to: '/admin/role-history', icon: Icon.shield },
+    ];
+  }
+
+  return common;
+};
+
+const getRoleWorkspaceLabel = (roleKey) => {
+  if (roleKey === 'academiccoordinator') return 'Academic Governance Workspace';
+  if (roleKey === 'facultycoordinator') return 'Faculty Scheduling Workspace';
+  if (roleKey === 'admin') return 'Administration Workspace';
+  if (roleKey === 'lic') return 'LIC Workspace';
+  if (roleKey === 'instructor') return 'Instructor Workspace';
+  return 'Unified Academic Workspace';
+};
 
 /* ---------------- COMPONENT ---------------- */
 
@@ -38,9 +82,12 @@ export default function FacultyCoordinatorShell({
 }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const roleKey = normalizeRoleKey(user?.role);
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const navItems = useMemo(() => getRoleNav(roleKey), [roleKey]);
+  const workspaceLabel = useMemo(() => getRoleWorkspaceLabel(roleKey), [roleKey]);
 
   const displayName = user?.name || 'Coordinator';
 
@@ -100,7 +147,7 @@ export default function FacultyCoordinatorShell({
           </div>
 
           <nav className="relative space-y-1 p-3">
-            {NAV.map((item) => {
+            {navItems.map((item) => {
               const active = location.pathname === item.to;
               return (
                 <button
@@ -187,6 +234,7 @@ export default function FacultyCoordinatorShell({
                       <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${isLightTheme ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-white/10 bg-white/5 text-slate-100'}`}>Academic scheduling</span>
                       <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${isLightTheme ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-white/10 bg-white/5 text-slate-100'}`}>Coordinator tools</span>
                       <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${isLightTheme ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-white/10 bg-white/5 text-slate-100'}`}>Live module sync</span>
+                      <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${isLightTheme ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-emerald-300/20 bg-emerald-500/10 text-emerald-100'}`}>{workspaceLabel}</span>
                     </div>
                   </div>
 
