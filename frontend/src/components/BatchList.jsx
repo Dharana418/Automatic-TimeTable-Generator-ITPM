@@ -217,6 +217,7 @@ export default function BatchList({ initialQuery = '' }) {
   const [savePending, setSavePending] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [editingId, setEditingId] = useState('');
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [form, setForm] = useState(formDefaults);
 
   const loadBatches = async () => {
@@ -290,6 +291,7 @@ export default function BatchList({ initialQuery = '' }) {
 
   const resetForm = () => {
     setEditingId('');
+    setIsEditDialogOpen(false);
     setForm(formDefaults);
   };
 
@@ -446,6 +448,7 @@ export default function BatchList({ initialQuery = '' }) {
   const handleEdit = (batch) => {
     const [, , mode = 'WD', , group = '', subgroup = ''] = batch.id.split('.');
     setEditingId(batch.id);
+    setIsEditDialogOpen(true);
     setForm({
       id: batch.id,
       specialization: batch.specialization,
@@ -586,7 +589,7 @@ export default function BatchList({ initialQuery = '' }) {
             value={form.subgroup}
             inputMode="numeric"
             maxLength={2}
-            disabled={!editingId && Number(form.studentCount || 0) > 0}
+            disabled={Number(form.studentCount || 0) > 0}
             onChange={(e) => {
               const nextValue = cleanTwoDigitGroupValue(e.target.value);
               setForm((prev) => ({ ...prev, subgroup: nextValue }));
@@ -612,7 +615,7 @@ export default function BatchList({ initialQuery = '' }) {
           Batch ID will be generated automatically: {buildBatchId(form) || 'Y?.S?.WD.IT.01.01'}
         </p>
 
-        {!editingId && generatedBatchPreview.length > 0 && (
+        {generatedBatchPreview.length > 0 && (
           <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 p-3">
             <p className="text-xs font-semibold text-sky-700">Generated Subgroup IDs ({generatedBatchPreview.length})</p>
             <div className="mt-2 max-h-32 overflow-y-auto space-y-1">
@@ -632,17 +635,8 @@ export default function BatchList({ initialQuery = '' }) {
             disabled={savePending}
             className="inline-flex min-h-10 items-center justify-center rounded-xl border border-blue-700 bg-gradient-to-r from-blue-700 to-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:from-blue-800 hover:to-blue-700 hover:shadow disabled:opacity-60"
           >
-            {savePending ? 'Saving...' : editingId ? 'Update' : 'Create'}
+            {savePending ? 'Saving...' : 'Create'}
           </button>
-          {editingId && (
-            <button
-              type="button"
-              onClick={resetForm}
-              className="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 transition-all hover:-translate-y-0.5 hover:bg-slate-100"
-            >
-              Cancel
-            </button>
-          )}
         </div>
       </form>
 
@@ -720,6 +714,108 @@ export default function BatchList({ initialQuery = '' }) {
           </div>
         )}
       </div>
+
+      {isEditDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+          <div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <h5 className="text-lg font-semibold text-slate-900">Edit Batch Details</h5>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                Close
+              </button>
+            </div>
+
+            <form onSubmit={handleFormSubmit} className="p-6">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <select
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                  value={form.year}
+                  onChange={(e) => setForm((prev) => ({ ...prev, year: e.target.value }))}
+                >
+                  {YEAR_OPTIONS.map((year) => (
+                    <option key={year} value={year}>Year {year}</option>
+                  ))}
+                </select>
+
+                <select
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                  value={form.semester}
+                  onChange={(e) => setForm((prev) => ({ ...prev, semester: e.target.value }))}
+                >
+                  {SEMESTER_OPTIONS.map((semester) => (
+                    <option key={semester} value={semester}>Semester {semester}</option>
+                  ))}
+                </select>
+
+                <select
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                  value={form.mode}
+                  onChange={(e) => setForm((prev) => ({ ...prev, mode: e.target.value }))}
+                >
+                  <option value="WD">Weekday (WD)</option>
+                  <option value="WE">Weekend (WE)</option>
+                </select>
+
+                <select
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                  value={form.specialization}
+                  onChange={(e) => setForm((prev) => ({ ...prev, specialization: e.target.value }))}
+                >
+                  {SPECIALIZATIONS.map((specialization) => (
+                    <option key={specialization.key} value={specialization.key}>{specialization.label}</option>
+                  ))}
+                </select>
+
+                <input
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-mono text-slate-900 outline-none transition-all placeholder:text-slate-500 focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                  placeholder="Group (2 digits)"
+                  value={form.group}
+                  inputMode="numeric"
+                  maxLength={2}
+                  onChange={(e) => setForm((prev) => ({ ...prev, group: cleanTwoDigitGroupValue(e.target.value) }))}
+                />
+
+                <input
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-mono text-slate-900 outline-none transition-all placeholder:text-slate-500 focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                  placeholder="Subgroup (01 or 02)"
+                  value={form.subgroup}
+                  inputMode="numeric"
+                  maxLength={2}
+                  onChange={(e) => {
+                    const nextValue = cleanTwoDigitGroupValue(e.target.value);
+                    setForm((prev) => ({ ...prev, subgroup: nextValue }));
+                  }}
+                />
+              </div>
+
+              <p className="mt-4 text-xs font-semibold text-slate-600">
+                Updated Batch ID: {buildBatchId(form) || 'Y?.S?.WD.IT.01.01'}
+              </p>
+
+              <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 transition-all hover:-translate-y-0.5 hover:bg-slate-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savePending}
+                  className="inline-flex min-h-10 items-center justify-center rounded-xl border border-blue-700 bg-gradient-to-r from-blue-700 to-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:from-blue-800 hover:to-blue-700 hover:shadow disabled:opacity-60"
+                >
+                  {savePending ? 'Saving...' : 'Update Batch'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
