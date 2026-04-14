@@ -15,6 +15,38 @@ import {
   Cell
 } from 'recharts';
 
+const normalizeModuleRecord = (module = {}) => {
+  let details = module.details;
+  if (typeof details === 'string') {
+    try {
+      details = JSON.parse(details);
+    } catch {
+      details = {};
+    }
+  }
+  if (!details || typeof details !== 'object') details = {};
+
+  const specialization =
+    module.specialization ||
+    module.department ||
+    details.specialization ||
+    details.spec ||
+    details.stream ||
+    'GENERAL';
+
+  const academicYear = module.academic_year || module.academicYear || details.academic_year || details.academicYear || '';
+  const semester = module.semester || details.semester || '';
+
+  return {
+    ...module,
+    id: module.id || module.module_id || module.moduleId || module.code || module.name,
+    details,
+    specialization,
+    academic_year: academicYear,
+    semester,
+  };
+};
+
 /* ── UI Components ──────────────────────────────────────────────── */
 const DarkInput = ({ label, val, onChange, type = 'text', placeholder = '', help = '', min, max }) => (
   <label style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
@@ -113,7 +145,8 @@ export default function AcademicModulesPage({ user }) {
     try {
       setLoading(true);
       const res = await api.listItems('modules');
-      setModules(res.items || []);
+      const normalized = Array.isArray(res.items) ? res.items.map((item) => normalizeModuleRecord(item)) : [];
+      setModules(normalized);
     } catch (err) {
       toast.error('Failed to load module registry.');
     } finally {
