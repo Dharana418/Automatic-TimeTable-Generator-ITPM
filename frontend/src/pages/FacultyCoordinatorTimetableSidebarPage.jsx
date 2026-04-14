@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Radar, SlidersHorizontal, Search, Download, RefreshCcw } from 'lucide-react';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 import schedulerApi from '../api/scheduler.js';
 import { downloadTimetableAsCSV } from '../api/timetableGeneration.js';
@@ -655,6 +656,25 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
 
   const riskInsights = useMemo(() => buildRiskInsights(schedule, dayModeFilter), [schedule, dayModeFilter]);
 
+  const dayLoadDistribution = useMemo(() => {
+    const counts = DAY_ORDER.map((day) => ({ day, count: 0 }));
+    const indexMap = new Map(counts.map((item, idx) => [item.day, idx]));
+
+    schedule.forEach((row) => {
+      if (!rowMatchesModeFilter(row, dayModeFilter)) return;
+      const normalizedDay = normalizeDay(row.day);
+      const idx = indexMap.get(normalizedDay);
+      if (idx === undefined) return;
+      counts[idx].count += 1;
+    });
+
+    const maxCount = Math.max(1, ...counts.map((item) => item.count));
+    return counts.map((item) => ({
+      ...item,
+      widthPercent: Math.max(8, Math.round((item.count / maxCount) * 100)),
+    }));
+  }, [schedule, dayModeFilter]);
+
   const applyFilterPreset = (preset) => {
     const filters = preset?.filters || {};
     setFilterYear(filters.filterYear || 'ALL');
@@ -813,6 +833,87 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
             >
               {showRiskHighlights ? 'Risk Highlight ON' : 'Risk Highlight OFF'}
             </button>
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-sky-50 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.4fr_1fr]">
+            <div className="rounded-2xl border border-slate-200 bg-white/90 p-4">
+              <div className="flex items-center justify-between gap-2">
+                <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
+                  <Radar size={14} className="text-sky-600" /> Operations Deck
+                </p>
+                <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-sky-700">
+                  Faculty Control Center
+                </span>
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!selectedTimetable) return;
+                    downloadTimetableAsCSV(
+                      schedule,
+                      extractTimetableMeta(selectedTimetable).year,
+                      extractTimetableMeta(selectedTimetable).semester,
+                      extractTimetableMeta(selectedTimetable).group,
+                      extractTimetableMeta(selectedTimetable).subgroup
+                    );
+                  }}
+                  disabled={!selectedTimetable || !schedule.length}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Download size={14} /> Quick Download CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                >
+                  <RefreshCcw size={14} /> Refresh Dataset
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLayoutMode('unified')}
+                  className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${layoutMode === 'unified' ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
+                >
+                  Unified Master View
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLayoutMode('grouped')}
+                  className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${layoutMode === 'grouped' ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
+                >
+                  Group-by-Batch View
+                </button>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-700">
+                  <Search size={12} /> Search-ready
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-700">
+                  <SlidersHorizontal size={12} /> Preset-enabled
+                </span>
+                <span className="rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-700">
+                  Live Risk Overlay
+                </span>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white/95 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Week Load Strip</p>
+              <div className="mt-3 space-y-2">
+                {dayLoadDistribution.map((item) => (
+                  <div key={item.day} className="grid grid-cols-[34px_1fr_36px] items-center gap-2">
+                    <span className="text-xs font-semibold text-slate-600">{item.day}</span>
+                    <div className="h-2.5 rounded-full bg-slate-200">
+                      <div className="h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-500" style={{ width: `${item.widthPercent}%` }} />
+                    </div>
+                    <span className="text-right text-xs font-semibold text-slate-700">{item.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
 
