@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 import schedulerApi from '../api/scheduler.js';
+import { downloadTimetableAsCSV } from '../api/timetableGeneration.js';
 import facultyDashboardBg from '../assets/Gemini_Generated_Image_hqfdrqhqfdrqhqfd.png';
 
 const DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -303,6 +305,8 @@ const buildUnifiedTable = (scheduleRows = [], dayModeFilter = 'WD') => {
 };
 
 const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [timetables, setTimetables] = useState([]);
@@ -496,6 +500,16 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
   }, [filteredTimetables, selectedId]);
 
   useEffect(() => {
+    const requestedTimetableId = String(searchParams.get('timetableId') || '').trim();
+    if (!requestedTimetableId || !filteredTimetables.length) return;
+
+    const found = filteredTimetables.some((tt) => String(tt.id) === requestedTimetableId);
+    if (found && String(selectedId) !== requestedTimetableId) {
+      setSelectedId(requestedTimetableId);
+    }
+  }, [searchParams, filteredTimetables, selectedId]);
+
+  useEffect(() => {
     if (!schedule.length) return;
     if (!filteredBatchTables.length && dayModeFilter !== 'ALL') {
       setDayModeFilter('ALL');
@@ -575,13 +589,39 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                 ))}
               </select>
             </div>
-            <button
-              type="button"
-              onClick={() => window.location.reload()}
-              className="rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:from-slate-200 hover:to-slate-50"
-            >
-              Refresh
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!selectedTimetable) return;
+                  downloadTimetableAsCSV(
+                    schedule,
+                    extractTimetableMeta(selectedTimetable).year,
+                    extractTimetableMeta(selectedTimetable).semester,
+                    extractTimetableMeta(selectedTimetable).group,
+                    extractTimetableMeta(selectedTimetable).subgroup
+                  );
+                }}
+                disabled={!selectedTimetable || !schedule.length}
+                className="rounded-xl border border-emerald-500 bg-gradient-to-r from-emerald-500 to-green-600 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:border-slate-300 disabled:from-slate-300 disabled:to-slate-400"
+              >
+                Download CSV
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/scheduler/by-year')}
+                className="rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:from-slate-200 hover:to-slate-50"
+              >
+                View Generator
+              </button>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:from-slate-200 hover:to-slate-50"
+              >
+                Refresh
+              </button>
+            </div>
           </div>
 
           <div className="mt-4 rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 via-white to-slate-200 p-3">
