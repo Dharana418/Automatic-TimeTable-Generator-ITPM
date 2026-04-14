@@ -78,6 +78,7 @@ export default function AcademicModulesPage({ user }) {
   const [sortDirection, setSortDirection] = useState('asc');
   const [showDataQualityOnly, setShowDataQualityOnly] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editErrors, setEditErrors] = useState({});
   const [editingModuleId, setEditingModuleId] = useState(null);
   const [editingForm, setEditingForm] = useState({
     code: '',
@@ -90,6 +91,9 @@ export default function AcademicModulesPage({ user }) {
   });
   const [updatingModuleId, setUpdatingModuleId] = useState(null);
   const [deletingModuleId, setDeletingModuleId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteConfirmCode, setDeleteConfirmCode] = useState('');
+  const [deleteReason, setDeleteReason] = useState('');
   const [saving, setSaving] = useState(false);
 
   // Form State
@@ -345,6 +349,7 @@ export default function AcademicModulesPage({ user }) {
     const moduleId = module?.id ?? module?.module_id ?? null;
     setEditingModuleId(moduleId);
     setIsEditModalOpen(true);
+    setEditErrors({});
     setEditingForm({
       code: String(module.code || '').toUpperCase(),
       name: String(module.name || ''),
@@ -358,6 +363,7 @@ export default function AcademicModulesPage({ user }) {
 
   const cancelEditModule = () => {
     setIsEditModalOpen(false);
+    setEditErrors({});
     setEditingModuleId(null);
     setUpdatingModuleId(null);
     setEditingForm({
@@ -381,16 +387,51 @@ export default function AcademicModulesPage({ user }) {
       return;
     }
 
+    const validationErrors = {};
+    const codeValue = String(editingForm.code || '').trim().toUpperCase();
+    const nameValue = String(editingForm.name || '').trim();
+    const yearValue = Number(editingForm.academic_year || 0);
+    const semesterValue = Number(editingForm.semester || 0);
+    const creditsValue = editingForm.credits === '' ? null : Number(editingForm.credits);
+    const lecturesValue = editingForm.lectures_per_week === '' ? null : Number(editingForm.lectures_per_week);
+
+    if (!/^[A-Z0-9-]{3,20}$/.test(codeValue)) {
+      validationErrors.code = 'Use 3-20 chars: A-Z, 0-9, or -';
+    }
+    if (nameValue.length < 3) {
+      validationErrors.name = 'Name should be at least 3 characters.';
+    }
+    if (yearValue < 1 || yearValue > 4) {
+      validationErrors.academic_year = 'Academic year must be between 1 and 4.';
+    }
+    if (semesterValue < 1 || semesterValue > 2) {
+      validationErrors.semester = 'Semester must be 1 or 2.';
+    }
+    if (creditsValue !== null && (creditsValue < 1 || creditsValue > 10)) {
+      validationErrors.credits = 'Credits must be between 1 and 10.';
+    }
+    if (lecturesValue !== null && (lecturesValue < 1 || lecturesValue > 10)) {
+      validationErrors.lectures_per_week = 'Lectures/week must be between 1 and 10.';
+    }
+
+    if (Object.keys(validationErrors).length) {
+      setEditErrors(validationErrors);
+      toast.warn('Please fix validation errors before saving.');
+      return;
+    }
+
+    setEditErrors({});
+
     try {
       setUpdatingModuleId(moduleId);
       await api.updateItem('modules', moduleId, {
-        code: editingForm.code.trim().toUpperCase(),
-        name: editingForm.name.trim(),
+        code: codeValue,
+        name: nameValue,
         specialization: editingForm.specialization,
-        academic_year: Number(editingForm.academic_year || 1),
-        semester: Number(editingForm.semester || 1),
-        credits: editingForm.credits === '' ? null : Number(editingForm.credits),
-        lectures_per_week: editingForm.lectures_per_week === '' ? null : Number(editingForm.lectures_per_week),
+        academic_year: yearValue,
+        semester: semesterValue,
+        credits: creditsValue,
+        lectures_per_week: lecturesValue,
       });
       toast.success('Module updated successfully.');
       cancelEditModule();
@@ -403,16 +444,43 @@ export default function AcademicModulesPage({ user }) {
   };
 
   const deleteModule = async (module) => {
-    const confirmed = window.confirm(`Delete module ${module.code || module.id}? This action cannot be undone.`);
-    if (!confirmed) return;
+    setDeleteTarget(module);
+    setDeleteConfirmCode('');
+    setDeleteReason('');
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteTarget(null);
+    setDeleteConfirmCode('');
+    setDeleteReason('');
+  };
+
+  const confirmDeleteModule = async () => {
+    if (!deleteTarget?.id) {
+      toast.error('Unable to delete: module id is missing.');
+      return;
+    }
+
+    const expectedCode = String(deleteTarget.code || '').trim().toUpperCase();
+    const enteredCode = String(deleteConfirmCode || '').trim().toUpperCase();
+    if (!expectedCode || enteredCode !== expectedCode) {
+      toast.warn('Confirmation code does not match the module code.');
+      return;
+    }
+
+    if (!String(deleteReason || '').trim()) {
+      toast.warn('Please provide a short reason before deleting.');
+      return;
+    }
 
     try {
-      setDeletingModuleId(module.id);
-      await api.deleteItem('modules', module.id);
+      setDeletingModuleId(deleteTarget.id);
+      await api.deleteItem('modules', deleteTarget.id);
       toast.success('Module deleted successfully.');
-      if (editingModuleId === module.id) {
+      if (editingModuleId === deleteTarget.id) {
         cancelEditModule();
       }
+      closeDeleteModal();
       await fetchModules();
     } catch (error) {
       toast.error(error.message || 'Failed to delete module.');
@@ -426,7 +494,50 @@ export default function AcademicModulesPage({ user }) {
     [modules, editingModuleId]
   );
 
-  const isActionLocked = isEditModalOpen || Boolean(updatingModuleId) || Boolean(deletingModuleId);
+  const editChangeSummary = useMemo(() => {
+    if (!activeEditingModule) return [];
+
+    const current = {
+      code: String(activeEditingModule.code || '').trim().toUpperCase(),
+      name: String(activeEditingModule.name || '').trim(),
+      specialization: String(activeEditingModule.specialization || activeEditingModule.department || 'GENERAL').toUpperCase(),
+      academic_year: String(activeEditingModule.academic_year || ''),
+      semester: String(activeEditingModule.semester || ''),
+      credits: activeEditingModule.credits === null || activeEditingModule.credits === undefined ? '' : String(activeEditingModule.credits),
+      lectures_per_week: activeEditingModule.lectures_per_week === null || activeEditingModule.lectures_per_week === undefined ? '' : String(activeEditingModule.lectures_per_week)
+    };
+
+    const next = {
+      code: String(editingForm.code || '').trim().toUpperCase(),
+      name: String(editingForm.name || '').trim(),
+      specialization: String(editingForm.specialization || 'GENERAL').toUpperCase(),
+      academic_year: String(editingForm.academic_year || ''),
+      semester: String(editingForm.semester || ''),
+      credits: editingForm.credits === '' ? '' : String(editingForm.credits),
+      lectures_per_week: editingForm.lectures_per_week === '' ? '' : String(editingForm.lectures_per_week)
+    };
+
+    const labels = {
+      code: 'Code',
+      name: 'Name',
+      specialization: 'Specialization',
+      academic_year: 'Academic Year',
+      semester: 'Semester',
+      credits: 'Credits',
+      lectures_per_week: 'Lectures / Week'
+    };
+
+    return Object.keys(labels)
+      .filter((key) => current[key] !== next[key])
+      .map((key) => ({
+        key,
+        label: labels[key],
+        from: current[key] || '-',
+        to: next[key] || '-'
+      }));
+  }, [activeEditingModule, editingForm]);
+
+  const isActionLocked = isEditModalOpen || Boolean(deleteTarget) || Boolean(updatingModuleId) || Boolean(deletingModuleId);
 
   return (
     <FacultyCoordinatorShell
@@ -509,6 +620,12 @@ export default function AcademicModulesPage({ user }) {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
           gap: 12px;
+        }
+        .ac-error-text {
+          margin: 4px 0 0;
+          color: #fda4af;
+          font-size: 11px;
+          font-weight: 700;
         }
       `}</style>
       
@@ -818,7 +935,7 @@ export default function AcademicModulesPage({ user }) {
                             type="button"
                             className="ac-action-btn"
                             onClick={() => deleteModule(m)}
-                            disabled={deletingModuleId === m.id || isEditModalOpen}
+                            disabled={deletingModuleId === m.id || isEditModalOpen || Boolean(deleteTarget)}
                             style={{ color: '#fca5a5', borderColor: 'rgba(252,165,165,0.35)' }}
                           >
                             {deletingModuleId === m.id ? 'Deleting...' : 'Delete'}
@@ -864,61 +981,81 @@ export default function AcademicModulesPage({ user }) {
 
               <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div className="ac-edit-modal-grid">
-                  <DarkInput
-                    label="Module Code"
-                    val={editingForm.code}
-                    onChange={(v) => setEditingForm((prev) => ({ ...prev, code: String(v || '').toUpperCase() }))}
-                    placeholder="ITXXXX"
-                    help="Use a unique code for scheduling integrity"
-                  />
-                  <DarkInput
-                    label="Module Name"
-                    val={editingForm.name}
-                    onChange={(v) => setEditingForm((prev) => ({ ...prev, name: v }))}
-                    placeholder="Module title"
-                  />
-                  <DarkSelect
-                    label="Specialization"
-                    value={editingForm.specialization}
-                    onChange={(v) => setEditingForm((prev) => ({ ...prev, specialization: v }))}
-                    options={['IM', 'DS', 'SE', 'CSNE', 'ISE', 'IT', 'CYBER SECURITY', 'GENERAL']}
-                  />
+                  <div>
+                    <DarkInput
+                      label="Module Code"
+                      val={editingForm.code}
+                      onChange={(v) => setEditingForm((prev) => ({ ...prev, code: String(v || '').toUpperCase() }))}
+                      placeholder="ITXXXX"
+                      help="Use a unique code for scheduling integrity"
+                    />
+                    {editErrors.code && <p className="ac-error-text">{editErrors.code}</p>}
+                  </div>
+                  <div>
+                    <DarkInput
+                      label="Module Name"
+                      val={editingForm.name}
+                      onChange={(v) => setEditingForm((prev) => ({ ...prev, name: v }))}
+                      placeholder="Module title"
+                    />
+                    {editErrors.name && <p className="ac-error-text">{editErrors.name}</p>}
+                  </div>
+                  <div>
+                    <DarkSelect
+                      label="Specialization"
+                      value={editingForm.specialization}
+                      onChange={(v) => setEditingForm((prev) => ({ ...prev, specialization: v }))}
+                      options={['IM', 'DS', 'SE', 'CSNE', 'ISE', 'IT', 'CYBER SECURITY', 'GENERAL']}
+                    />
+                  </div>
                 </div>
 
                 <div className="ac-edit-modal-grid">
-                  <DarkInput
-                    label="Academic Year"
-                    type="number"
-                    min="1"
-                    max="4"
-                    val={editingForm.academic_year}
-                    onChange={(v) => setEditingForm((prev) => ({ ...prev, academic_year: v }))}
-                  />
-                  <DarkInput
-                    label="Semester"
-                    type="number"
-                    min="1"
-                    max="2"
-                    val={editingForm.semester}
-                    onChange={(v) => setEditingForm((prev) => ({ ...prev, semester: v }))}
-                  />
-                  <DarkInput
-                    label="Credits"
-                    type="number"
-                    min="1"
-                    max="10"
-                    val={editingForm.credits}
-                    onChange={(v) => setEditingForm((prev) => ({ ...prev, credits: v }))}
-                    help="Leave empty only if not finalized"
-                  />
-                  <DarkInput
-                    label="Lectures / Week"
-                    type="number"
-                    min="1"
-                    max="10"
-                    val={editingForm.lectures_per_week}
-                    onChange={(v) => setEditingForm((prev) => ({ ...prev, lectures_per_week: v }))}
-                  />
+                  <div>
+                    <DarkInput
+                      label="Academic Year"
+                      type="number"
+                      min="1"
+                      max="4"
+                      val={editingForm.academic_year}
+                      onChange={(v) => setEditingForm((prev) => ({ ...prev, academic_year: v }))}
+                    />
+                    {editErrors.academic_year && <p className="ac-error-text">{editErrors.academic_year}</p>}
+                  </div>
+                  <div>
+                    <DarkInput
+                      label="Semester"
+                      type="number"
+                      min="1"
+                      max="2"
+                      val={editingForm.semester}
+                      onChange={(v) => setEditingForm((prev) => ({ ...prev, semester: v }))}
+                    />
+                    {editErrors.semester && <p className="ac-error-text">{editErrors.semester}</p>}
+                  </div>
+                  <div>
+                    <DarkInput
+                      label="Credits"
+                      type="number"
+                      min="1"
+                      max="10"
+                      val={editingForm.credits}
+                      onChange={(v) => setEditingForm((prev) => ({ ...prev, credits: v }))}
+                      help="Leave empty only if not finalized"
+                    />
+                    {editErrors.credits && <p className="ac-error-text">{editErrors.credits}</p>}
+                  </div>
+                  <div>
+                    <DarkInput
+                      label="Lectures / Week"
+                      type="number"
+                      min="1"
+                      max="10"
+                      val={editingForm.lectures_per_week}
+                      onChange={(v) => setEditingForm((prev) => ({ ...prev, lectures_per_week: v }))}
+                    />
+                    {editErrors.lectures_per_week && <p className="ac-error-text">{editErrors.lectures_per_week}</p>}
+                  </div>
                 </div>
 
                 <div style={{ border: '1px solid rgba(148,163,184,0.16)', borderRadius: 12, background: 'rgba(15,23,42,0.5)', padding: '12px 14px' }}>
@@ -926,6 +1063,23 @@ export default function AcademicModulesPage({ user }) {
                   <p style={{ margin: '6px 0 0', color: 'rgba(148,163,184,0.88)', fontSize: 12 }}>
                     {editingForm.code || 'NO-CODE'} | {editingForm.name || 'Untitled Module'} | {editingForm.specialization || 'GENERAL'} | Y{editingForm.academic_year || '?'} S{editingForm.semester || '?'} | {editingForm.credits || '-'} Credits | {editingForm.lectures_per_week || '-'} Lectures/Week
                   </p>
+                </div>
+
+                <div style={{ border: '1px solid rgba(148,163,184,0.16)', borderRadius: 12, background: 'rgba(15,23,42,0.5)', padding: '12px 14px' }}>
+                  <p style={{ margin: 0, color: '#cbd5e1', fontSize: 12, fontWeight: 700 }}>Change Summary</p>
+                  {editChangeSummary.length ? (
+                    <div style={{ marginTop: 8, display: 'grid', gap: 6 }}>
+                      {editChangeSummary.map((item) => (
+                        <p key={item.key} style={{ margin: 0, fontSize: 12, color: '#e2e8f0' }}>
+                          <strong style={{ color: '#bae6fd' }}>{item.label}:</strong> {item.from} → {item.to}
+                        </p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ margin: '8px 0 0', fontSize: 12, color: 'rgba(148,163,184,0.88)' }}>
+                      No changes yet. Update one or more fields to enable a meaningful save.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -941,10 +1095,62 @@ export default function AcademicModulesPage({ user }) {
                   type="button"
                   className="ac-action-btn"
                   onClick={() => saveEditedModule(editingModuleId)}
-                  disabled={!editingModuleId || updatingModuleId === editingModuleId}
+                  disabled={!editingModuleId || updatingModuleId === editingModuleId || !editChangeSummary.length}
                   style={{ color: '#86efac', borderColor: 'rgba(134,239,172,0.4)' }}
                 >
                   {updatingModuleId === editingModuleId ? 'Saving Changes...' : 'Save Module Changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {deleteTarget && (
+          <div className="ac-edit-overlay" onClick={closeDeleteModal}>
+            <div className="ac-edit-modal" style={{ width: 'min(640px, 100%)' }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ padding: 20, borderBottom: '1px solid rgba(148,163,184,0.18)' }}>
+                <p style={{ margin: 0, fontSize: 10, fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#fda4af' }}>
+                  Destructive Action
+                </p>
+                <h4 style={{ margin: '6px 0 0', color: '#fee2e2', fontSize: 20, fontWeight: 900 }}>
+                  Confirm Module Deletion
+                </h4>
+                <p style={{ margin: '8px 0 0', color: 'rgba(254,202,202,0.9)', fontSize: 13 }}>
+                  You are about to permanently remove <strong>{deleteTarget.code || deleteTarget.id}</strong>. This cannot be undone.
+                </p>
+              </div>
+
+              <div style={{ padding: 20, display: 'grid', gap: 12 }}>
+                <DarkInput
+                  label="Type Module Code To Confirm"
+                  val={deleteConfirmCode}
+                  onChange={setDeleteConfirmCode}
+                  placeholder={String(deleteTarget.code || '').toUpperCase()}
+                  help="Delete button unlocks only when this matches exactly"
+                />
+                <DarkInput
+                  label="Deletion Reason"
+                  val={deleteReason}
+                  onChange={setDeleteReason}
+                  placeholder="e.g. merged with new curriculum module"
+                  help="Required for coordinator accountability"
+                />
+              </div>
+
+              <div style={{ padding: 20, borderTop: '1px solid rgba(148,163,184,0.18)', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button type="button" className="ac-action-btn" onClick={closeDeleteModal}>Cancel</button>
+                <button
+                  type="button"
+                  className="ac-action-btn"
+                  onClick={confirmDeleteModule}
+                  disabled={
+                    deletingModuleId === deleteTarget.id ||
+                    String(deleteConfirmCode || '').trim().toUpperCase() !== String(deleteTarget.code || '').trim().toUpperCase() ||
+                    !String(deleteReason || '').trim()
+                  }
+                  style={{ color: '#fca5a5', borderColor: 'rgba(252,165,165,0.4)' }}
+                >
+                  {deletingModuleId === deleteTarget.id ? 'Deleting...' : 'Delete Module Permanently'}
                 </button>
               </div>
             </div>
