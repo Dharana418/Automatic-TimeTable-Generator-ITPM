@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from 'react-toastify';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell';
 import api from '../api/scheduler';
@@ -79,6 +80,7 @@ export default function AcademicModulesPage({ user }) {
   const [showDataQualityOnly, setShowDataQualityOnly] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editErrors, setEditErrors] = useState({});
+  const [editingRecord, setEditingRecord] = useState(null);
   const [editingModuleId, setEditingModuleId] = useState(null);
   const [editingForm, setEditingForm] = useState({
     code: '',
@@ -346,7 +348,12 @@ export default function AcademicModulesPage({ user }) {
   };
 
   const startEditModule = (module) => {
-    const moduleId = module?.id ?? module?.module_id ?? null;
+    if (!module) {
+      toast.error('Unable to open editor for this module.');
+      return;
+    }
+    const moduleId = String(module?.id || module?.module_id || module?.moduleId || '').trim() || null;
+    setEditingRecord(module || null);
     setEditingModuleId(moduleId);
     setIsEditModalOpen(true);
     setEditErrors({});
@@ -364,6 +371,7 @@ export default function AcademicModulesPage({ user }) {
   const cancelEditModule = () => {
     setIsEditModalOpen(false);
     setEditErrors({});
+    setEditingRecord(null);
     setEditingModuleId(null);
     setUpdatingModuleId(null);
     setEditingForm({
@@ -378,7 +386,15 @@ export default function AcademicModulesPage({ user }) {
   };
 
   const saveEditedModule = async (moduleId) => {
-    if (!moduleId) {
+    const resolvedId = String(
+      moduleId ||
+      editingModuleId ||
+      editingRecord?.id ||
+      editingRecord?.module_id ||
+      modules.find((m) => String(m.code || '').trim().toUpperCase() === String(editingForm.code || '').trim().toUpperCase())?.id ||
+      ''
+    ).trim();
+    if (!resolvedId) {
       toast.error('Unable to update: module id is missing for this record.');
       return;
     }
@@ -423,8 +439,8 @@ export default function AcademicModulesPage({ user }) {
     setEditErrors({});
 
     try {
-      setUpdatingModuleId(moduleId);
-      await api.updateItem('modules', moduleId, {
+      setUpdatingModuleId(resolvedId);
+      await api.updateItem('modules', resolvedId, {
         code: codeValue,
         name: nameValue,
         specialization: editingForm.specialization,
@@ -494,17 +510,19 @@ export default function AcademicModulesPage({ user }) {
     [modules, editingModuleId]
   );
 
+  const activeEditingSource = activeEditingModule || editingRecord;
+
   const editChangeSummary = useMemo(() => {
-    if (!activeEditingModule) return [];
+    if (!activeEditingSource) return [];
 
     const current = {
-      code: String(activeEditingModule.code || '').trim().toUpperCase(),
-      name: String(activeEditingModule.name || '').trim(),
-      specialization: String(activeEditingModule.specialization || activeEditingModule.department || 'GENERAL').toUpperCase(),
-      academic_year: String(activeEditingModule.academic_year || ''),
-      semester: String(activeEditingModule.semester || ''),
-      credits: activeEditingModule.credits === null || activeEditingModule.credits === undefined ? '' : String(activeEditingModule.credits),
-      lectures_per_week: activeEditingModule.lectures_per_week === null || activeEditingModule.lectures_per_week === undefined ? '' : String(activeEditingModule.lectures_per_week)
+      code: String(activeEditingSource.code || '').trim().toUpperCase(),
+      name: String(activeEditingSource.name || '').trim(),
+      specialization: String(activeEditingSource.specialization || activeEditingSource.department || 'GENERAL').toUpperCase(),
+      academic_year: String(activeEditingSource.academic_year || ''),
+      semester: String(activeEditingSource.semester || ''),
+      credits: activeEditingSource.credits === null || activeEditingSource.credits === undefined ? '' : String(activeEditingSource.credits),
+      lectures_per_week: activeEditingSource.lectures_per_week === null || activeEditingSource.lectures_per_week === undefined ? '' : String(activeEditingSource.lectures_per_week)
     };
 
     const next = {
@@ -535,7 +553,7 @@ export default function AcademicModulesPage({ user }) {
         from: current[key] || '-',
         to: next[key] || '-'
       }));
-  }, [activeEditingModule, editingForm]);
+  }, [activeEditingSource, editingForm]);
 
   const isActionLocked = isEditModalOpen || Boolean(deleteTarget) || Boolean(updatingModuleId) || Boolean(deletingModuleId);
 
@@ -599,7 +617,7 @@ export default function AcademicModulesPage({ user }) {
         .ac-edit-overlay {
           position: fixed;
           inset: 0;
-          z-index: 1200;
+          z-index: 99999;
           background: rgba(2, 6, 23, 0.72);
           backdrop-filter: blur(6px);
           display: flex;
@@ -926,7 +944,7 @@ export default function AcademicModulesPage({ user }) {
                             type="button"
                             className="ac-action-btn"
                             onClick={() => startEditModule(m)}
-                            disabled={isActionLocked && editingModuleId !== m.id}
+                            disabled={deletingModuleId === m.id}
                             style={{ color: '#93c5fd', borderColor: 'rgba(147,197,253,0.35)' }}
                           >
                             Edit
@@ -955,7 +973,7 @@ export default function AcademicModulesPage({ user }) {
           )}
         </section>
 
-        {isEditModalOpen && (
+        {isEditModalOpen && typeof document !== 'undefined' && createPortal((
           <div className="ac-edit-overlay" onClick={cancelEditModule}>
             <div className="ac-edit-modal" onClick={(e) => e.stopPropagation()}>
               <div style={{ padding: 20, borderBottom: '1px solid rgba(148,163,184,0.18)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
@@ -967,7 +985,7 @@ export default function AcademicModulesPage({ user }) {
                     Update Module Details
                   </h4>
                   <p style={{ margin: '6px 0 0', color: 'rgba(148,163,184,0.82)', fontSize: 12 }}>
-                    Record ID: {activeEditingModule?.id || editingModuleId}
+                    Record ID: {activeEditingSource?.id || activeEditingSource?.module_id || editingModuleId || 'Unavailable'}
                   </p>
                 </div>
                 <button
@@ -1095,7 +1113,7 @@ export default function AcademicModulesPage({ user }) {
                   type="button"
                   className="ac-action-btn"
                   onClick={() => saveEditedModule(editingModuleId)}
-                  disabled={!editingModuleId || updatingModuleId === editingModuleId || !editChangeSummary.length}
+                  disabled={updatingModuleId === editingModuleId || !editChangeSummary.length}
                   style={{ color: '#86efac', borderColor: 'rgba(134,239,172,0.4)' }}
                 >
                   {updatingModuleId === editingModuleId ? 'Saving Changes...' : 'Save Module Changes'}
@@ -1103,9 +1121,9 @@ export default function AcademicModulesPage({ user }) {
               </div>
             </div>
           </div>
-        )}
+        ), document.body)}
 
-        {deleteTarget && (
+        {deleteTarget && typeof document !== 'undefined' && createPortal((
           <div className="ac-edit-overlay" onClick={closeDeleteModal}>
             <div className="ac-edit-modal" style={{ width: 'min(640px, 100%)' }} onClick={(e) => e.stopPropagation()}>
               <div style={{ padding: 20, borderBottom: '1px solid rgba(148,163,184,0.18)' }}>
@@ -1155,7 +1173,7 @@ export default function AcademicModulesPage({ user }) {
               </div>
             </div>
           </div>
-        )}
+        ), document.body)}
 
       </div>
     </FacultyCoordinatorShell>
