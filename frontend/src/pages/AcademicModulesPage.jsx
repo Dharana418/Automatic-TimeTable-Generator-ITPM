@@ -77,6 +77,18 @@ export default function AcademicModulesPage({ user }) {
   const [sortBy, setSortBy] = useState('code');
   const [sortDirection, setSortDirection] = useState('asc');
   const [showDataQualityOnly, setShowDataQualityOnly] = useState(false);
+  const [editingModuleId, setEditingModuleId] = useState(null);
+  const [editingForm, setEditingForm] = useState({
+    code: '',
+    name: '',
+    specialization: 'GENERAL',
+    academic_year: '1',
+    semester: '1',
+    credits: '',
+    lectures_per_week: ''
+  });
+  const [updatingModuleId, setUpdatingModuleId] = useState(null);
+  const [deletingModuleId, setDeletingModuleId] = useState(null);
   const [saving, setSaving] = useState(false);
 
   // Form State
@@ -318,6 +330,79 @@ export default function AcademicModulesPage({ user }) {
     URL.revokeObjectURL(url);
   };
 
+  const startEditModule = (module) => {
+    setEditingModuleId(module.id);
+    setEditingForm({
+      code: String(module.code || '').toUpperCase(),
+      name: String(module.name || ''),
+      specialization: String(module.specialization || module.department || 'GENERAL').toUpperCase(),
+      academic_year: String(module.academic_year || '1'),
+      semester: String(module.semester || '1'),
+      credits: module.credits ?? '',
+      lectures_per_week: module.lectures_per_week ?? ''
+    });
+  };
+
+  const cancelEditModule = () => {
+    setEditingModuleId(null);
+    setUpdatingModuleId(null);
+    setEditingForm({
+      code: '',
+      name: '',
+      specialization: 'GENERAL',
+      academic_year: '1',
+      semester: '1',
+      credits: '',
+      lectures_per_week: ''
+    });
+  };
+
+  const saveEditedModule = async (moduleId) => {
+    if (!editingForm.code.trim() || !editingForm.name.trim()) {
+      toast.warn('Module code and name are mandatory for update.');
+      return;
+    }
+
+    try {
+      setUpdatingModuleId(moduleId);
+      await api.updateItem('modules', moduleId, {
+        code: editingForm.code.trim().toUpperCase(),
+        name: editingForm.name.trim(),
+        specialization: editingForm.specialization,
+        academic_year: Number(editingForm.academic_year || 1),
+        semester: Number(editingForm.semester || 1),
+        credits: editingForm.credits === '' ? null : Number(editingForm.credits),
+        lectures_per_week: editingForm.lectures_per_week === '' ? null : Number(editingForm.lectures_per_week),
+      });
+      toast.success('Module updated successfully.');
+      cancelEditModule();
+      await fetchModules();
+    } catch (error) {
+      toast.error(error.message || 'Failed to update module.');
+    } finally {
+      setUpdatingModuleId(null);
+    }
+  };
+
+  const deleteModule = async (module) => {
+    const confirmed = window.confirm(`Delete module ${module.code || module.id}? This action cannot be undone.`);
+    if (!confirmed) return;
+
+    try {
+      setDeletingModuleId(module.id);
+      await api.deleteItem('modules', module.id);
+      toast.success('Module deleted successfully.');
+      if (editingModuleId === module.id) {
+        cancelEditModule();
+      }
+      await fetchModules();
+    } catch (error) {
+      toast.error(error.message || 'Failed to delete module.');
+    } finally {
+      setDeletingModuleId(null);
+    }
+  };
+
   return (
     <FacultyCoordinatorShell
       user={user}
@@ -350,6 +435,30 @@ export default function AcademicModulesPage({ user }) {
           border-radius: 14px;
           padding: 14px;
           background: linear-gradient(160deg, rgba(2,6,23,0.78), rgba(15,23,42,0.82));
+        }
+        .ac-cell-input {
+          width: 100%;
+          background: rgba(15,23,42,0.7);
+          border: 1px solid rgba(148,163,184,0.24);
+          color: #e2e8f0;
+          border-radius: 8px;
+          padding: 6px 8px;
+          font-size: 12px;
+          outline: none;
+        }
+        .ac-cell-input:focus {
+          border-color: rgba(56,189,248,0.55);
+          box-shadow: 0 0 0 2px rgba(56,189,248,0.14);
+        }
+        .ac-action-btn {
+          border-radius: 8px;
+          border: 1px solid rgba(148,163,184,0.25);
+          padding: 6px 9px;
+          font-size: 11px;
+          font-weight: 700;
+          cursor: pointer;
+          background: rgba(15,23,42,0.78);
+          color: #e2e8f0;
         }
       `}</style>
       
@@ -602,16 +711,17 @@ export default function AcademicModulesPage({ user }) {
             <p style={{ color: 'rgba(148,163,184,0.7)', textAlign: 'center', padding: '40px 0' }}>Loading module database...</p>
           ) : (
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', minWidth: 900, borderCollapse: 'collapse' }}>
+              <table style={{ width: '100%', minWidth: 1040, borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: 'rgba(7,20,43,0.9)' }}>
-                    {['Code', 'Name', 'Specialization', 'Year/Sem', 'Credits', 'Lectures/Wk'].map((head) => (
+                    {['Code', 'Name', 'Specialization', 'Year/Sem', 'Credits', 'Lectures/Wk', 'Actions'].map((head) => (
                       <th key={head} style={{ textAlign: 'left', padding: '14px', fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)', borderBottom: '1px solid rgba(148,163,184,0.2)' }}>{head}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {sortedModules.length > 0 ? sortedModules.map(m => {
+                    const isEditing = editingModuleId === m.id;
                     const dep = String(m.specialization || m.department || 'GENERAL').toUpperCase();
                     const s = getBadgeStyle(dep);
                     const isDuplicateCode = duplicateCodeSet.has(String(m.code || '').trim().toUpperCase());
@@ -621,10 +731,24 @@ export default function AcademicModulesPage({ user }) {
                       m.lectures_per_week === null || m.lectures_per_week === undefined || m.lectures_per_week === '';
                     return (
                     <tr key={m.id} style={{ borderBottom: '1px solid rgba(148,163,184,0.1)', background: isDuplicateCode ? 'rgba(239,68,68,0.06)' : 'transparent' }}>
-                      <td style={{ padding: '14px', color: '#f8fafc', fontWeight: 700, fontSize: 13 }}>{m.code || '—'}</td>
+                      <td style={{ padding: '14px', color: '#f8fafc', fontWeight: 700, fontSize: 13 }}>
+                        {isEditing ? (
+                          <input
+                            className="ac-cell-input"
+                            value={editingForm.code}
+                            onChange={(e) => setEditingForm((prev) => ({ ...prev, code: e.target.value.toUpperCase() }))}
+                          />
+                        ) : (m.code || '—')}
+                      </td>
                       <td style={{ padding: '14px', color: '#e2e8f0', fontSize: 13 }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                          <span>{m.name || '—'}</span>
+                          {isEditing ? (
+                            <input
+                              className="ac-cell-input"
+                              value={editingForm.name}
+                              onChange={(e) => setEditingForm((prev) => ({ ...prev, name: e.target.value }))}
+                            />
+                          ) : <span>{m.name || '—'}</span>}
                           {isDuplicateCode && (
                             <span style={{ fontSize: 10, color: '#fca5a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                               Duplicate module code
@@ -633,22 +757,124 @@ export default function AcademicModulesPage({ user }) {
                         </div>
                       </td>
                       <td style={{ padding: '14px' }}>
-                        <span style={{ padding: '4px 10px', borderRadius: 16, fontSize: 11, fontWeight: 700, background: s.bg, border: `1px solid ${s.border}`, color: s.color }}>
-                          {dep}
-                        </span>
+                        {isEditing ? (
+                          <select
+                            className="ac-cell-input"
+                            value={editingForm.specialization}
+                            onChange={(e) => setEditingForm((prev) => ({ ...prev, specialization: e.target.value }))}
+                          >
+                            {['IM', 'DS', 'SE', 'CSNE', 'ISE', 'IT', 'CYBER SECURITY', 'GENERAL'].map((option) => (
+                              <option key={option} value={option} style={{ background: '#0f172a', color: '#f1f5f9' }}>{option}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span style={{ padding: '4px 10px', borderRadius: 16, fontSize: 11, fontWeight: 700, background: s.bg, border: `1px solid ${s.border}`, color: s.color }}>
+                            {dep}
+                          </span>
+                        )}
                       </td>
                       <td style={{ padding: '14px', color: '#cbd5e1', fontSize: 13 }}>
-                        <span style={{ padding: '4px 10px', background: 'rgba(148,163,184,0.1)', color: '#cbd5e1', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>
-                          Y{m.academic_year || '?'} S{m.semester || '?'}
-                        </span>
+                        {isEditing ? (
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <select
+                              className="ac-cell-input"
+                              value={editingForm.academic_year}
+                              onChange={(e) => setEditingForm((prev) => ({ ...prev, academic_year: e.target.value }))}
+                            >
+                              <option value="1">Year 1</option>
+                              <option value="2">Year 2</option>
+                              <option value="3">Year 3</option>
+                              <option value="4">Year 4</option>
+                            </select>
+                            <select
+                              className="ac-cell-input"
+                              value={editingForm.semester}
+                              onChange={(e) => setEditingForm((prev) => ({ ...prev, semester: e.target.value }))}
+                            >
+                              <option value="1">Sem 1</option>
+                              <option value="2">Sem 2</option>
+                            </select>
+                          </div>
+                        ) : (
+                          <span style={{ padding: '4px 10px', background: 'rgba(148,163,184,0.1)', color: '#cbd5e1', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>
+                            Y{m.academic_year || '?'} S{m.semester || '?'}
+                          </span>
+                        )}
                       </td>
-                      <td style={{ padding: '14px', color: hasDataGap ? '#fda4af' : '#94a3b8', fontSize: 13 }}>{m.credits || '—'}</td>
-                      <td style={{ padding: '14px', color: hasDataGap ? '#fda4af' : '#94a3b8', fontSize: 13 }}>{m.lectures_per_week || '—'}</td>
+                      <td style={{ padding: '14px', color: hasDataGap ? '#fda4af' : '#94a3b8', fontSize: 13 }}>
+                        {isEditing ? (
+                          <input
+                            className="ac-cell-input"
+                            type="number"
+                            min="1"
+                            max="10"
+                            value={editingForm.credits}
+                            onChange={(e) => setEditingForm((prev) => ({ ...prev, credits: e.target.value }))}
+                          />
+                        ) : (m.credits || '—')}
+                      </td>
+                      <td style={{ padding: '14px', color: hasDataGap ? '#fda4af' : '#94a3b8', fontSize: 13 }}>
+                        {isEditing ? (
+                          <input
+                            className="ac-cell-input"
+                            type="number"
+                            min="1"
+                            max="10"
+                            value={editingForm.lectures_per_week}
+                            onChange={(e) => setEditingForm((prev) => ({ ...prev, lectures_per_week: e.target.value }))}
+                          />
+                        ) : (m.lectures_per_week || '—')}
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {isEditing ? (
+                            <>
+                              <button
+                                type="button"
+                                className="ac-action-btn"
+                                onClick={() => saveEditedModule(m.id)}
+                                disabled={updatingModuleId === m.id}
+                                style={{ color: '#86efac', borderColor: 'rgba(134,239,172,0.35)' }}
+                              >
+                                {updatingModuleId === m.id ? 'Saving...' : 'Save'}
+                              </button>
+                              <button
+                                type="button"
+                                className="ac-action-btn"
+                                onClick={cancelEditModule}
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                className="ac-action-btn"
+                                onClick={() => startEditModule(m)}
+                                disabled={Boolean(editingModuleId && editingModuleId !== m.id)}
+                                style={{ color: '#93c5fd', borderColor: 'rgba(147,197,253,0.35)' }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="ac-action-btn"
+                                onClick={() => deleteModule(m)}
+                                disabled={deletingModuleId === m.id || Boolean(editingModuleId)}
+                                style={{ color: '#fca5a5', borderColor: 'rgba(252,165,165,0.35)' }}
+                              >
+                                {deletingModuleId === m.id ? 'Deleting...' : 'Delete'}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                     );
                   }) : (
                     <tr>
-                      <td colSpan={6} style={{ padding: 40, textAlign: 'center', color: 'rgba(148,163,184,0.6)' }}>No modules found.</td>
+                      <td colSpan={7} style={{ padding: 40, textAlign: 'center', color: 'rgba(148,163,184,0.6)' }}>No modules found.</td>
                     </tr>
                   )}
                 </tbody>
