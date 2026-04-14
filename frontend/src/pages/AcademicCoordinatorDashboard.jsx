@@ -90,6 +90,7 @@ export default function AcademicCoordinatorDashboard({ user }) {
       brandCode="AC"
       brandTitle="Academic Coordinator"
       brandSubtitle="Operations Console"
+      themeVariant="academic"
     >
       <style>{`
         .ac-action-tile { display: block; border-radius: 20px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }

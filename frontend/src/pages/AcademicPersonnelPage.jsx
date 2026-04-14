@@ -159,6 +159,7 @@ export default function AcademicPersonnelPage({ user }) {
       title="Personnel Roster"
       subtitle="Register and review Lecturer profiles and Lead Instructors (LICs)."
       badge="Network"
+      themeVariant="academic"
     >
       <style>{`
         .ac-input-hover:focus { border-color: rgba(167,139,250,0.5) !important; box-shadow: 0 0 0 3px rgba(167,139,250,0.1) !important; }
