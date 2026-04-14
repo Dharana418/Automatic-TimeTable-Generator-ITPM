@@ -118,6 +118,16 @@ export default function AcademicModulesPage({ user }) {
     fetchModules();
   }, []);
 
+  useEffect(() => {
+    const onEscape = (event) => {
+      if (event.key === 'Escape' && editingModuleId) {
+        cancelEditModule();
+      }
+    };
+    window.addEventListener('keydown', onEscape);
+    return () => window.removeEventListener('keydown', onEscape);
+  }, [editingModuleId]);
+
   const handleAddModule = async (e) => {
     e.preventDefault();
     if (!form.code.trim() || !form.name.trim()) {
@@ -403,6 +413,11 @@ export default function AcademicModulesPage({ user }) {
     }
   };
 
+  const activeEditingModule = useMemo(
+    () => modules.find((m) => m.id === editingModuleId) || null,
+    [modules, editingModuleId]
+  );
+
   return (
     <FacultyCoordinatorShell
       user={user}
@@ -459,6 +474,31 @@ export default function AcademicModulesPage({ user }) {
           cursor: pointer;
           background: rgba(15,23,42,0.78);
           color: #e2e8f0;
+        }
+        .ac-edit-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 1200;
+          background: rgba(2, 6, 23, 0.72);
+          backdrop-filter: blur(6px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 16px;
+        }
+        .ac-edit-modal {
+          width: min(840px, 100%);
+          max-height: 92vh;
+          overflow: auto;
+          border-radius: 18px;
+          border: 1px solid rgba(148,163,184,0.24);
+          background: linear-gradient(160deg, rgba(2,6,23,0.98), rgba(15,23,42,0.96));
+          box-shadow: 0 24px 70px rgba(2,6,23,0.6);
+        }
+        .ac-edit-modal-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+          gap: 12px;
         }
       `}</style>
       
@@ -721,7 +761,6 @@ export default function AcademicModulesPage({ user }) {
                 </thead>
                 <tbody>
                   {sortedModules.length > 0 ? sortedModules.map(m => {
-                    const isEditing = editingModuleId === m.id;
                     const dep = String(m.specialization || m.department || 'GENERAL').toUpperCase();
                     const s = getBadgeStyle(dep);
                     const isDuplicateCode = duplicateCodeSet.has(String(m.code || '').trim().toUpperCase());
@@ -731,24 +770,10 @@ export default function AcademicModulesPage({ user }) {
                       m.lectures_per_week === null || m.lectures_per_week === undefined || m.lectures_per_week === '';
                     return (
                     <tr key={m.id} style={{ borderBottom: '1px solid rgba(148,163,184,0.1)', background: isDuplicateCode ? 'rgba(239,68,68,0.06)' : 'transparent' }}>
-                      <td style={{ padding: '14px', color: '#f8fafc', fontWeight: 700, fontSize: 13 }}>
-                        {isEditing ? (
-                          <input
-                            className="ac-cell-input"
-                            value={editingForm.code}
-                            onChange={(e) => setEditingForm((prev) => ({ ...prev, code: e.target.value.toUpperCase() }))}
-                          />
-                        ) : (m.code || '—')}
-                      </td>
+                      <td style={{ padding: '14px', color: '#f8fafc', fontWeight: 700, fontSize: 13 }}>{m.code || '—'}</td>
                       <td style={{ padding: '14px', color: '#e2e8f0', fontSize: 13 }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                          {isEditing ? (
-                            <input
-                              className="ac-cell-input"
-                              value={editingForm.name}
-                              onChange={(e) => setEditingForm((prev) => ({ ...prev, name: e.target.value }))}
-                            />
-                          ) : <span>{m.name || '—'}</span>}
+                          <span>{m.name || '—'}</span>
                           {isDuplicateCode && (
                             <span style={{ fontSize: 10, color: '#fca5a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                               Duplicate module code
@@ -757,117 +782,37 @@ export default function AcademicModulesPage({ user }) {
                         </div>
                       </td>
                       <td style={{ padding: '14px' }}>
-                        {isEditing ? (
-                          <select
-                            className="ac-cell-input"
-                            value={editingForm.specialization}
-                            onChange={(e) => setEditingForm((prev) => ({ ...prev, specialization: e.target.value }))}
-                          >
-                            {['IM', 'DS', 'SE', 'CSNE', 'ISE', 'IT', 'CYBER SECURITY', 'GENERAL'].map((option) => (
-                              <option key={option} value={option} style={{ background: '#0f172a', color: '#f1f5f9' }}>{option}</option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span style={{ padding: '4px 10px', borderRadius: 16, fontSize: 11, fontWeight: 700, background: s.bg, border: `1px solid ${s.border}`, color: s.color }}>
-                            {dep}
-                          </span>
-                        )}
+                        <span style={{ padding: '4px 10px', borderRadius: 16, fontSize: 11, fontWeight: 700, background: s.bg, border: `1px solid ${s.border}`, color: s.color }}>
+                          {dep}
+                        </span>
                       </td>
                       <td style={{ padding: '14px', color: '#cbd5e1', fontSize: 13 }}>
-                        {isEditing ? (
-                          <div style={{ display: 'flex', gap: 8 }}>
-                            <select
-                              className="ac-cell-input"
-                              value={editingForm.academic_year}
-                              onChange={(e) => setEditingForm((prev) => ({ ...prev, academic_year: e.target.value }))}
-                            >
-                              <option value="1">Year 1</option>
-                              <option value="2">Year 2</option>
-                              <option value="3">Year 3</option>
-                              <option value="4">Year 4</option>
-                            </select>
-                            <select
-                              className="ac-cell-input"
-                              value={editingForm.semester}
-                              onChange={(e) => setEditingForm((prev) => ({ ...prev, semester: e.target.value }))}
-                            >
-                              <option value="1">Sem 1</option>
-                              <option value="2">Sem 2</option>
-                            </select>
-                          </div>
-                        ) : (
-                          <span style={{ padding: '4px 10px', background: 'rgba(148,163,184,0.1)', color: '#cbd5e1', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>
-                            Y{m.academic_year || '?'} S{m.semester || '?'}
-                          </span>
-                        )}
+                        <span style={{ padding: '4px 10px', background: 'rgba(148,163,184,0.1)', color: '#cbd5e1', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>
+                          Y{m.academic_year || '?'} S{m.semester || '?'}
+                        </span>
                       </td>
-                      <td style={{ padding: '14px', color: hasDataGap ? '#fda4af' : '#94a3b8', fontSize: 13 }}>
-                        {isEditing ? (
-                          <input
-                            className="ac-cell-input"
-                            type="number"
-                            min="1"
-                            max="10"
-                            value={editingForm.credits}
-                            onChange={(e) => setEditingForm((prev) => ({ ...prev, credits: e.target.value }))}
-                          />
-                        ) : (m.credits || '—')}
-                      </td>
-                      <td style={{ padding: '14px', color: hasDataGap ? '#fda4af' : '#94a3b8', fontSize: 13 }}>
-                        {isEditing ? (
-                          <input
-                            className="ac-cell-input"
-                            type="number"
-                            min="1"
-                            max="10"
-                            value={editingForm.lectures_per_week}
-                            onChange={(e) => setEditingForm((prev) => ({ ...prev, lectures_per_week: e.target.value }))}
-                          />
-                        ) : (m.lectures_per_week || '—')}
-                      </td>
+                      <td style={{ padding: '14px', color: hasDataGap ? '#fda4af' : '#94a3b8', fontSize: 13 }}>{m.credits || '—'}</td>
+                      <td style={{ padding: '14px', color: hasDataGap ? '#fda4af' : '#94a3b8', fontSize: 13 }}>{m.lectures_per_week || '—'}</td>
                       <td style={{ padding: '14px' }}>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                          {isEditing ? (
-                            <>
-                              <button
-                                type="button"
-                                className="ac-action-btn"
-                                onClick={() => saveEditedModule(m.id)}
-                                disabled={updatingModuleId === m.id}
-                                style={{ color: '#86efac', borderColor: 'rgba(134,239,172,0.35)' }}
-                              >
-                                {updatingModuleId === m.id ? 'Saving...' : 'Save'}
-                              </button>
-                              <button
-                                type="button"
-                                className="ac-action-btn"
-                                onClick={cancelEditModule}
-                              >
-                                Cancel
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                type="button"
-                                className="ac-action-btn"
-                                onClick={() => startEditModule(m)}
-                                disabled={Boolean(editingModuleId && editingModuleId !== m.id)}
-                                style={{ color: '#93c5fd', borderColor: 'rgba(147,197,253,0.35)' }}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                className="ac-action-btn"
-                                onClick={() => deleteModule(m)}
-                                disabled={deletingModuleId === m.id || Boolean(editingModuleId)}
-                                style={{ color: '#fca5a5', borderColor: 'rgba(252,165,165,0.35)' }}
-                              >
-                                {deletingModuleId === m.id ? 'Deleting...' : 'Delete'}
-                              </button>
-                            </>
-                          )}
+                          <button
+                            type="button"
+                            className="ac-action-btn"
+                            onClick={() => startEditModule(m)}
+                            disabled={Boolean(editingModuleId && editingModuleId !== m.id)}
+                            style={{ color: '#93c5fd', borderColor: 'rgba(147,197,253,0.35)' }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="ac-action-btn"
+                            onClick={() => deleteModule(m)}
+                            disabled={deletingModuleId === m.id || Boolean(editingModuleId)}
+                            style={{ color: '#fca5a5', borderColor: 'rgba(252,165,165,0.35)' }}
+                          >
+                            {deletingModuleId === m.id ? 'Deleting...' : 'Delete'}
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -882,6 +827,119 @@ export default function AcademicModulesPage({ user }) {
             </div>
           )}
         </section>
+
+        {editingModuleId && (
+          <div className="ac-edit-overlay" onClick={cancelEditModule}>
+            <div className="ac-edit-modal" onClick={(e) => e.stopPropagation()}>
+              <div style={{ padding: 20, borderBottom: '1px solid rgba(148,163,184,0.18)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: 10, fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#93c5fd' }}>
+                    Advanced Module Editor
+                  </p>
+                  <h4 style={{ margin: '6px 0 0', color: '#f8fafc', fontSize: 20, fontWeight: 900 }}>
+                    Update Module Details
+                  </h4>
+                  <p style={{ margin: '6px 0 0', color: 'rgba(148,163,184,0.82)', fontSize: 12 }}>
+                    Record ID: {activeEditingModule?.id || editingModuleId}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="ac-action-btn"
+                  onClick={cancelEditModule}
+                >
+                  Close
+                </button>
+              </div>
+
+              <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div className="ac-edit-modal-grid">
+                  <DarkInput
+                    label="Module Code"
+                    val={editingForm.code}
+                    onChange={(v) => setEditingForm((prev) => ({ ...prev, code: String(v || '').toUpperCase() }))}
+                    placeholder="ITXXXX"
+                    help="Use a unique code for scheduling integrity"
+                  />
+                  <DarkInput
+                    label="Module Name"
+                    val={editingForm.name}
+                    onChange={(v) => setEditingForm((prev) => ({ ...prev, name: v }))}
+                    placeholder="Module title"
+                  />
+                  <DarkSelect
+                    label="Specialization"
+                    value={editingForm.specialization}
+                    onChange={(v) => setEditingForm((prev) => ({ ...prev, specialization: v }))}
+                    options={['IM', 'DS', 'SE', 'CSNE', 'ISE', 'IT', 'CYBER SECURITY', 'GENERAL']}
+                  />
+                </div>
+
+                <div className="ac-edit-modal-grid">
+                  <DarkInput
+                    label="Academic Year"
+                    type="number"
+                    min="1"
+                    max="4"
+                    val={editingForm.academic_year}
+                    onChange={(v) => setEditingForm((prev) => ({ ...prev, academic_year: v }))}
+                  />
+                  <DarkInput
+                    label="Semester"
+                    type="number"
+                    min="1"
+                    max="2"
+                    val={editingForm.semester}
+                    onChange={(v) => setEditingForm((prev) => ({ ...prev, semester: v }))}
+                  />
+                  <DarkInput
+                    label="Credits"
+                    type="number"
+                    min="1"
+                    max="10"
+                    val={editingForm.credits}
+                    onChange={(v) => setEditingForm((prev) => ({ ...prev, credits: v }))}
+                    help="Leave empty only if not finalized"
+                  />
+                  <DarkInput
+                    label="Lectures / Week"
+                    type="number"
+                    min="1"
+                    max="10"
+                    val={editingForm.lectures_per_week}
+                    onChange={(v) => setEditingForm((prev) => ({ ...prev, lectures_per_week: v }))}
+                  />
+                </div>
+
+                <div style={{ border: '1px solid rgba(148,163,184,0.16)', borderRadius: 12, background: 'rgba(15,23,42,0.5)', padding: '12px 14px' }}>
+                  <p style={{ margin: 0, color: '#cbd5e1', fontSize: 12, fontWeight: 700 }}>Live Preview</p>
+                  <p style={{ margin: '6px 0 0', color: 'rgba(148,163,184,0.88)', fontSize: 12 }}>
+                    {editingForm.code || 'NO-CODE'} | {editingForm.name || 'Untitled Module'} | {editingForm.specialization || 'GENERAL'} | Y{editingForm.academic_year || '?'} S{editingForm.semester || '?'} | {editingForm.credits || '-'} Credits | {editingForm.lectures_per_week || '-'} Lectures/Week
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ padding: 20, borderTop: '1px solid rgba(148,163,184,0.18)', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button
+                  type="button"
+                  className="ac-action-btn"
+                  onClick={cancelEditModule}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="ac-action-btn"
+                  onClick={() => saveEditedModule(editingModuleId)}
+                  disabled={updatingModuleId === editingModuleId}
+                  style={{ color: '#86efac', borderColor: 'rgba(134,239,172,0.4)' }}
+                >
+                  {updatingModuleId === editingModuleId ? 'Saving Changes...' : 'Save Module Changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </FacultyCoordinatorShell>
