@@ -317,6 +317,69 @@ const buildUnifiedTable = (scheduleRows = [], dayModeFilter = 'WD') => {
   };
 };
 
+const rowMatchesModeFilter = (row, dayModeFilter = 'ALL') => {
+  if (dayModeFilter === 'ALL') return true;
+  const batchKeys = extractBatchKeys(row);
+  return batchKeys.some((key) => extractBatchMode(key) === dayModeFilter);
+};
+
+const buildRiskInsights = (scheduleRows = [], dayModeFilter = 'ALL') => {
+  const cellCountMap = new Map();
+  const hallConflictMap = new Map();
+  const instructorConflictMap = new Map();
+
+  scheduleRows.forEach((row) => {
+    if (!rowMatchesModeFilter(row, dayModeFilter)) return;
+
+    const day = normalizeDay(row.day);
+    const slot = normalizeSlot(row);
+    const hall = String(row.hallName || row.hallId || 'Hall TBA').trim();
+    const instructor = String(row.instructorName || row.instructorId || 'Instructor TBA').trim();
+
+    const cellKey = `${slot}::${day}`;
+    cellCountMap.set(cellKey, (cellCountMap.get(cellKey) || 0) + 1);
+
+    const hallKey = `${cellKey}::${hall}`;
+    hallConflictMap.set(hallKey, (hallConflictMap.get(hallKey) || 0) + 1);
+
+    const instructorKey = `${cellKey}::${instructor}`;
+    instructorConflictMap.set(instructorKey, (instructorConflictMap.get(instructorKey) || 0) + 1);
+  });
+
+  const riskyCells = new Set();
+  const hallConflicts = new Set();
+  const instructorConflicts = new Set();
+
+  cellCountMap.forEach((count, key) => {
+    if (count >= 4) riskyCells.add(key);
+  });
+
+  hallConflictMap.forEach((count, key) => {
+    if (count > 1) {
+      hallConflicts.add(key);
+      riskyCells.add(key.split('::').slice(0, 2).join('::'));
+    }
+  });
+
+  instructorConflictMap.forEach((count, key) => {
+    if (count > 1) {
+      instructorConflicts.add(key);
+      riskyCells.add(key.split('::').slice(0, 2).join('::'));
+    }
+  });
+
+  return {
+    riskyCells,
+    hallConflicts,
+    instructorConflicts,
+    summary: {
+      riskyCellCount: riskyCells.size,
+      hallConflictCount: hallConflicts.size,
+      instructorConflictCount: instructorConflicts.size,
+    },
+  };
+};
+
 const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -338,6 +401,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
   const [filterPresets, setFilterPresets] = useState([]);
   const [favoriteIds, setFavoriteIds] = useState([]);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [showRiskHighlights, setShowRiskHighlights] = useState(true);
 
   useEffect(() => {
     setFilterPresets(safeReadStorageJson(FILTER_PRESET_STORAGE_KEY, []));
@@ -589,6 +653,8 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
     };
   }, [schedule]);
 
+  const riskInsights = useMemo(() => buildRiskInsights(schedule, dayModeFilter), [schedule, dayModeFilter]);
+
   const applyFilterPreset = (preset) => {
     const filters = preset?.filters || {};
     setFilterYear(filters.filterYear || 'ALL');
@@ -705,7 +771,9 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
               </div>
               <div className="col-span-2 rounded-2xl border border-amber-200 bg-amber-50/90 p-3">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-700">Planning Alerts</p>
-                <p className="mt-1 text-sm font-semibold text-amber-900">Overlapping cells: {planningInsights.overlapCells}</p>
+                <p className="mt-1 text-sm font-semibold text-amber-900">
+                  Overlapping cells: {planningInsights.overlapCells} • Risky cells: {riskInsights.summary.riskyCellCount}
+                </p>
               </div>
             </div>
           </div>
@@ -727,6 +795,24 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Favorite Timetables</p>
             <p className="mt-2 text-base font-bold text-slate-900">{favoriteIds.length}</p>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-rose-200 bg-rose-50/60 p-4 shadow-[0_8px_24px_rgba(244,63,94,0.12)]">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-rose-700">High-Risk Conflict Detection</p>
+              <p className="mt-1 text-sm text-rose-900">
+                Hall conflicts: {riskInsights.summary.hallConflictCount} • Instructor conflicts: {riskInsights.summary.instructorConflictCount}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowRiskHighlights((prev) => !prev)}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${showRiskHighlights ? 'border-rose-600 bg-rose-600 text-white' : 'border-slate-300 bg-white text-slate-700'}`}
+            >
+              {showRiskHighlights ? 'Risk Highlight ON' : 'Risk Highlight OFF'}
+            </button>
           </div>
         </section>
 
@@ -1118,18 +1204,40 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                         {unifiedTable.days.map((day) => {
                           const key = `${timelineRow.slot}::${day}`;
                           const entries = unifiedTable.cellMap.get(key) || [];
+                          const isRiskyCell = showRiskHighlights && riskInsights.riskyCells.has(key);
                           return (
-                            <td key={key} className="border border-slate-300 bg-white px-2 py-2 align-top">
+                            <td key={key} className={`border px-2 py-2 align-top ${isRiskyCell ? 'border-rose-400 bg-rose-50' : 'border-slate-300 bg-white'}`}>
                               {!entries.length ? (
                                 <span className="text-[11px] text-slate-400">-</span>
                               ) : (
                                 <div className="space-y-2">
                                   {entries.map((entry, idx) => (
-                                    <div key={`${entry.module}-${entry.group}-${idx}`} className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1">
+                                    <div
+                                      key={`${entry.module}-${entry.group}-${idx}`}
+                                      className={`rounded border px-2 py-1 ${(() => {
+                                        if (!showRiskHighlights) return 'border-emerald-200 bg-emerald-50';
+                                        const hallKey = `${timelineRow.slot}::${day}::${entry.hall}`;
+                                        const instructorKey = `${timelineRow.slot}::${day}::${entry.instructor}`;
+                                        if (riskInsights.hallConflicts.has(hallKey) || riskInsights.instructorConflicts.has(instructorKey)) {
+                                          return 'border-rose-300 bg-rose-100';
+                                        }
+                                        return 'border-emerald-200 bg-emerald-50';
+                                      })()}`}
+                                    >
                                       <p className="text-xs font-semibold text-slate-900">{entry.module}</p>
                                       <p className="text-[11px] text-slate-600">{entry.yearSemester} • {entry.specialization} • G{entry.group}</p>
                                       <p className="text-[11px] text-slate-600">{entry.hall}</p>
                                       <p className="text-[11px] text-slate-500">{entry.instructor}</p>
+                                      {showRiskHighlights && (
+                                        <div className="mt-1 flex flex-wrap gap-1">
+                                          {riskInsights.hallConflicts.has(`${timelineRow.slot}::${day}::${entry.hall}`) && (
+                                            <span className="rounded bg-rose-200 px-1.5 py-0.5 text-[10px] font-semibold text-rose-800">Hall conflict</span>
+                                          )}
+                                          {riskInsights.instructorConflicts.has(`${timelineRow.slot}::${day}::${entry.instructor}`) && (
+                                            <span className="rounded bg-rose-200 px-1.5 py-0.5 text-[10px] font-semibold text-rose-800">Instructor conflict</span>
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
                                   ))}
                                 </div>
@@ -1244,17 +1352,39 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                           {batch.days.map((day) => {
                             const key = `${timelineRow.slot}::${day}`;
                             const entries = batch.cellMap.get(key) || [];
+                            const isRiskyCell = showRiskHighlights && riskInsights.riskyCells.has(key);
                             return (
-                              <td key={key} className="border border-slate-300 bg-white px-2 py-2 align-top">
+                                <td key={key} className={`border px-2 py-2 align-top ${isRiskyCell ? 'border-rose-400 bg-rose-50' : 'border-slate-300 bg-white'}`}>
                                 {!entries.length ? (
                                   <span className="text-[11px] text-slate-400">-</span>
                                 ) : (
                                   <div className="space-y-2">
                                     {entries.map((entry, idx) => (
-                                      <div key={`${entry.module}-${entry.hall}-${idx}`} className="rounded border border-slate-200 bg-slate-50 px-2 py-1">
+                                        <div
+                                          key={`${entry.module}-${entry.hall}-${idx}`}
+                                          className={`rounded border px-2 py-1 ${(() => {
+                                            if (!showRiskHighlights) return 'border-slate-200 bg-slate-50';
+                                            const hallKey = `${timelineRow.slot}::${day}::${entry.hall}`;
+                                            const instructorKey = `${timelineRow.slot}::${day}::${entry.instructor}`;
+                                            if (riskInsights.hallConflicts.has(hallKey) || riskInsights.instructorConflicts.has(instructorKey)) {
+                                              return 'border-rose-300 bg-rose-100';
+                                            }
+                                            return 'border-slate-200 bg-slate-50';
+                                          })()}`}
+                                        >
                                         <p className="text-xs font-semibold text-slate-900">{entry.module}</p>
                                         <p className="text-[11px] text-slate-600">{entry.hall}</p>
                                         <p className="text-[11px] text-slate-500">{entry.instructor}</p>
+                                          {showRiskHighlights && (
+                                            <div className="mt-1 flex flex-wrap gap-1">
+                                              {riskInsights.hallConflicts.has(`${timelineRow.slot}::${day}::${entry.hall}`) && (
+                                                <span className="rounded bg-rose-200 px-1.5 py-0.5 text-[10px] font-semibold text-rose-800">Hall conflict</span>
+                                              )}
+                                              {riskInsights.instructorConflicts.has(`${timelineRow.slot}::${day}::${entry.instructor}`) && (
+                                                <span className="rounded bg-rose-200 px-1.5 py-0.5 text-[10px] font-semibold text-rose-800">Instructor conflict</span>
+                                              )}
+                                            </div>
+                                          )}
                                       </div>
                                     ))}
                                   </div>
