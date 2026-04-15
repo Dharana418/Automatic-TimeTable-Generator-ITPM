@@ -67,6 +67,18 @@ const Icon = {
       <polyline points="20 6 9 17 4 12"/>
     </svg>
   ),
+  alert: (c='currentColor') => (
+    <svg viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:20,height:20}}>
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+      <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
+  ),
+  refresh: (c='currentColor') => (
+    <svg viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:18,height:18}}>
+      <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+      <path d="M3.51 9a9 9 0 0 1 14.13-3.36L23 10M1 14l5.36 4.36A9 9 0 0 0 20.49 15"/>
+    </svg>
+  ),
 };
 
 /* ── Sparkline SVG ─────────────────────────────────────────────── */
@@ -218,6 +230,9 @@ const FacultyCoordinatorDashboard = ({ user }) => {
   const navigate = useNavigate();
 
   const [resources, setResources] = useState([]);
+  const [modulesCatalog, setModulesCatalog] = useState([]);
+  const [batchesCatalog, setBatchesCatalog] = useState([]);
+  const [lastWorkspaceSync, setLastWorkspaceSync] = useState(null);
   const [savedTimetables, setSavedTimetables] = useState([]);
   const [conflicts, setConflicts] = useState([]);
   const [loadingTimetables, setLoadingTimetables] = useState(false);
@@ -240,14 +255,19 @@ const FacultyCoordinatorDashboard = ({ user }) => {
         setLoadingResources(true);
         setLoadingTimetables(true);
         setLoadingConflicts(true);
-        const [resourceResponse, timetableResponse, conflictResponse] = await Promise.all([
+        const [resourceResponse, timetableResponse, conflictResponse, moduleResponse, batchResponse] = await Promise.all([
           api.getLicsWithInstructors(),
           api.getAcademicCoordinatorTimetables().catch(() => ({ data: [] })),
           getSchedulingConflicts(false).catch(() => ({ data: [] })),
+          api.listItems('modules').catch(() => ({ items: [] })),
+          api.listItems('batches').catch(() => ({ items: [] })),
         ]);
         if (mounted && resourceResponse?.items) setResources(resourceResponse.items);
         if (mounted) setSavedTimetables(Array.isArray(timetableResponse?.data) ? timetableResponse.data : []);
         if (mounted) setConflicts(Array.isArray(conflictResponse?.data) ? conflictResponse.data : []);
+        if (mounted) setModulesCatalog(Array.isArray(moduleResponse?.items) ? moduleResponse.items : []);
+        if (mounted) setBatchesCatalog(Array.isArray(batchResponse?.items) ? batchResponse.items : []);
+        if (mounted) setLastWorkspaceSync(new Date());
       } catch (err) {
         console.error('Resource load failed', err);
       } finally {
@@ -269,6 +289,79 @@ const FacultyCoordinatorDashboard = ({ user }) => {
     () => resources.reduce((s, l) => s + (l.instructors?.length || 0), 0),
     [resources],
   );
+
+  const specializationCoverage = useMemo(() => {
+    const bag = new Set();
+    batchesCatalog.forEach((batch) => {
+      const tag = String(batch?.specialization || batch?.department || batch?.stream || '').trim().toUpperCase();
+      if (tag) bag.add(tag);
+    });
+    return bag;
+  }, [batchesCatalog]);
+
+  const conflictPressureScore = useMemo(() => {
+    const unresolved = conflicts.length;
+    const rawScore = unresolved * 18 + Math.max(0, 4 - specializationCoverage.size) * 12;
+    return Math.min(100, rawScore);
+  }, [conflicts.length, specializationCoverage.size]);
+
+  const operationsHealth = useMemo(() => {
+    const hasResources = resources.length > 0;
+    const hasModules = modulesCatalog.length > 0;
+    const hasBatches = batchesCatalog.length > 0;
+    const healthySignals = [hasResources, hasModules, hasBatches, conflicts.length < 3].filter(Boolean).length;
+    return Math.round((healthySignals / 4) * 100);
+  }, [resources.length, modulesCatalog.length, batchesCatalog.length, conflicts.length]);
+
+  const coordinatorRecommendations = useMemo(() => {
+    const items = [];
+
+    if (conflicts.length >= 3) {
+      items.push({
+        id: 'high-conflicts',
+        tone: '#b91c1c',
+        title: 'Conflict load is high',
+        detail: `${conflicts.length} unresolved conflicts detected. Prioritize conflict queue triage before next generation run.`,
+        cta: 'Open Conflicts',
+        onClick: () => document.getElementById('fcConflicts')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      });
+    }
+
+    if (specializationCoverage.size < 3) {
+      items.push({
+        id: 'coverage-gap',
+        tone: '#b45309',
+        title: 'Specialization coverage gap',
+        detail: `Only ${specializationCoverage.size || 0} specializations found in batches. Validate batch setup to avoid generation blind spots.`,
+        cta: 'Open Batches',
+        onClick: () => navigate('/faculty/batches'),
+      });
+    }
+
+    if (savedTimetables.length === 0) {
+      items.push({
+        id: 'no-archives',
+        tone: '#1d4ed8',
+        title: 'No timetable baseline found',
+        detail: 'Create at least one timetable archive for rollback and comparative quality checks.',
+        cta: 'Open Scheduler',
+        onClick: () => navigate('/scheduler/by-year'),
+      });
+    }
+
+    if (items.length === 0) {
+      items.push({
+        id: 'healthy',
+        tone: '#15803d',
+        title: 'Workspace looks healthy',
+        detail: 'Operations are balanced. Continue with optimization cycles and keep constraints updated.',
+        cta: 'Tune Constraints',
+        onClick: () => document.getElementById('fcSoftConstraints')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      });
+    }
+
+    return items;
+  }, [conflicts.length, specializationCoverage.size, savedTimetables.length, navigate]);
 
   const syncHealth = resources.length > 0 ? 'Synced' : 'Pending';
 
