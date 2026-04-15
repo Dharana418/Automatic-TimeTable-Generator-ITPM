@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import TimetableGenerationByYearSemester from '../components/TimetableGenerationByYearSemester.jsx';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 import facultyDashboardBg from '../assets/Gemini_Generated_Image_hqfdrqhqfdrqhqfd.png';
+import { useNavigate } from 'react-router-dom';
 
 const stats = [
   { label: 'Academic Years', value: 'Y1 - Y4', note: 'Scheduling scope', icon: 'calendar', color: 'sky' },
@@ -37,6 +38,7 @@ const Icons = {
 
 const FacultyCoordinatorSchedulerPage = ({ user }) => {
   const [expandedStat, setExpandedStat] = useState(null);
+  const navigate = useNavigate();
 
   const colorMaps = {
     sky: { bg: 'from-sky-50 to-blue-50', border: 'border-sky-200', icon: 'text-sky-600', badge: 'bg-sky-100 text-sky-700' },
@@ -53,10 +55,25 @@ const FacultyCoordinatorSchedulerPage = ({ user }) => {
       badge="Timetable Planning"
       backgroundImage={facultyDashboardBg}
       footerNote="Faculty Coordinator advanced scheduling workspace"
+      sidebarSections={[
+        { id: 'schedulerHero', label: 'Overview' },
+        { id: 'schedulerStats', label: 'Statistics' },
+        { id: 'schedulerCapabilities', label: 'Capabilities' },
+        { id: 'schedulerGenerator', label: 'Generator' },
+      ]}
+      headerActions={
+        <button
+          type="button"
+          onClick={() => navigate('/faculty/timetable-report')}
+          className="rounded-xl border border-sky-300/70 bg-sky-50 px-3 py-2 text-xs font-bold uppercase tracking-[0.08em] text-sky-700 transition hover:bg-sky-100"
+        >
+          Timetable Report
+        </button>
+      }
     >
       <div className="flex flex-col gap-8">
         {/* HERO SECTION */}
-        <section className="relative overflow-hidden rounded-3xl border border-slate-200/60 bg-gradient-to-br from-slate-50 via-white to-blue-50/40 p-8 text-slate-900 shadow-lg md:p-12">
+        <section id="schedulerHero" className="relative overflow-hidden rounded-3xl border border-slate-200/60 bg-gradient-to-br from-slate-50 via-white to-blue-50/40 p-8 text-slate-900 shadow-lg md:p-12">
           <div className="absolute top-0 right-0 h-40 w-40 rounded-full bg-gradient-to-br from-sky-200/20 to-cyan-200/20 blur-3xl" />
           <div className="relative z-10 flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
@@ -99,7 +116,7 @@ const FacultyCoordinatorSchedulerPage = ({ user }) => {
         </section>
 
         {/* ADVANCED STATS SECTION */}
-        <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <section id="schedulerStats" className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((item, index) => {
             const colors = colorMaps[item.color];
             return (
@@ -125,7 +142,7 @@ const FacultyCoordinatorSchedulerPage = ({ user }) => {
         </section>
 
         {/* CAPABILITIES SHOWCASE */}
-        <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <section id="schedulerCapabilities" className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {capabilities.map((cap, idx) => (
             <div key={idx} className="group rounded-2xl border border-slate-200 bg-white p-6 shadow-md transition-all duration-300 hover:shadow-lg hover:border-sky-300">
               <div className="flex items-start justify-between">
@@ -142,7 +159,7 @@ const FacultyCoordinatorSchedulerPage = ({ user }) => {
         </section>
 
         {/* MAIN GENERATION SECTION */}
-        <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.5fr_0.9fr]">
+        <section id="schedulerGenerator" className="grid grid-cols-1 gap-6 xl:grid-cols-[1.5fr_0.9fr]">
           <div className="overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50/50 shadow-lg">
             <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50/40 p-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
