@@ -563,7 +563,8 @@ const TimetableGenerationByYearSemester = () => {
 
   const handleSemesterChange = (semester) => {
     setSelectedSemester(semester);
-    setSelectedBatchMode('');
+    const autoMode = semester === '1' ? 'WD' : semester === '2' ? 'WE' : '';
+    setSelectedBatchMode(autoMode);
     setSelectedGroup('');
     setSelectedSubGroup('');
     setSelectedBatch('');
