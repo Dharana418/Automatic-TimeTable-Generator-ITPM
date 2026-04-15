@@ -333,7 +333,19 @@ const TimetableGenerationByYearSemester = () => {
         specialization: inferSpecializationFromModule(m),
       }));
 
-      const limitedModules = mapped.slice(0, MODULE_LIMIT_PER_SPECIALIZATION);
+      const filteredByMode = mapped.filter((module) => {
+        if (!selectedBatchMode) return true;
+        const details = parseJsonSafe(module.details, {});
+        const dayType = String(module.day_type || details.day_type || 'weekday').trim().toLowerCase();
+
+        if (selectedBatchMode === 'WE') {
+          return ['weekend', 'any', 'both'].includes(dayType);
+        }
+
+        return ['weekday', 'any', 'both', ''].includes(dayType);
+      });
+
+      const limitedModules = filteredByMode.slice(0, MODULE_LIMIT_PER_SPECIALIZATION);
       setModules(limitedModules);
       const message = `${limitedModules.length} modules has been fetched successfully`;
       setSuccess(message);
@@ -343,7 +355,7 @@ const TimetableGenerationByYearSemester = () => {
     } finally {
       setLoadingModules(false);
     }
-  }, [selectedYear, selectedSemester, selectedSpecialization]);
+  }, [selectedYear, selectedSemester, selectedSpecialization, selectedBatchMode]);
 
   const fetchSpecializationModuleCounts = useCallback(async () => {
     if (!selectedYear || !selectedSemester || !selectedSpecialization) {
@@ -814,7 +826,7 @@ const TimetableGenerationByYearSemester = () => {
                 <GraduationCap size={16} className="inline mr-2" /> Batch
               </label>
               <div className="rounded-xl border-2 border-teal-200 bg-gradient-to-br from-teal-50 to-cyan-50 px-4 py-3 font-semibold text-slate-900 shadow-md">
-                {selectedYear && selectedSemester && selectedSpecialization && selectedGroup && selectedSubGroup
+                {selectedYear && selectedSemester && selectedBatchMode && selectedSpecialization && selectedGroup && selectedSubGroup
                   ? selectedBatch || resolvedBatchId || 'Batch will be generated automatically'
                   : 'Select year, semester, batch type, specialization, group, and subgroup to auto-generate the batch'}
               </div>
