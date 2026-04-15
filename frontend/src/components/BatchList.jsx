@@ -35,6 +35,18 @@ const SPECIALIZATION_CHIP_STYLE = 'border-slate-300 bg-white text-slate-700';
 const YEAR_OPTIONS = ['1', '2', '3', '4'];
 const SEMESTER_OPTIONS = ['1', '2'];
 const MODE_ORDER = { WD: 0, WE: 1 };
+const FILTER_ALL = 'ALL';
+
+const SORT_OPTIONS = [
+  { value: 'id_asc', label: 'Batch ID (A-Z)' },
+  { value: 'id_desc', label: 'Batch ID (Z-A)' },
+  { value: 'capacity_desc', label: 'Capacity (High-Low)' },
+  { value: 'capacity_asc', label: 'Capacity (Low-High)' },
+  { value: 'group_asc', label: 'Group/Subgroup (Low-High)' },
+  { value: 'group_desc', label: 'Group/Subgroup (High-Low)' },
+];
+
+const PAGE_SIZE_OPTIONS = [10, 20, 30, 50];
 
 const toUpper = (value = '') => String(value).trim().toUpperCase();
 const SUBGROUP_INPUT_PATTERN = /^(0?[1-2])?$/;
@@ -220,6 +232,15 @@ export default function BatchList({ initialQuery = '' }) {
   const [editingId, setEditingId] = useState('');
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [form, setForm] = useState(formDefaults);
+  const [filters, setFilters] = useState({
+    specialization: FILTER_ALL,
+    year: FILTER_ALL,
+    semester: FILTER_ALL,
+    mode: FILTER_ALL,
+  });
+  const [sortBy, setSortBy] = useState('id_asc');
+  const [pageSize, setPageSize] = useState(20);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const loadBatches = async () => {
     try {
@@ -241,15 +262,80 @@ export default function BatchList({ initialQuery = '' }) {
     loadBatches();
   }, []);
 
-  const list = useMemo(() => {
+  const filteredList = useMemo(() => {
     const q = query.trim().toLowerCase();
+
     return [...batches]
       .filter((batch) => {
-        if (!q) return true;
-        return (`${batch.id} ${batch.specialization} Y${batch.year} S${batch.semester} ${batch.mode}`).toLowerCase().includes(q);
+        const matchesQuery =
+          !q || (`${batch.id} ${batch.specialization} Y${batch.year} S${batch.semester} ${batch.mode}`).toLowerCase().includes(q);
+        const matchesSpecialization =
+          filters.specialization === FILTER_ALL || normalizeSpecialization(batch.specialization) === filters.specialization;
+        const matchesYear = filters.year === FILTER_ALL || String(batch.year) === String(filters.year);
+        const matchesSemester = filters.semester === FILTER_ALL || String(batch.semester) === String(filters.semester);
+        const matchesMode = filters.mode === FILTER_ALL || String(batch.mode || '').toUpperCase() === filters.mode;
+
+        return matchesQuery && matchesSpecialization && matchesYear && matchesSemester && matchesMode;
       })
-      .sort((a, b) => compareBatchIds(a.id, b.id));
-  }, [batches, query]);
+      .sort((a, b) => {
+        if (sortBy === 'id_desc') return compareBatchIds(b.id, a.id);
+        if (sortBy === 'capacity_desc') return Number(b.capacity || 0) - Number(a.capacity || 0);
+        if (sortBy === 'capacity_asc') return Number(a.capacity || 0) - Number(b.capacity || 0);
+        if (sortBy === 'group_desc') {
+          const groupCompare = Number(b.group || 0) - Number(a.group || 0);
+          if (groupCompare !== 0) return groupCompare;
+          return Number(b.subgroup || 0) - Number(a.subgroup || 0);
+        }
+        if (sortBy === 'group_asc') {
+          const groupCompare = Number(a.group || 0) - Number(b.group || 0);
+          if (groupCompare !== 0) return groupCompare;
+          return Number(a.subgroup || 0) - Number(b.subgroup || 0);
+        }
+        return compareBatchIds(a.id, b.id);
+      });
+  }, [batches, query, filters, sortBy]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [query, filters, sortBy, pageSize]);
+
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(filteredList.length / pageSize)),
+    [filteredList.length, pageSize],
+  );
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginatedList = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredList.slice(start, start + pageSize);
+  }, [filteredList, currentPage, pageSize]);
+
+  const listMetrics = useMemo(() => {
+    const totalStudents = filteredList.reduce((sum, batch) => sum + Number(batch.capacity || 0), 0);
+    const weekdayBatches = filteredList.filter((batch) => String(batch.mode || '').toUpperCase() === 'WD').length;
+    const weekendBatches = filteredList.filter((batch) => String(batch.mode || '').toUpperCase() === 'WE').length;
+
+    const uniqueGroups = new Set(
+      filteredList.map((batch) => {
+        const [yearToken = '', semesterToken = '', modeToken = '', specializationToken = '', groupToken = ''] = String(batch.id)
+          .split('.')
+          .slice(0, 5);
+        return [yearToken, semesterToken, modeToken, specializationToken, groupToken].join('.');
+      }),
+    );
+
+    return {
+      totalStudents,
+      weekdayBatches,
+      weekendBatches,
+      totalGroups: uniqueGroups.size,
+    };
+  }, [filteredList]);
 
   const specializationCounts = useMemo(() => {
     return batches.reduce((acc, batch) => {
@@ -494,7 +580,26 @@ export default function BatchList({ initialQuery = '' }) {
             <p className="mt-1 text-sm text-slate-600">Manage only the required fields: Batch ID, specialization, year, and semester.</p>
           </div>
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
-            {list.length} batches
+            {filteredList.length} / {batches.length} visible
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Students</p>
+            <p className="mt-1 text-base font-bold text-slate-900">{listMetrics.totalStudents}</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Groups</p>
+            <p className="mt-1 text-base font-bold text-slate-900">{listMetrics.totalGroups}</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Weekday</p>
+            <p className="mt-1 text-base font-bold text-slate-900">{listMetrics.weekdayBatches}</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Weekend</p>
+            <p className="mt-1 text-base font-bold text-slate-900">{listMetrics.weekendBatches}</p>
           </div>
         </div>
 
@@ -652,69 +757,191 @@ export default function BatchList({ initialQuery = '' }) {
       )}
 
       <div className="border-b border-slate-200 p-6">
-        <input
-          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-all placeholder:text-slate-500 focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
-          placeholder="Search by Batch ID, specialization, year, or semester"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <input
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-all placeholder:text-slate-500 focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+            placeholder="Search by Batch ID, specialization, year, or semester"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+
+          <select
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+            value={filters.specialization}
+            onChange={(e) => setFilters((prev) => ({ ...prev, specialization: e.target.value }))}
+          >
+            <option value={FILTER_ALL}>All Specializations</option>
+            {SPECIALIZATIONS.map((specialization) => (
+              <option key={specialization.key} value={specialization.key}>{specialization.label}</option>
+            ))}
+          </select>
+
+          <select
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+            value={filters.year}
+            onChange={(e) => setFilters((prev) => ({ ...prev, year: e.target.value }))}
+          >
+            <option value={FILTER_ALL}>All Years</option>
+            {YEAR_OPTIONS.map((year) => (
+              <option key={year} value={year}>Year {year}</option>
+            ))}
+          </select>
+
+          <select
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+            value={filters.semester}
+            onChange={(e) => setFilters((prev) => ({ ...prev, semester: e.target.value }))}
+          >
+            <option value={FILTER_ALL}>All Semesters</option>
+            {SEMESTER_OPTIONS.map((semester) => (
+              <option key={semester} value={semester}>Semester {semester}</option>
+            ))}
+          </select>
+
+          <select
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+            value={filters.mode}
+            onChange={(e) => setFilters((prev) => ({ ...prev, mode: e.target.value }))}
+          >
+            <option value={FILTER_ALL}>All Modes</option>
+            <option value="WD">Weekday (WD)</option>
+            <option value="WE">Weekend (WE)</option>
+          </select>
+
+          <select
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-all focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+          >
+            {SORT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="text-xs font-semibold text-slate-600">
+            Showing {paginatedList.length} of {filteredList.length} filtered batches
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-xs font-semibold text-slate-600" htmlFor="batch-page-size">Rows</label>
+            <select
+              id="batch-page-size"
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700"
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={() => {
+                setQuery('');
+                setSortBy('id_asc');
+                setFilters({
+                  specialization: FILTER_ALL,
+                  year: FILTER_ALL,
+                  semester: FILTER_ALL,
+                  mode: FILTER_ALL,
+                });
+              }}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+            >
+              Reset Filters
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div className="overflow-x-auto border-b border-slate-200">
-        <table className="w-full min-w-[900px] border-collapse">
-          <thead className="sticky top-0 z-10 bg-slate-900 text-white">
+      <div className="border-b border-slate-200 bg-slate-100/70 p-3">
+        <div className="overflow-x-auto rounded-2xl border-2 border-slate-300 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.08)]">
+          <table className="w-full min-w-[980px] border-collapse">
+            <thead className="sticky top-0 z-10 bg-slate-900 text-white">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Batch ID</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Specialization</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Year</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Semester</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Mode</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Group</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Subgroup</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Capacity</th>
+              <th className="border-r border-slate-700 px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Batch ID</th>
+              <th className="border-r border-slate-700 px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Specialization</th>
+              <th className="border-r border-slate-700 px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Year</th>
+              <th className="border-r border-slate-700 px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Semester</th>
+              <th className="border-r border-slate-700 px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Mode</th>
+              <th className="border-r border-slate-700 px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Group</th>
+              <th className="border-r border-slate-700 px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Subgroup</th>
+              <th className="border-r border-slate-700 px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Capacity</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em]">Actions</th>
             </tr>
-          </thead>
-          <tbody>
-            {list.map((batch, idx) => (
-              <tr key={batch.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                <td className="px-4 py-4 font-mono text-sm font-semibold text-slate-900">{batch.id}</td>
-                <td className="px-4 py-4 text-sm text-slate-700">{batch.specialization}</td>
-                <td className="px-4 py-4 text-sm text-slate-700">Y{batch.year}</td>
-                <td className="px-4 py-4 text-sm text-slate-700">S{batch.semester}</td>
-                <td className="px-4 py-4 text-sm text-slate-700">{batch.mode || '--'}</td>
-                <td className="px-4 py-4 text-sm text-slate-700">{batch.group || '--'}</td>
-                <td className="px-4 py-4 text-sm text-slate-700">{batch.subgroup || '--'}</td>
-                <td className="px-4 py-4 text-sm text-slate-700">{batch.capacity || '--'}</td>
-                <td className="px-4 py-4">
+            </thead>
+            <tbody>
+              {paginatedList.map((batch, idx) => (
+                <tr
+                  key={batch.id}
+                  className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} transition-colors hover:bg-sky-50`}
+                >
+                  <td className="border-r border-t border-slate-200 px-4 py-4 font-mono text-sm font-semibold text-slate-900">{batch.id}</td>
+                  <td className="border-r border-t border-slate-200 px-4 py-4 text-sm text-slate-700">{batch.specialization}</td>
+                  <td className="border-r border-t border-slate-200 px-4 py-4 text-sm text-slate-700">Y{batch.year}</td>
+                  <td className="border-r border-t border-slate-200 px-4 py-4 text-sm text-slate-700">S{batch.semester}</td>
+                  <td className="border-r border-t border-slate-200 px-4 py-4 text-sm text-slate-700">{batch.mode || '--'}</td>
+                  <td className="border-r border-t border-slate-200 px-4 py-4 text-sm text-slate-700">{batch.group || '--'}</td>
+                  <td className="border-r border-t border-slate-200 px-4 py-4 text-sm text-slate-700">{batch.subgroup || '--'}</td>
+                  <td className="border-r border-t border-slate-200 px-4 py-4 text-sm text-slate-700">{batch.capacity || '--'}</td>
+                  <td className="border-t border-slate-200 px-4 py-4">
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={() => handleEdit(batch)}
-                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                      className="rounded-lg border border-slate-800 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-100 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-900"
                     >
-                      Edit
+                      Update
                     </button>
                     <button
                       type="button"
                       onClick={() => handleDelete(batch.id)}
-                      className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
+                      className="rounded-lg border border-red-900 bg-red-900 px-3 py-1.5 text-xs font-semibold text-red-50 shadow-sm transition hover:-translate-y-0.5 hover:border-red-950 hover:bg-red-950"
                     >
                       Delete
                     </button>
                   </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
-        {list.length === 0 && (
-          <div className="border-t border-slate-200 bg-white px-6 py-8 text-center">
+        {filteredList.length === 0 && (
+          <div className="mt-3 rounded-xl border border-slate-200 bg-white px-6 py-8 text-center">
             <p className="text-sm text-slate-500">No batches match your current search.</p>
           </div>
         )}
       </div>
+
+      {filteredList.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 p-4">
+          <p className="text-xs font-semibold text-slate-600">
+            Page {currentPage} of {totalPages}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {isEditDialogOpen && typeof document !== 'undefined' && createPortal((
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
@@ -808,7 +1035,7 @@ export default function BatchList({ initialQuery = '' }) {
                 <button
                   type="submit"
                   disabled={savePending}
-                  className="inline-flex min-h-10 items-center justify-center rounded-xl border border-blue-700 bg-gradient-to-r from-blue-700 to-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:from-blue-800 hover:to-blue-700 hover:shadow disabled:opacity-60"
+                  className="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-900 bg-gradient-to-r from-slate-900 to-slate-800 px-5 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:from-black hover:to-slate-900 hover:shadow disabled:opacity-60"
                 >
                   {savePending ? 'Saving...' : 'Update Batch'}
                 </button>

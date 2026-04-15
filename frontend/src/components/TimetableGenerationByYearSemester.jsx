@@ -148,11 +148,11 @@ const parseBatchSelectionId = (batchId = '') => {
   };
 };
 
-const buildBatchIdFromSelection = (year, semester, specialization, group, subgroup) => {
+const buildBatchIdFromSelection = (year, semester, mode, specialization, group, subgroup) => {
   const yearToken = normalizeYearToken(year);
   const semesterToken = String(semester || '').trim();
+  const modeToken = String(mode || '').trim().toUpperCase();
   const specializationToken = normalizeSpecialization(specialization);
-  const modeToken = semesterToken === '1' ? 'WD' : semesterToken === '2' ? 'WE' : '';
   const groupToken = String(group || '').trim().padStart(2, '0');
   const subgroupToken = String(subgroup || '').trim().padStart(2, '0');
 
@@ -263,6 +263,7 @@ const TimetableGenerationByYearSemester = () => {
   const [selectedGroup, setSelectedGroup] = useState('');
   const [subGroups, setSubGroups] = useState([]);
   const [selectedSubGroup, setSelectedSubGroup] = useState('');
+  const [selectedBatchMode, setSelectedBatchMode] = useState('');
   const [batches, setBatches] = useState([]);
   const [selectedBatch, setSelectedBatch] = useState('');
 
@@ -281,7 +282,7 @@ const TimetableGenerationByYearSemester = () => {
   const [success, setSuccess] = useState(null);
 
   const matchingBatches = useMemo(() => {
-    if (!selectedYear || !selectedSemester || !selectedSpecialization) {
+    if (!selectedYear || !selectedSemester || !selectedBatchMode || !selectedSpecialization) {
       return [];
     }
 
@@ -294,14 +295,15 @@ const TimetableGenerationByYearSemester = () => {
       if (!identity) return false;
       if (yearToken && identity.year !== yearToken) return false;
       if (semesterToken && identity.semester !== semesterToken) return false;
+      if (selectedBatchMode && identity.mode !== selectedBatchMode) return false;
       if (specializationToken && identity.specialization !== specializationToken) return false;
       return true;
     });
-  }, [batches, selectedYear, selectedSemester, selectedSpecialization]);
+  }, [batches, selectedYear, selectedSemester, selectedBatchMode, selectedSpecialization]);
 
   const resolvedBatchId = useMemo(
-    () => buildBatchIdFromSelection(selectedYear, selectedSemester, selectedSpecialization, selectedGroup, selectedSubGroup),
-    [selectedYear, selectedSemester, selectedSpecialization, selectedGroup, selectedSubGroup]
+    () => buildBatchIdFromSelection(selectedYear, selectedSemester, selectedBatchMode, selectedSpecialization, selectedGroup, selectedSubGroup),
+    [selectedYear, selectedSemester, selectedBatchMode, selectedSpecialization, selectedGroup, selectedSubGroup]
   );
 
   /* ---------------- FETCH ---------------- */
@@ -331,7 +333,19 @@ const TimetableGenerationByYearSemester = () => {
         specialization: inferSpecializationFromModule(m),
       }));
 
-      const limitedModules = mapped.slice(0, MODULE_LIMIT_PER_SPECIALIZATION);
+      const filteredByMode = mapped.filter((module) => {
+        if (!selectedBatchMode) return true;
+        const details = parseJsonSafe(module.details, {});
+        const dayType = String(module.day_type || details.day_type || 'weekday').trim().toLowerCase();
+
+        if (selectedBatchMode === 'WE') {
+          return ['weekend', 'any', 'both'].includes(dayType);
+        }
+
+        return ['weekday', 'any', 'both', ''].includes(dayType);
+      });
+
+      const limitedModules = filteredByMode.slice(0, MODULE_LIMIT_PER_SPECIALIZATION);
       setModules(limitedModules);
       const message = `${limitedModules.length} modules has been fetched successfully`;
       setSuccess(message);
@@ -341,7 +355,7 @@ const TimetableGenerationByYearSemester = () => {
     } finally {
       setLoadingModules(false);
     }
-  }, [selectedYear, selectedSemester, selectedSpecialization]);
+  }, [selectedYear, selectedSemester, selectedSpecialization, selectedBatchMode]);
 
   const fetchSpecializationModuleCounts = useCallback(async () => {
     if (!selectedYear || !selectedSemester || !selectedSpecialization) {
@@ -394,12 +408,13 @@ const TimetableGenerationByYearSemester = () => {
       selectedSemester,
       {
         specialization: selectedSpecialization || null,
+        mode: selectedBatchMode || null,
         group: selectedGroup || null,
         subgroup: selectedSubGroup || null,
       }
     );
     setExistingTimetables(res.data || []);
-  }, [selectedYear, selectedSemester, selectedSpecialization, selectedGroup, selectedSubGroup]);
+  }, [selectedYear, selectedSemester, selectedSpecialization, selectedBatchMode, selectedGroup, selectedSubGroup]);
 
   const fetchBatches = useCallback(async () => {
     try {
@@ -501,7 +516,7 @@ const TimetableGenerationByYearSemester = () => {
       return;
     }
 
-    if (selectedYear && selectedSemester && selectedSpecialization && selectedGroup && selectedSubGroup) {
+    if (selectedYear && selectedSemester && selectedBatchMode && selectedSpecialization && selectedGroup && selectedSubGroup) {
       const nextBatchId = matchingBatches.find((batch) => {
         const identity = parseBatchSelectionId(batch.id || batch.name || '');
         return identity && identity.group === selectedGroup && identity.subgroup === selectedSubGroup;
@@ -518,6 +533,7 @@ const TimetableGenerationByYearSemester = () => {
     resolvedBatchId,
     selectedBatch,
     selectedGroup,
+    selectedBatchMode,
     selectedSemester,
     selectedSpecialization,
     selectedSubGroup,
@@ -539,6 +555,7 @@ const TimetableGenerationByYearSemester = () => {
 
   const handleYearChange = (year) => {
     setSelectedYear(year);
+    setSelectedBatchMode('');
     setSelectedGroup('');
     setSelectedSubGroup('');
     setSelectedBatch('');
@@ -546,6 +563,14 @@ const TimetableGenerationByYearSemester = () => {
 
   const handleSemesterChange = (semester) => {
     setSelectedSemester(semester);
+    setSelectedBatchMode('');
+    setSelectedGroup('');
+    setSelectedSubGroup('');
+    setSelectedBatch('');
+  };
+
+  const handleBatchModeChange = (mode) => {
+    setSelectedBatchMode(mode);
     setSelectedGroup('');
     setSelectedSubGroup('');
     setSelectedBatch('');
@@ -576,7 +601,7 @@ const TimetableGenerationByYearSemester = () => {
       selectedSubGroup
     );
 
-    if (!selectedYear || !selectedSemester || !selectedSpecialization || !selectedGroup || !selectedSubGroup || !batchId) {
+    if (!selectedYear || !selectedSemester || !selectedBatchMode || !selectedSpecialization || !selectedGroup || !selectedSubGroup || !batchId) {
       setError('Fill all required fields');
       return;
     }
@@ -591,6 +616,7 @@ const TimetableGenerationByYearSemester = () => {
           algorithms,
           timetableName: resolvedTimetableName,
           weekdayFreeDay,
+          batchMode: selectedBatchMode,
           specialization: selectedSpecialization,
           group: selectedGroup,
           subgroup: selectedSubGroup,
@@ -686,6 +712,25 @@ const TimetableGenerationByYearSemester = () => {
               </select>
             </div>
 
+            {/* BATCH TYPE SELECT */}
+            <div className="w-full">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">
+                <Layers size={16} className="inline mr-2" /> Batch Type
+              </label>
+              <select
+                value={selectedBatchMode}
+                onChange={(e) => handleBatchModeChange(e.target.value)}
+                disabled={!selectedYear || !selectedSemester}
+                className="w-full rounded-xl border-2 border-fuchsia-200 bg-gradient-to-br from-fuchsia-50 to-pink-50 px-4 py-3 font-semibold text-slate-900 shadow-md transition-all duration-200 hover:border-fuchsia-300 hover:shadow-lg focus:border-fuchsia-500 focus:outline-none focus:ring-2 focus:ring-fuchsia-300/50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="">
+                  {!selectedYear || !selectedSemester ? 'Select Year and Semester First' : 'Select Batch Type'}
+                </option>
+                <option value="WD">Weekday (WD)</option>
+                <option value="WE">Weekend (WE)</option>
+              </select>
+            </div>
+
             {/* SPECIALIZATION SELECT */}
             <div className="w-full">
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">
@@ -721,12 +766,14 @@ const TimetableGenerationByYearSemester = () => {
               <select
                 value={selectedGroup}
                 onChange={(e) => handleGroupChange(e.target.value)}
-                disabled={!selectedYear || !selectedSemester || !selectedSpecialization || groups.length === 0}
+                disabled={!selectedYear || !selectedSemester || !selectedBatchMode || !selectedSpecialization || groups.length === 0}
                 className="w-full rounded-xl border-2 border-rose-200 bg-gradient-to-br from-rose-50 to-pink-50 px-4 py-3 font-semibold text-slate-900 shadow-md transition-all duration-200 hover:border-rose-300 hover:shadow-lg focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-300/50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="">
                   {!selectedYear || !selectedSemester
                     ? 'Select Year and Semester First'
+                    : !selectedBatchMode
+                      ? 'Select Batch Type First'
                     : !selectedSpecialization
                       ? 'Select Specialization First'
                       : groups.length === 0
@@ -749,12 +796,14 @@ const TimetableGenerationByYearSemester = () => {
               <select
                 value={selectedSubGroup}
                 onChange={(e) => setSelectedSubGroup(e.target.value)}
-                disabled={!selectedYear || !selectedSemester || !selectedSpecialization || !selectedGroup || subGroups.length === 0}
+                disabled={!selectedYear || !selectedSemester || !selectedBatchMode || !selectedSpecialization || !selectedGroup || subGroups.length === 0}
                 className="w-full rounded-xl border-2 border-cyan-200 bg-gradient-to-br from-cyan-50 to-blue-50 px-4 py-3 font-semibold text-slate-900 shadow-md transition-all duration-200 hover:border-cyan-300 hover:shadow-lg focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-300/50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="">
                   {!selectedYear || !selectedSemester
                     ? 'Select Year and Semester First'
+                    : !selectedBatchMode
+                      ? 'Select Batch Type First'
                     : !selectedSpecialization
                       ? 'Select Specialization First'
                       : !selectedGroup
@@ -777,9 +826,9 @@ const TimetableGenerationByYearSemester = () => {
                 <GraduationCap size={16} className="inline mr-2" /> Batch
               </label>
               <div className="rounded-xl border-2 border-teal-200 bg-gradient-to-br from-teal-50 to-cyan-50 px-4 py-3 font-semibold text-slate-900 shadow-md">
-                {selectedYear && selectedSemester && selectedSpecialization && selectedGroup && selectedSubGroup
+                {selectedYear && selectedSemester && selectedBatchMode && selectedSpecialization && selectedGroup && selectedSubGroup
                   ? selectedBatch || resolvedBatchId || 'Batch will be generated automatically'
-                  : 'Select year, semester, specialization, group, and subgroup to auto-generate the batch'}
+                  : 'Select year, semester, batch type, specialization, group, and subgroup to auto-generate the batch'}
               </div>
             </div>
 
@@ -830,10 +879,10 @@ const TimetableGenerationByYearSemester = () => {
           </div>
 
           {/* SELECTION SUMMARY */}
-          {(selectedYear || selectedSemester || selectedSpecialization || selectedGroup || selectedSubGroup) && (
+          {(selectedYear || selectedSemester || selectedBatchMode || selectedSpecialization || selectedGroup || selectedSubGroup) && (
             <div className="rounded-2xl border-2 border-blue-300 bg-gradient-to-r from-blue-50 to-indigo-50 p-5 mb-6">
               <h3 className="text-sm font-bold uppercase tracking-wider text-blue-900 mb-4">Your Selection</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
                 {selectedYear && (
                   <div className="rounded-lg bg-white/70 px-3 py-2 backdrop-blur-sm">
                     <p className="text-xs font-semibold text-slate-600">Year</p>
@@ -844,6 +893,12 @@ const TimetableGenerationByYearSemester = () => {
                   <div className="rounded-lg bg-white/70 px-3 py-2 backdrop-blur-sm">
                     <p className="text-xs font-semibold text-slate-600">Semester</p>
                     <p className="text-sm font-bold text-slate-900">Sem {selectedSemester}</p>
+                  </div>
+                )}
+                {selectedBatchMode && (
+                  <div className="rounded-lg bg-white/70 px-3 py-2 backdrop-blur-sm">
+                    <p className="text-xs font-semibold text-slate-600">Batch Type</p>
+                    <p className="text-sm font-bold text-slate-900">{selectedBatchMode === 'WD' ? 'Weekday' : 'Weekend'}</p>
                   </div>
                 )}
                 {selectedSpecialization && (
