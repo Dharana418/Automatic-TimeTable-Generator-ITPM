@@ -4,6 +4,17 @@ import api from '../api/scheduler.js';
 import { getSchedulingConflicts, resolveSchedulingConflict } from '../api/timetableGeneration.js';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 import facultyDashboardBg from '../assets/Gemini_Generated_Image_hqfdrqhqfdrqhqfd.png';
+import '../styles/enhanced-faculty-theme.css';
+import {
+  EnhancedStatCard,
+  TimetableUtilizationChart,
+  SchedulingConflictsChart,
+  ModuleDistributionChart,
+  ScheduleComplianceChart,
+  EnhancedTable,
+  AdvancedFilterPanel,
+} from '../components/EnhancedFacultyComponents.jsx';
+import { Users, Calendar, Book, Zap, TrendingUp, RefreshCw } from 'lucide-react';
 
 const dayOptions = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 

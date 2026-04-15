@@ -440,20 +440,22 @@ function getAllowedDays(module, options = {}) {
   const weekdayDays = WEEKDAYS.filter((day) => day !== weekdayFreeDay);
   const safeWeekdayDays = weekdayDays.length ? weekdayDays : [...WEEKDAYS];
 
+  // CONSTRAINT: Lectures and labs can ONLY be on weekdays (Mon-Fri)
+  // Only explicitly 'weekend' type modules get weekend slots
   if (dt === 'weekend') return WEEKEND;
-  if (dt === 'any' || dt === 'both') return [...safeWeekdayDays, ...WEEKEND];
+  // 'weekday', 'any', 'both' all follow weekday constraint
   return safeWeekdayDays;
 }
 
 function getAllowedSlotIndexes(module, allSlots = SLOTS) {
   const dt = String(module.day_type || module?.details?.day_type || 'weekday').toLowerCase();
 
+  // CONSTRAINT: Lectures and labs can ONLY be on weekdays (Mon-Fri)
+  // Only explicitly 'weekend' type modules get extended weekend slots
   const allowedLabels =
     dt === 'weekend'
       ? WEEKEND_SLOTS
-      : dt === 'any' || dt === 'both'
-        ? allSlots
-        : WEEKDAY_SLOTS;
+      : WEEKDAY_SLOTS; // 'weekday', 'any', 'both' all use weekday slots only
 
   const allowedSet = new Set();
   allSlots.forEach((label, idx) => {
