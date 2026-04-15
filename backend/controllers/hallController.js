@@ -437,11 +437,30 @@ export const getHallRecommendations = async (req, res) => {
 
       // Resource matching (max 60 points)
       const hallResources = hall.resources || [];
-      const hallResourceNames = hallResources.map(r => r.resource_type?.toLowerCase());
+      const hallResourceNames = hallResources
+        .flatMap((resource) => [resource?.resource_type, resource?.resource_name])
+        .map((value) => String(value || '').trim().toLowerCase())
+        .filter(Boolean);
+
+      let amenities = hall.features?.amenities;
+      if (typeof amenities === 'string') {
+        try {
+          amenities = JSON.parse(amenities);
+        } catch {
+          amenities = {};
+        }
+      }
+
+      const amenityKeys = Object.entries(amenities || {})
+        .filter(([, enabled]) => Boolean(enabled))
+        .map(([key]) => String(key || '').trim().toLowerCase())
+        .filter(Boolean);
+
+      const searchKeywords = new Set([...hallResourceNames, ...amenityKeys]);
 
       requiredResourcesList.forEach(resource => {
         const resourceLower = resource.toLowerCase();
-        if (hallResourceNames.includes(resourceLower)) {
+        if (searchKeywords.has(resourceLower)) {
           matchingResources.push(resource);
           score += 10;
         } else {
