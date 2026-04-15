@@ -148,11 +148,11 @@ const parseBatchSelectionId = (batchId = '') => {
   };
 };
 
-const buildBatchIdFromSelection = (year, semester, specialization, group, subgroup) => {
+const buildBatchIdFromSelection = (year, semester, mode, specialization, group, subgroup) => {
   const yearToken = normalizeYearToken(year);
   const semesterToken = String(semester || '').trim();
+  const modeToken = String(mode || '').trim().toUpperCase();
   const specializationToken = normalizeSpecialization(specialization);
-  const modeToken = semesterToken === '1' ? 'WD' : semesterToken === '2' ? 'WE' : '';
   const groupToken = String(group || '').trim().padStart(2, '0');
   const subgroupToken = String(subgroup || '').trim().padStart(2, '0');
 
@@ -263,6 +263,7 @@ const TimetableGenerationByYearSemester = () => {
   const [selectedGroup, setSelectedGroup] = useState('');
   const [subGroups, setSubGroups] = useState([]);
   const [selectedSubGroup, setSelectedSubGroup] = useState('');
+  const [selectedBatchMode, setSelectedBatchMode] = useState('');
   const [batches, setBatches] = useState([]);
   const [selectedBatch, setSelectedBatch] = useState('');
 
@@ -281,7 +282,7 @@ const TimetableGenerationByYearSemester = () => {
   const [success, setSuccess] = useState(null);
 
   const matchingBatches = useMemo(() => {
-    if (!selectedYear || !selectedSemester || !selectedSpecialization) {
+    if (!selectedYear || !selectedSemester || !selectedBatchMode || !selectedSpecialization) {
       return [];
     }
 
@@ -294,14 +295,15 @@ const TimetableGenerationByYearSemester = () => {
       if (!identity) return false;
       if (yearToken && identity.year !== yearToken) return false;
       if (semesterToken && identity.semester !== semesterToken) return false;
+      if (selectedBatchMode && identity.mode !== selectedBatchMode) return false;
       if (specializationToken && identity.specialization !== specializationToken) return false;
       return true;
     });
-  }, [batches, selectedYear, selectedSemester, selectedSpecialization]);
+  }, [batches, selectedYear, selectedSemester, selectedBatchMode, selectedSpecialization]);
 
   const resolvedBatchId = useMemo(
-    () => buildBatchIdFromSelection(selectedYear, selectedSemester, selectedSpecialization, selectedGroup, selectedSubGroup),
-    [selectedYear, selectedSemester, selectedSpecialization, selectedGroup, selectedSubGroup]
+    () => buildBatchIdFromSelection(selectedYear, selectedSemester, selectedBatchMode, selectedSpecialization, selectedGroup, selectedSubGroup),
+    [selectedYear, selectedSemester, selectedBatchMode, selectedSpecialization, selectedGroup, selectedSubGroup]
   );
 
   /* ---------------- FETCH ---------------- */
@@ -394,12 +396,13 @@ const TimetableGenerationByYearSemester = () => {
       selectedSemester,
       {
         specialization: selectedSpecialization || null,
+        mode: selectedBatchMode || null,
         group: selectedGroup || null,
         subgroup: selectedSubGroup || null,
       }
     );
     setExistingTimetables(res.data || []);
-  }, [selectedYear, selectedSemester, selectedSpecialization, selectedGroup, selectedSubGroup]);
+  }, [selectedYear, selectedSemester, selectedSpecialization, selectedBatchMode, selectedGroup, selectedSubGroup]);
 
   const fetchBatches = useCallback(async () => {
     try {
@@ -539,6 +542,7 @@ const TimetableGenerationByYearSemester = () => {
 
   const handleYearChange = (year) => {
     setSelectedYear(year);
+    setSelectedBatchMode('');
     setSelectedGroup('');
     setSelectedSubGroup('');
     setSelectedBatch('');
@@ -546,6 +550,14 @@ const TimetableGenerationByYearSemester = () => {
 
   const handleSemesterChange = (semester) => {
     setSelectedSemester(semester);
+    setSelectedBatchMode('');
+    setSelectedGroup('');
+    setSelectedSubGroup('');
+    setSelectedBatch('');
+  };
+
+  const handleBatchModeChange = (mode) => {
+    setSelectedBatchMode(mode);
     setSelectedGroup('');
     setSelectedSubGroup('');
     setSelectedBatch('');
@@ -576,7 +588,7 @@ const TimetableGenerationByYearSemester = () => {
       selectedSubGroup
     );
 
-    if (!selectedYear || !selectedSemester || !selectedSpecialization || !selectedGroup || !selectedSubGroup || !batchId) {
+    if (!selectedYear || !selectedSemester || !selectedBatchMode || !selectedSpecialization || !selectedGroup || !selectedSubGroup || !batchId) {
       setError('Fill all required fields');
       return;
     }
@@ -591,6 +603,7 @@ const TimetableGenerationByYearSemester = () => {
           algorithms,
           timetableName: resolvedTimetableName,
           weekdayFreeDay,
+          batchMode: selectedBatchMode,
           specialization: selectedSpecialization,
           group: selectedGroup,
           subgroup: selectedSubGroup,
