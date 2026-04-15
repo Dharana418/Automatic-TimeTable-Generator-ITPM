@@ -145,6 +145,48 @@ export const rejectTimetable = async (timetableId, comments = '') => {
 };
 
 /**
+ * Get scheduling conflicts with optional resolved filter
+ * @param {boolean|null} resolved - true for resolved, false for unresolved, null for all
+ * @returns {Promise<{data: Array}>}
+ */
+export const getSchedulingConflicts = async (resolved = null) => {
+  try {
+    const params = new URLSearchParams();
+    if (resolved === true || resolved === false) {
+      params.set('resolved', String(resolved));
+    }
+
+    const query = params.toString();
+    const response = await fetchFromAPI(`/api/academic-coordinator/conflicts${query ? `?${query}` : ''}`);
+    return {
+      data: Array.isArray(response?.data) ? response.data : [],
+    };
+  } catch (error) {
+    console.error('Error fetching scheduling conflicts:', error);
+    throw error;
+  }
+};
+
+/**
+ * Mark a scheduling conflict as resolved
+ * @param {number|string} conflictId - Conflict identifier
+ * @param {string} resolutionNotes - Optional resolution details
+ * @returns {Promise<object>}
+ */
+export const resolveSchedulingConflict = async (conflictId, resolutionNotes = '') => {
+  try {
+    const response = await fetchFromAPI(`/api/academic-coordinator/conflicts/${encodeURIComponent(conflictId)}/resolve`, {
+      method: 'PUT',
+      body: JSON.stringify({ resolution_notes: resolutionNotes || null }),
+    });
+    return response.data || response;
+  } catch (error) {
+    console.error(`Error resolving conflict ${conflictId}:`, error);
+    throw error;
+  }
+};
+
+/**
  * Format timetable data for display
  * @param {object} timetable - Timetable object
  * @returns {object} Formatted timetable
