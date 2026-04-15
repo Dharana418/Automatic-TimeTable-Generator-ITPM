@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { motion as Motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import api from '../api/scheduler.js';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 import backgroundImage from '../assets/room-interior-design.jpg';
@@ -49,6 +50,7 @@ const normalizeRoleKey = (value) => String(value || '').toLowerCase().replace(/[
 const FacultyAddedModulesPage = ({ user }) => {
   const roleKey = normalizeRoleKey(user?.role);
   const canManageModules = roleKey === 'academiccoordinator';
+  const navigate = useNavigate();
   const [modules, setModules] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -182,6 +184,20 @@ const FacultyAddedModulesPage = ({ user }) => {
       badge="Governance Control Center"
       backgroundImage={backgroundImage}
       footerNote={canManageModules ? 'Use Update for corrections and Delete for retired modules only.' : 'View-only mode: modules are managed by Academic Coordinator.'}
+      sidebarSections={[
+        { id: 'addedModulesSummary', label: 'Summary' },
+        { id: 'addedModulesFilters', label: 'Filters' },
+        { id: 'addedModulesTable', label: 'Registry Table' },
+      ]}
+      headerActions={
+        <button
+          type="button"
+          onClick={() => navigate(canManageModules ? '/academic/modules' : '/scheduler/by-year')}
+          className="rounded-xl border border-cyan-300/70 bg-cyan-50 px-3 py-2 text-xs font-bold uppercase tracking-[0.08em] text-cyan-700 transition hover:bg-cyan-100"
+        >
+          {canManageModules ? 'Academic Modules' : 'Open Scheduler'}
+        </button>
+      }
     >
       <style>{`
         .am-glass-card {
@@ -284,7 +300,7 @@ const FacultyAddedModulesPage = ({ user }) => {
       `}</style>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <section className="am-glass-card" style={{ padding: 24 }}>
+        <section id="addedModulesSummary" className="am-glass-card" style={{ padding: 24 }}>
           <p className="am-header">Governance Ledger</p>
           <h2 className="am-title">Added Modules Registry</h2>
           <p style={{ margin: 0, color: 'rgba(203,213,225,0.82)', fontSize: 13 }}>
@@ -292,7 +308,7 @@ const FacultyAddedModulesPage = ({ user }) => {
           </p>
         </section>
 
-        <section className="am-glass-card am-filters-grid" style={{ padding: 16 }}>
+        <section id="addedModulesFilters" className="am-glass-card am-filters-grid" style={{ padding: 16 }}>
           <input
             className="am-input"
             value={search}
@@ -342,7 +358,7 @@ const FacultyAddedModulesPage = ({ user }) => {
           </div>
         )}
 
-        <section className="am-table-shell">
+        <section id="addedModulesTable" className="am-table-shell">
           <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)', color: 'rgba(186,230,253,0.95)', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.12em' }}>
             {loading ? 'Loading modules' : `${filteredModules.length} modules shown`}
           </div>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../api/scheduler.js';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 
@@ -143,6 +143,7 @@ const ModuleCard = ({ m }) => {
 /* ── Main Component ─────────────────────────────────────────────── */
 const FacultyModulesPage = ({ user }) => {
   const displayName = user?.name || user?.username || 'Faculty Coordinator';
+  const navigate = useNavigate();
   const [modules, setModules] = useState([]);
   const [selectedDep, setSelectedDep] = useState('ALL');
   const [search, setSearch] = useState('');
@@ -197,6 +198,19 @@ const FacultyModulesPage = ({ user }) => {
       title="Department Module Control"
       subtitle="Filter, inspect, and monitor modules by department and instructional load"
       badge="Module Management"
+      sidebarSections={[
+        { id: 'moduleFilters', label: 'Filters' },
+        { id: 'moduleTable', label: 'Module Table' },
+      ]}
+      headerActions={
+        <button
+          type="button"
+          onClick={() => navigate('/faculty/modules/added')}
+          className="rounded-xl border border-indigo-300/70 bg-indigo-50 px-3 py-2 text-xs font-bold uppercase tracking-[0.08em] text-indigo-700 transition hover:bg-indigo-100"
+        >
+          Added Modules
+        </button>
+      }
     >
       <style>{`
         .fc-card-hover { transition: all 0.25s cubic-bezier(0.4,0,0.2,1); }
@@ -209,7 +223,7 @@ const FacultyModulesPage = ({ user }) => {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
 
         {/* ── Search & filter card ── */}
-        <section className="fc-section-card" style={{ padding: '28px', position: 'relative', overflow: 'hidden' }}>
+        <section id="moduleFilters" className="fc-section-card" style={{ padding: '28px', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: -60, right: -60, width: 220, height: 220, borderRadius: '50%', background: 'radial-gradient(circle, rgba(56,189,248,0.1) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
           <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#38bdf8' }}>Module Ledger</p>
@@ -374,7 +388,7 @@ const FacultyModulesPage = ({ user }) => {
               </p>
             </div>
 
-            <div className="fc-section-card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div id="moduleTable" className="fc-section-card" style={{ padding: 0, overflow: 'hidden' }}>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 920 }}>
                   <thead>

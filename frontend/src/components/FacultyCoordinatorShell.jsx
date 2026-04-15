@@ -78,6 +78,8 @@ export default function FacultyCoordinatorShell({
   backgroundImage = null,
   footerNote = 'Faculty coordinator workspace',
   themeVariant = 'dark',
+  headerActions = null,
+  sidebarSections = [],
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -85,6 +87,7 @@ export default function FacultyCoordinatorShell({
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [activeSectionId, setActiveSectionId] = useState('');
   const navItems = useMemo(() => getRoleNav(roleKey), [roleKey]);
   const workspaceLabel = useMemo(() => getRoleWorkspaceLabel(roleKey), [roleKey]);
 
@@ -106,8 +109,42 @@ export default function FacultyCoordinatorShell({
     };
   }, []);
 
+  useEffect(() => {
+    if (!Array.isArray(sidebarSections) || sidebarSections.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+
+        if (visible.length > 0) {
+          setActiveSectionId(visible[0].target.id);
+        }
+      },
+      { rootMargin: '-120px 0px -45% 0px', threshold: [0.15, 0.4, 0.7] },
+    );
+
+    const targets = sidebarSections
+      .map((section) => document.getElementById(section.id))
+      .filter(Boolean);
+
+    targets.forEach((target) => observer.observe(target));
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [sidebarSections, location.pathname]);
+
   const isLightTheme = themeVariant === 'light';
   const isAcademicTheme = themeVariant === 'academic';
+
+  const jumpToSection = (sectionId) => {
+    const target = document.getElementById(sectionId);
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setMobileOpen(false);
+  };
 
   return (
     <div className={`relative min-h-screen overflow-hidden ${isLightTheme ? 'bg-slate-100 text-slate-900' : isAcademicTheme ? 'bg-[#040a16] text-slate-100' : 'bg-[#07111f] text-slate-100'}`}>
@@ -119,14 +156,14 @@ export default function FacultyCoordinatorShell({
       }`} />
       <div className={`pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:72px_72px] ${isLightTheme ? 'opacity-60' : isAcademicTheme ? 'opacity-30' : 'opacity-20'}`} />
 
-      <div className="relative flex min-h-screen">
+      <div className="relative grid min-h-screen grid-cols-1 lg:grid-cols-[auto_minmax(0,1fr)] lg:gap-6 lg:px-4 lg:pt-6">
         <div
           className={`fixed inset-0 z-30 ${isLightTheme ? 'bg-slate-900/35' : 'bg-black/55'} backdrop-blur-sm transition-opacity duration-300 lg:hidden ${mobileOpen ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
           onClick={() => setMobileOpen(false)}
         />
 
         {/* SIDEBAR */}
-        <aside className={`fixed left-4 top-10 z-40 flex h-[calc(100vh-5rem)] flex-col overflow-y-auto rounded-[28px] border ${isLightTheme ? 'border-slate-200 bg-white/85 shadow-[0_24px_80px_rgba(15,23,42,0.16)]' : isAcademicTheme ? 'border-emerald-300/20 bg-slate-950/85 shadow-[0_24px_80px_rgba(2,10,24,0.55)]' : 'border-white/10 bg-slate-950/80 shadow-[0_24px_80px_rgba(2,6,23,0.48)]'} backdrop-blur-2xl transition-all duration-300 lg:top-10 lg:bottom-24 lg:h-[calc(100vh-8.5rem)]
+        <aside className={`fixed left-4 top-24 z-40 flex h-[calc(100vh-7rem)] flex-col overflow-y-auto rounded-[28px] border ${isLightTheme ? 'border-slate-200 bg-white/85 shadow-[0_24px_80px_rgba(15,23,42,0.16)]' : isAcademicTheme ? 'border-emerald-300/20 bg-slate-950/85 shadow-[0_24px_80px_rgba(2,10,24,0.55)]' : 'border-white/10 bg-slate-950/80 shadow-[0_24px_80px_rgba(2,6,23,0.48)]'} backdrop-blur-2xl transition-all duration-300 lg:sticky lg:left-0 lg:top-24 lg:h-[calc(100vh-7rem)]
           ${collapsed ? 'w-20' : 'w-72'}
           ${mobileOpen ? 'translate-x-0' : '-translate-x-[110%]'}
           lg:translate-x-0`}>
@@ -170,6 +207,39 @@ export default function FacultyCoordinatorShell({
             })}
           </nav>
 
+          {Array.isArray(sidebarSections) && sidebarSections.length > 0 && (
+            <div className={`relative mx-3 mb-3 rounded-2xl border p-3 ${isLightTheme ? 'border-slate-200 bg-slate-50/85' : isAcademicTheme ? 'border-emerald-300/20 bg-slate-900/70' : 'border-white/10 bg-slate-900/70'}`}>
+              <p className={`mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${isLightTheme ? 'text-slate-500' : 'text-slate-400'}`}>
+                In Page
+              </p>
+              <div className="space-y-1">
+                {sidebarSections.map((section) => {
+                  const isActive = activeSectionId === section.id;
+                  return (
+                    <button
+                      key={section.id}
+                      type="button"
+                      onClick={() => jumpToSection(section.id)}
+                      className={`w-full rounded-xl px-3 py-2 text-left text-xs font-semibold transition ${
+                        isActive
+                          ? (isLightTheme
+                            ? 'bg-white text-sky-700 shadow-[0_8px_18px_rgba(14,116,144,0.14)] ring-1 ring-sky-200'
+                            : isAcademicTheme
+                              ? 'bg-emerald-500/15 text-emerald-100 ring-1 ring-emerald-300/20'
+                              : 'bg-cyan-500/15 text-cyan-100 ring-1 ring-cyan-300/20')
+                          : (isLightTheme
+                            ? 'text-slate-600 hover:bg-white/90 hover:text-slate-900'
+                            : 'text-slate-300 hover:bg-white/5 hover:text-white')
+                      }`}
+                    >
+                      {section.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className={`mt-auto flex items-center gap-3 border-t ${isLightTheme ? 'border-slate-200/80 bg-white/70' : 'border-white/10 bg-slate-950/60'} p-4 backdrop-blur-xl`}>
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400 to-cyan-500 text-sm font-bold text-white shadow-lg shadow-cyan-950/20">
               {initials}
@@ -191,8 +261,8 @@ export default function FacultyCoordinatorShell({
         </aside>
 
         {/* MAIN */}
-        <div className={`relative flex flex-1 flex-col transition-all duration-300 ${collapsed ? 'lg:ml-24' : 'lg:ml-[19rem]'}`}>
-          <header className={`sticky top-4 z-30 mx-4 mb-4 rounded-[28px] border ${isLightTheme ? 'border-slate-200 bg-white/80 shadow-[0_18px_40px_rgba(15,23,42,0.12)]' : 'border-white/10 bg-slate-950/70 shadow-[0_18px_40px_rgba(2,6,23,0.35)]'} px-5 py-4 backdrop-blur-2xl lg:mx-6`}>
+        <div className="relative flex min-w-0 flex-1 flex-col">
+          <header className={`sticky top-24 z-30 mx-4 mb-4 rounded-[28px] border ${isLightTheme ? 'border-slate-200 bg-white/80 shadow-[0_18px_40px_rgba(15,23,42,0.12)]' : 'border-white/10 bg-slate-950/70 shadow-[0_18px_40px_rgba(2,6,23,0.35)]'} px-5 py-4 backdrop-blur-2xl lg:mx-0`}>
             <div className="flex items-center justify-between gap-4">
               <div className="flex min-w-0 items-center gap-3">
                 <button className={`rounded-xl border ${isLightTheme ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-white/10 bg-white/5 text-white'} p-2 lg:hidden`} onClick={() => setMobileOpen(true)}>
@@ -209,14 +279,17 @@ export default function FacultyCoordinatorShell({
                 </div>
               </div>
 
-              <button className={`relative rounded-2xl border p-3 transition ${isLightTheme ? 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100' : 'border-white/10 bg-white/5 text-white hover:bg-white/10'}`}>
-                {Icon.bell}
-                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-500 shadow-[0_0_0_4px_rgba(244,63,94,0.18)]" />
-              </button>
+              <div className="flex items-center gap-2">
+                {headerActions}
+                <button className={`relative rounded-2xl border p-3 transition ${isLightTheme ? 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100' : 'border-white/10 bg-white/5 text-white hover:bg-white/10'}`}>
+                  {Icon.bell}
+                  <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-500 shadow-[0_0_0_4px_rgba(244,63,94,0.18)]" />
+                </button>
+              </div>
             </div>
           </header>
 
-          <main className="flex-1 px-4 pb-12 lg:px-6 lg:pb-16">
+          <main className="flex-1 px-4 pb-12 lg:px-0 lg:pb-16">
             <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
               <section className={`relative overflow-hidden rounded-[32px] border p-6 backdrop-blur-xl lg:p-8 ${isLightTheme ? 'border-slate-200 bg-white/85 shadow-[0_18px_50px_rgba(15,23,42,0.10)]' : 'border-white/10 bg-white/5 shadow-[0_18px_50px_rgba(2,6,23,0.24)]'}`}>
                 <div className={`absolute inset-0 ${isLightTheme ? 'bg-[radial-gradient(circle_at_top_right,_rgba(34,211,238,0.12),_transparent_26%),radial-gradient(circle_at_bottom_left,_rgba(99,102,241,0.10),_transparent_30%)]' : 'bg-[radial-gradient(circle_at_top_right,_rgba(34,211,238,0.18),_transparent_26%),radial-gradient(circle_at_bottom_left,_rgba(99,102,241,0.18),_transparent_30%)]'}`} />
@@ -268,7 +341,7 @@ export default function FacultyCoordinatorShell({
             </div>
           </main>
 
-          <footer className={`mx-4 mb-8 rounded-[24px] border px-4 py-3 text-center text-xs backdrop-blur-xl lg:mx-6 lg:mb-10 ${isLightTheme ? 'border-slate-200 bg-white/85 text-slate-600 shadow-[0_12px_30px_rgba(15,23,42,0.08)]' : 'border-white/10 bg-slate-950/70 text-slate-300 shadow-[0_12px_30px_rgba(2,6,23,0.24)]'}`}>
+          <footer className={`mx-4 mb-8 rounded-[24px] border px-4 py-3 text-center text-xs backdrop-blur-xl lg:mx-0 lg:mb-10 ${isLightTheme ? 'border-slate-200 bg-white/85 text-slate-600 shadow-[0_12px_30px_rgba(15,23,42,0.08)]' : 'border-white/10 bg-slate-950/70 text-slate-300 shadow-[0_12px_30px_rgba(2,6,23,0.24)]'}`}>
             {footerNote} · © {new Date().getFullYear()} SLIIT Scheduler
           </footer>
         </div>
