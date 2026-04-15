@@ -504,7 +504,7 @@ const TimetableGenerationByYearSemester = () => {
       return;
     }
 
-    if (selectedYear && selectedSemester && selectedSpecialization && selectedGroup && selectedSubGroup) {
+    if (selectedYear && selectedSemester && selectedBatchMode && selectedSpecialization && selectedGroup && selectedSubGroup) {
       const nextBatchId = matchingBatches.find((batch) => {
         const identity = parseBatchSelectionId(batch.id || batch.name || '');
         return identity && identity.group === selectedGroup && identity.subgroup === selectedSubGroup;
@@ -521,6 +521,7 @@ const TimetableGenerationByYearSemester = () => {
     resolvedBatchId,
     selectedBatch,
     selectedGroup,
+    selectedBatchMode,
     selectedSemester,
     selectedSpecialization,
     selectedSubGroup,
