@@ -753,7 +753,7 @@ const TimetableGenerationByYearSemester = () => {
               <select
                 value={selectedGroup}
                 onChange={(e) => handleGroupChange(e.target.value)}
-                disabled={!selectedYear || !selectedSemester || !selectedSpecialization || groups.length === 0}
+                disabled={!selectedYear || !selectedSemester || !selectedBatchMode || !selectedSpecialization || groups.length === 0}
                 className="w-full rounded-xl border-2 border-rose-200 bg-gradient-to-br from-rose-50 to-pink-50 px-4 py-3 font-semibold text-slate-900 shadow-md transition-all duration-200 hover:border-rose-300 hover:shadow-lg focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-300/50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="">
@@ -783,7 +783,7 @@ const TimetableGenerationByYearSemester = () => {
               <select
                 value={selectedSubGroup}
                 onChange={(e) => setSelectedSubGroup(e.target.value)}
-                disabled={!selectedYear || !selectedSemester || !selectedSpecialization || !selectedGroup || subGroups.length === 0}
+                disabled={!selectedYear || !selectedSemester || !selectedBatchMode || !selectedSpecialization || !selectedGroup || subGroups.length === 0}
                 className="w-full rounded-xl border-2 border-cyan-200 bg-gradient-to-br from-cyan-50 to-blue-50 px-4 py-3 font-semibold text-slate-900 shadow-md transition-all duration-200 hover:border-cyan-300 hover:shadow-lg focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-300/50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="">
@@ -866,10 +866,10 @@ const TimetableGenerationByYearSemester = () => {
           </div>
 
           {/* SELECTION SUMMARY */}
-          {(selectedYear || selectedSemester || selectedSpecialization || selectedGroup || selectedSubGroup) && (
+          {(selectedYear || selectedSemester || selectedBatchMode || selectedSpecialization || selectedGroup || selectedSubGroup) && (
             <div className="rounded-2xl border-2 border-blue-300 bg-gradient-to-r from-blue-50 to-indigo-50 p-5 mb-6">
               <h3 className="text-sm font-bold uppercase tracking-wider text-blue-900 mb-4">Your Selection</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
                 {selectedYear && (
                   <div className="rounded-lg bg-white/70 px-3 py-2 backdrop-blur-sm">
                     <p className="text-xs font-semibold text-slate-600">Year</p>
@@ -880,6 +880,12 @@ const TimetableGenerationByYearSemester = () => {
                   <div className="rounded-lg bg-white/70 px-3 py-2 backdrop-blur-sm">
                     <p className="text-xs font-semibold text-slate-600">Semester</p>
                     <p className="text-sm font-bold text-slate-900">Sem {selectedSemester}</p>
+                  </div>
+                )}
+                {selectedBatchMode && (
+                  <div className="rounded-lg bg-white/70 px-3 py-2 backdrop-blur-sm">
+                    <p className="text-xs font-semibold text-slate-600">Batch Type</p>
+                    <p className="text-sm font-bold text-slate-900">{selectedBatchMode === 'WD' ? 'Weekday' : 'Weekend'}</p>
                   </div>
                 )}
                 {selectedSpecialization && (
