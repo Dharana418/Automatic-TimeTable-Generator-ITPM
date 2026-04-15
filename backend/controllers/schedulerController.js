@@ -2307,11 +2307,15 @@ export const runSchedulerForYearSemester = async (req, res) => {
     const requestedSpecialization = normalizeSpecializationCode(options.specialization || '');
     const requestedGroup = String(options.group || '').trim();
     const requestedSubgroup = String(options.subgroup || '').trim();
+    const requestedBatchMode = ['WD', 'WE'].includes(String(options.batchMode || options.mode || '').trim().toUpperCase())
+      ? String(options.batchMode || options.mode || '').trim().toUpperCase()
+      : '';
     const normalizedYear = String(academicYear).trim();
     const normalizedSemester = String(semester).trim();
     const normalizedScope = {
       year: normalizedYear,
       semester: normalizedSemester,
+      mode: requestedBatchMode || null,
       specialization: requestedSpecialization || null,
       group: requestedGroup || null,
       subgroup: requestedSubgroup || null,
@@ -2319,6 +2323,7 @@ export const runSchedulerForYearSemester = async (req, res) => {
     const scopeKey = [
       normalizedYear,
       normalizedSemester,
+      requestedBatchMode || 'ALL',
       requestedSpecialization || 'ALL',
       requestedGroup || 'ALL',
       requestedSubgroup || 'ALL',
@@ -2347,6 +2352,10 @@ export const runSchedulerForYearSemester = async (req, res) => {
       }
 
       if (requestedSpecialization && (!scope.specialization || scope.specialization !== requestedSpecialization)) {
+        return false;
+      }
+
+      if (requestedBatchMode && (!scope.mode || scope.mode !== requestedBatchMode)) {
         return false;
       }
 
@@ -2389,6 +2398,19 @@ export const runSchedulerForYearSemester = async (req, res) => {
       }
     });
 
+    const dayTypeFilteredModules = filteredModules.filter((module) => {
+      if (!requestedBatchMode) return true;
+
+      const details = parseJsonSafe(module?.details, {});
+      const moduleDayType = String(module?.day_type || details?.day_type || 'weekday').trim().toLowerCase();
+
+      if (requestedBatchMode === 'WE') {
+        return ['weekend', 'any', 'both'].includes(moduleDayType);
+      }
+
+      return ['weekday', 'any', 'both', ''].includes(moduleDayType);
+    });
+
     // Validation
     if (!halls.length) {
       return res.status(400).json({
@@ -2396,11 +2418,11 @@ export const runSchedulerForYearSemester = async (req, res) => {
       });
     }
 
-    if (!filteredModules.length) {
+    if (!dayTypeFilteredModules.length) {
       return res.status(400).json({
         error: requestedSpecialization
-          ? `No modules found for academic year ${academicYear}, semester ${semester}, specialization ${requestedSpecialization}. Please add modules first.`
-          : `No modules found for academic year ${academicYear}, semester ${semester}. Please add modules first.`,
+          ? `No modules found for academic year ${academicYear}, semester ${semester}, specialization ${requestedSpecialization}${requestedBatchMode ? `, mode ${requestedBatchMode}` : ''}. Please add modules first.`
+          : `No modules found for academic year ${academicYear}, semester ${semester}${requestedBatchMode ? `, mode ${requestedBatchMode}` : ''}. Please add modules first.`,
       });
     }
 
@@ -2414,7 +2436,7 @@ export const runSchedulerForYearSemester = async (req, res) => {
 
     // Load and apply hall allocations
     const hallAllocationMap = await loadCoordinatorHallAllocationMap();
-    const modulesWithAllocations = applyCoordinatorHallAllocations(filteredModules, hallAllocationMap);
+    const modulesWithAllocations = applyCoordinatorHallAllocations(dayTypeFilteredModules, hallAllocationMap);
 
     // Load faculty soft constraints if user is faculty coordinator
     const mergedOptions = await withFacultySoftConstraints(req.user, {
@@ -2461,7 +2483,7 @@ export const runSchedulerForYearSemester = async (req, res) => {
         generatedAt: new Date().toISOString(),
         algorithms: Array.isArray(algorithms) ? algorithms : [algorithms],
         hallAllocations: Object.fromEntries(hallAllocationMap),
-        modulesCount: filteredModules.length,
+        modulesCount: dayTypeFilteredModules.length,
         hallsCount: halls.length,
         batchesCount: filteredBatches.length,
         schedule: results.hybrid?.schedule || results.pso?.schedule || results.genetic?.schedule || results.ant?.schedule || results.tabu?.schedule || [],
@@ -2511,11 +2533,12 @@ export const runSchedulerForYearSemester = async (req, res) => {
         created_at: savedTimetable.created_at,
       },
       summary: {
-        modulesScheduled: filteredModules.length,
+        modulesScheduled: dayTypeFilteredModules.length,
         hallsUsed: halls.length,
         batchesUsed: filteredBatches.length,
         academicYear,
         semester,
+        mode: requestedBatchMode || null,
         specialization: requestedSpecialization || null,
         group: requestedGroup || null,
         subgroup: requestedSubgroup || null,
