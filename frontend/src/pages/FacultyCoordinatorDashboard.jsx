@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/scheduler.js';
+import { getSchedulingConflicts, resolveSchedulingConflict } from '../api/timetableGeneration.js';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 import facultyDashboardBg from '../assets/Gemini_Generated_Image_hqfdrqhqfdrqhqfd.png';
 
@@ -218,7 +219,10 @@ const FacultyCoordinatorDashboard = ({ user }) => {
 
   const [resources, setResources] = useState([]);
   const [savedTimetables, setSavedTimetables] = useState([]);
+  const [conflicts, setConflicts] = useState([]);
   const [loadingTimetables, setLoadingTimetables] = useState(false);
+  const [loadingConflicts, setLoadingConflicts] = useState(false);
+  const [resolvingConflictId, setResolvingConflictId] = useState('');
   const [_loadingResources, setLoadingResources] = useState(false);
   const [savingSoftConstraints, setSavingSoftConstraints] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -235,17 +239,21 @@ const FacultyCoordinatorDashboard = ({ user }) => {
       try {
         setLoadingResources(true);
         setLoadingTimetables(true);
-        const [resourceResponse, timetableResponse] = await Promise.all([
+        setLoadingConflicts(true);
+        const [resourceResponse, timetableResponse, conflictResponse] = await Promise.all([
           api.getLicsWithInstructors(),
           api.getAcademicCoordinatorTimetables().catch(() => ({ data: [] })),
+          getSchedulingConflicts(false).catch(() => ({ data: [] })),
         ]);
         if (mounted && resourceResponse?.items) setResources(resourceResponse.items);
         if (mounted) setSavedTimetables(Array.isArray(timetableResponse?.data) ? timetableResponse.data : []);
+        if (mounted) setConflicts(Array.isArray(conflictResponse?.data) ? conflictResponse.data : []);
       } catch (err) {
         console.error('Resource load failed', err);
       } finally {
         if (mounted) setLoadingResources(false);
         if (mounted) setLoadingTimetables(false);
+        if (mounted) setLoadingConflicts(false);
       }
     };
     loadData();
@@ -370,6 +378,36 @@ const FacultyCoordinatorDashboard = ({ user }) => {
     }
   };
 
+  const refreshConflicts = async () => {
+    try {
+      setLoadingConflicts(true);
+      const response = await getSchedulingConflicts(false);
+      setConflicts(Array.isArray(response?.data) ? response.data : []);
+    } catch (error) {
+      window.alert(error.message || 'Failed to load conflicts');
+    } finally {
+      setLoadingConflicts(false);
+    }
+  };
+
+  const markConflictResolved = async (conflictId) => {
+    if (!conflictId) return;
+    const accepted = window.confirm('Mark this conflict as resolved?');
+    if (!accepted) return;
+
+    const resolutionNotes = window.prompt('Resolution note (optional):', '') || '';
+
+    try {
+      setResolvingConflictId(String(conflictId));
+      await resolveSchedulingConflict(conflictId, resolutionNotes);
+      await refreshConflicts();
+    } catch (error) {
+      window.alert(error.message || 'Failed to resolve conflict');
+    } finally {
+      setResolvingConflictId('');
+    }
+  };
+
   return (
     <FacultyCoordinatorShell
       user={user}
@@ -381,6 +419,7 @@ const FacultyCoordinatorDashboard = ({ user }) => {
         { id: 'fcOverview', label: 'Overview' },
         { id: 'fcOperations', label: 'Operations Center' },
         { id: 'fcActivity', label: 'Recent Activity' },
+        { id: 'fcConflicts', label: 'Conflict Center' },
         { id: 'fcTimetables', label: 'Saved Timetables' },
         { id: 'fcSoftConstraints', label: 'Soft Constraints' },
       ]}
@@ -590,6 +629,84 @@ const FacultyCoordinatorDashboard = ({ user }) => {
                 </div>
               ))}
             </div>
+          </section>
+
+          <section id="fcConflicts" style={{
+            borderRadius: 16, padding: '24px',
+            background: 'linear-gradient(145deg, rgba(255,255,255,0.9), rgba(239,246,255,0.76))',
+            border: '1px solid rgba(191,219,254,0.75)',
+            boxShadow: '0 14px 28px rgba(14,116,144,0.12)',
+            backdropFilter: 'blur(10px)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#b91c1c' }}>Conflict Command Center</p>
+                <h3 className="fc-section-title" style={{ margin: '8px 0 0', fontWeight: 800, color: '#14314b' }}>Unresolved Conflict Queue</h3>
+              </div>
+              <button
+                type="button"
+                onClick={refreshConflicts}
+                className="fc-btn fc-btn-md"
+                style={{
+                  cursor: 'pointer',
+                  background: 'linear-gradient(90deg, #991b1b, #dc2626)', border: 'none', color: '#fff',
+                }}
+              >
+                {loadingConflicts ? 'Refreshing...' : 'Refresh Queue'}
+              </button>
+            </div>
+
+            {loadingConflicts ? (
+              <p style={{ margin: 0, fontSize: 13, color: '#5f7389' }}>Loading conflict queue...</p>
+            ) : conflicts.length === 0 ? (
+              <p style={{ margin: 0, fontSize: 13, color: '#166534' }}>No unresolved conflicts at the moment.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {conflicts.slice(0, 10).map((conflict) => {
+                  const conflictId = String(conflict?.id || '');
+                  return (
+                    <div
+                      key={conflictId}
+                      className="fc-card-hover"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 10,
+                        padding: '10px 12px',
+                        borderRadius: 12,
+                        border: '1px solid #fecaca',
+                        background: '#fff1f2',
+                      }}
+                    >
+                      <div>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#7f1d1d' }}>
+                          {conflict.conflict_type || conflict.type || 'Scheduling conflict'}
+                        </p>
+                        <p style={{ margin: '4px 0 0', fontSize: 12, color: '#881337' }}>
+                          {conflict.description || conflict.message || conflict.conflict_description || 'Conflict details unavailable'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => markConflictResolved(conflictId)}
+                        disabled={resolvingConflictId === conflictId}
+                        className="fc-btn fc-btn-sm"
+                        style={{
+                          cursor: resolvingConflictId === conflictId ? 'not-allowed' : 'pointer',
+                          background: 'rgba(127,29,29,0.12)',
+                          border: '1px solid rgba(127,29,29,0.3)',
+                          color: '#7f1d1d',
+                          opacity: resolvingConflictId === conflictId ? 0.6 : 1,
+                        }}
+                      >
+                        {resolvingConflictId === conflictId ? 'Resolving...' : 'Resolve'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
           <section id="fcTimetables" style={{
