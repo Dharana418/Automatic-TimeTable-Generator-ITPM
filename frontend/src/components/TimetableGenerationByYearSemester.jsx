@@ -699,6 +699,25 @@ const TimetableGenerationByYearSemester = () => {
               </select>
             </div>
 
+            {/* BATCH TYPE SELECT */}
+            <div className="w-full">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">
+                <Layers size={16} className="inline mr-2" /> Batch Type
+              </label>
+              <select
+                value={selectedBatchMode}
+                onChange={(e) => handleBatchModeChange(e.target.value)}
+                disabled={!selectedYear || !selectedSemester}
+                className="w-full rounded-xl border-2 border-fuchsia-200 bg-gradient-to-br from-fuchsia-50 to-pink-50 px-4 py-3 font-semibold text-slate-900 shadow-md transition-all duration-200 hover:border-fuchsia-300 hover:shadow-lg focus:border-fuchsia-500 focus:outline-none focus:ring-2 focus:ring-fuchsia-300/50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="">
+                  {!selectedYear || !selectedSemester ? 'Select Year and Semester First' : 'Select Batch Type'}
+                </option>
+                <option value="WD">Weekday (WD)</option>
+                <option value="WE">Weekend (WE)</option>
+              </select>
+            </div>
+
             {/* SPECIALIZATION SELECT */}
             <div className="w-full">
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">
@@ -740,6 +759,8 @@ const TimetableGenerationByYearSemester = () => {
                 <option value="">
                   {!selectedYear || !selectedSemester
                     ? 'Select Year and Semester First'
+                    : !selectedBatchMode
+                      ? 'Select Batch Type First'
                     : !selectedSpecialization
                       ? 'Select Specialization First'
                       : groups.length === 0
@@ -768,6 +789,8 @@ const TimetableGenerationByYearSemester = () => {
                 <option value="">
                   {!selectedYear || !selectedSemester
                     ? 'Select Year and Semester First'
+                    : !selectedBatchMode
+                      ? 'Select Batch Type First'
                     : !selectedSpecialization
                       ? 'Select Specialization First'
                       : !selectedGroup
@@ -792,7 +815,7 @@ const TimetableGenerationByYearSemester = () => {
               <div className="rounded-xl border-2 border-teal-200 bg-gradient-to-br from-teal-50 to-cyan-50 px-4 py-3 font-semibold text-slate-900 shadow-md">
                 {selectedYear && selectedSemester && selectedSpecialization && selectedGroup && selectedSubGroup
                   ? selectedBatch || resolvedBatchId || 'Batch will be generated automatically'
-                  : 'Select year, semester, specialization, group, and subgroup to auto-generate the batch'}
+                  : 'Select year, semester, batch type, specialization, group, and subgroup to auto-generate the batch'}
               </div>
             </div>
 
