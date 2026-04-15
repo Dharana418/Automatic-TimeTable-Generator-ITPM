@@ -127,21 +127,21 @@ export function scheduleGreedy(constraints = {}, options = {}) {
     for (let s = 0; s < lectures; s++) {
       let placed = false;
       // try allowed day-slot combos
+      // CONSTRAINT: Lectures and labs can ONLY be on weekdays (Mon-Fri)
       let allowedDays = WEEKDAYS;
       let allowedSlots = WEEKDAY_SLOTS;
-      if (mod.day_type === 'weekend') allowedDays = WEEKEND;
-      else if (mod.day_type === 'any' || mod.day_type === 'both') {
-        allowedDays = WEEKDAYS.concat(WEEKEND);
+      
+      if (mod.day_type === 'weekend') {
+        // Only explicitly 'weekend' type modules can use weekend slots
+        allowedDays = WEEKEND;
+        allowedSlots = WEEKEND_SLOTS;
       } else {
+        // 'weekday' (default), 'any', 'both' all follow weekday constraint
+        // Lectures and labs must be Mon-Fri only
+        allowedDays = WEEKDAYS.filter((day) => day !== weekdayFreeDay);
+        if (!allowedDays.length) allowedDays = WEEKDAYS;
         allowedSlots = WEEKDAY_SLOTS;
       }
-
-      if (mod.day_type === 'weekend') {
-        allowedSlots = WEEKEND_SLOTS;
-      } else if (mod.day_type === 'any' || mod.day_type === 'both') {
-        allowedSlots = SLOTS;
-      }
-      else allowedDays = WEEKDAYS.filter((day) => day !== weekdayFreeDay);
 
       if (!allowedDays.length) {
         allowedDays = WEEKDAYS;
