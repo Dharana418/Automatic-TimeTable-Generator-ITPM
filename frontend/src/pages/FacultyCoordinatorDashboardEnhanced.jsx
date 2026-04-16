@@ -368,7 +368,7 @@ const FacultyCoordinatorDashboardEnhanced = ({ user }) => {
   };
 
   const handleRejectTimetable = async (timetable) => {
-    const reason = window.prompt(`Reject ${timetable?.name || 'this timetable'} with a short note:`, '') || '';
+    const reason = window.prompt(`Reject ${timetable?.name || 'this timetable'} with a short note:`, '');
     if (reason === null) return;
 
     try {
@@ -677,7 +677,7 @@ const FacultyCoordinatorDashboardEnhanced = ({ user }) => {
                 <span className="fc-badge danger">{conflicts.length} Unresolved</span>
               )}
               <button
-                onClick={handleRefreshData}
+                onClick={refreshConflicts}
                 className="fc-btn secondary"
                 disabled={loadingConflicts}
               >
