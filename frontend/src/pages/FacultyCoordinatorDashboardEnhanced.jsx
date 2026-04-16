@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/scheduler.js';
-import { getSchedulingConflicts, resolveSchedulingConflict } from '../api/timetableGeneration.js';
+import {
+  approveTimetable,
+  getSchedulingConflicts,
+  getTimetablesForYearSemester,
+  rejectTimetable,
+  resolveSchedulingConflict,
+} from '../api/timetableGeneration.js';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 import '../styles/enhanced-faculty-theme.css';
 import {
@@ -14,6 +20,57 @@ import {
   AdvancedFilterPanel,
 } from '../components/EnhancedFacultyComponents.jsx';
 import { Users, Calendar, Book, Zap, TrendingUp, RefreshCw, AlertCircle } from 'lucide-react';
+
+const normalizeStatus = (value) => String(value || '').trim().toLowerCase();
+
+const extractScheduleRows = (timetable) => {
+  const rawData = timetable?.data;
+  const parsedData = typeof rawData === 'string'
+    ? (() => {
+        try {
+          return JSON.parse(rawData);
+        } catch {
+          return {};
+        }
+      })()
+    : (rawData || {});
+
+  if (Array.isArray(parsedData.schedule)) return parsedData.schedule;
+  if (Array.isArray(parsedData.data)) return parsedData.data;
+  return [];
+};
+
+const downloadTimetableCsv = (timetable) => {
+  const schedule = extractScheduleRows(timetable);
+  if (!schedule.length) {
+    window.alert('No schedule data available');
+    return;
+  }
+
+  const headers = ['Module', 'Hall', 'Day', 'Slot', 'Instructor', 'Batch'];
+  const rows = schedule.map((row) => [
+    row.moduleName || row.moduleId || '',
+    row.hallName || row.hallId || '',
+    row.day || '',
+    row.slot || (Array.isArray(row.slots) ? row.slots.join(' | ') : ''),
+    row.instructorName || row.instructorId || '',
+    Array.isArray(row.batchKeys) ? row.batchKeys.join(' | ') : '',
+  ]);
+
+  const csv = [headers, ...rows]
+    .map((line) => line.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${String(timetable?.name || 'timetable').replace(/[^a-zA-Z0-9-_]/g, '_')}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
 
 const FacultyCoordinatorDashboardEnhanced = ({ user }) => {
   const username = user?.username || user?.name || 'Coordinator';
@@ -28,6 +85,12 @@ const FacultyCoordinatorDashboardEnhanced = ({ user }) => {
   const [loadingTimetables, setLoadingTimetables] = useState(false);
   const [loadingConflicts, setLoadingConflicts] = useState(false);
   const [_loadingResources, setLoadingResources] = useState(false);
+  const [timetableFilters, setTimetableFilters] = useState({
+    year: '',
+    semester: '',
+    specialization: '',
+  });
+  const [actioningTimetableId, setActioningTimetableId] = useState('');
 
   // Load initial data
   useEffect(() => {
@@ -78,6 +141,33 @@ const FacultyCoordinatorDashboardEnhanced = ({ user }) => {
     [resources]
   );
 
+  const pendingReviewTimetables = useMemo(
+    () => savedTimetables.filter((timetable) => {
+      const status = normalizeStatus(timetable.status);
+      return !status || status === 'pending';
+    }),
+    [savedTimetables]
+  );
+
+  const filteredTimetables = useMemo(() => {
+    return savedTimetables.filter((timetable) => {
+      const timetableYear = String(timetable.year || timetable.academicYear || '').trim();
+      const timetableSemester = String(timetable.semester || '').trim();
+      const timetableSpecialization = String(
+        timetable.specialization || timetable?.data?.scope?.specialization || timetable?.data?.specialization || '',
+      ).trim().toLowerCase();
+
+      if (timetableFilters.year && timetableYear !== timetableFilters.year.trim()) return false;
+      if (timetableFilters.semester && timetableSemester !== timetableFilters.semester.trim()) return false;
+      if (
+        timetableFilters.specialization &&
+        timetableSpecialization !== timetableFilters.specialization.trim().toLowerCase()
+      ) return false;
+
+      return true;
+    });
+  }, [savedTimetables, timetableFilters]);
+
   const operationalHealth = useMemo(() => {
     const healthSignals = [
       resources.length > 0,
@@ -86,34 +176,167 @@ const FacultyCoordinatorDashboardEnhanced = ({ user }) => {
       conflicts.length < 5,
       savedTimetables.length > 0,
     ].filter(Boolean).length;
-    return Math.round((healthySignals / 5) * 100);
+    return Math.round((healthSignals / 5) * 100);
   }, [resources.length, modulesCatalog.length, batchesCatalog.length, conflicts.length, savedTimetables.length]);
 
   const scheduleComplianceScore = 94 + Math.min(6, savedTimetables.length * 2);
   const resourceUtilization = Math.min(100, totalInstructors * 4.2);
+  const reviewQueueLoad = Math.min(100, pendingReviewTimetables.length * 20 + conflicts.length * 8);
+
+  const timetableColumns = [
+    {
+      key: 'name',
+      label: 'Timetable',
+      render: (_, row) => (
+        <div>
+          <div className="font-semibold text-slate-900">{row.name || 'Timetable'}</div>
+          <div className="text-xs text-slate-500">{row.created_at ? new Date(row.created_at).toLocaleString() : 'Recently generated'}</div>
+        </div>
+      ),
+    },
+    {
+      key: 'scope',
+      label: 'Scope',
+      render: (_, row) => {
+        const specialization = row.specialization || row?.data?.scope?.specialization || row?.data?.specialization || 'General';
+        return (
+          <div className="text-sm text-slate-700">
+            <div>{String(row.year || row.academicYear || 'N/A')} / Sem {String(row.semester || 'N/A')}</div>
+            <div className="text-xs text-slate-500">{specialization}</div>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (_, row) => {
+        const status = normalizeStatus(row.status);
+        const label = status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Pending';
+        const tone = status === 'approved' ? 'success' : status === 'rejected' ? 'danger' : 'amber';
+        return <span className={`fc-badge ${tone}`}>{label}</span>;
+      },
+    },
+    {
+      key: 'entries',
+      label: 'Entries',
+      render: (_, row) => <span className="font-semibold text-slate-900">{extractScheduleRows(row).length}</span>,
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (_, row) => {
+        const isBusy = actioningTimetableId === String(row.id);
+        const status = normalizeStatus(row.status);
+        return (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => downloadTimetableCsv(row)}
+              className="fc-btn secondary"
+              disabled={isBusy}
+            >
+              Export
+            </button>
+            <button
+              type="button"
+              onClick={() => handleApproveTimetable(row)}
+              className="fc-btn primary"
+              disabled={isBusy || status === 'approved'}
+            >
+              Approve
+            </button>
+            <button
+              type="button"
+              onClick={() => handleRejectTimetable(row)}
+              className="fc-btn secondary"
+              disabled={isBusy || status === 'rejected'}
+            >
+              Reject
+            </button>
+          </div>
+        );
+      },
+    },
+  ];
 
   /* ──────────────────────────────────────────────────────────── */
   /* HANDLERS                                                     */
   /* ──────────────────────────────────────────────────────────── */
 
-  const handleRefreshData = async () => {
+  const refreshTimetables = async (filters = timetableFilters) => {
+    setLoadingTimetables(true);
     try {
+      const year = String(filters.year || '').trim();
+      const semester = String(filters.semester || '').trim();
+      const specialization = String(filters.specialization || '').trim();
+
+      let response;
+      if (year && semester) {
+        response = await getTimetablesForYearSemester(year, semester, specialization ? { specialization } : {});
+      } else {
+        response = await api.getAcademicCoordinatorTimetables();
+      }
+
+      setSavedTimetables(Array.isArray(response?.data) ? response.data : []);
+      setLastWorkspaceSync(new Date());
+    } catch (error) {
+      console.error('Failed to refresh timetables:', error);
+      window.alert(error.message || 'Failed to refresh timetables');
+    } finally {
+      setLoadingTimetables(false);
+    }
+  };
+
+  const refreshConflicts = async () => {
+    setLoadingConflicts(true);
+    try {
+      const response = await getSchedulingConflicts(false);
+      setConflicts(Array.isArray(response?.data) ? response.data : []);
+      setLastWorkspaceSync(new Date());
+    } catch (error) {
+      console.error('Failed to refresh conflicts:', error);
+      window.alert(error.message || 'Failed to refresh conflicts');
+    } finally {
+      setLoadingConflicts(false);
+    }
+  };
+
+  const refreshWorkspace = async () => {
+    try {
+      setLoadingResources(true);
       setLoadingTimetables(true);
       setLoadingConflicts(true);
 
-      const [timetableResponse, conflictResponse] = await Promise.all([
+      const [resourceResponse, timetableResponse, conflictResponse, moduleResponse, batchResponse] = await Promise.all([
+        api.getLicsWithInstructors().catch(() => ({ items: [] })),
         api.getAcademicCoordinatorTimetables().catch(() => ({ data: [] })),
         getSchedulingConflicts(false).catch(() => ({ data: [] })),
+        api.listItems('modules').catch(() => ({ items: [] })),
+        api.listItems('batches').catch(() => ({ items: [] })),
       ]);
 
+      setResources(Array.isArray(resourceResponse?.items) ? resourceResponse.items : []);
       setSavedTimetables(Array.isArray(timetableResponse?.data) ? timetableResponse.data : []);
       setConflicts(Array.isArray(conflictResponse?.data) ? conflictResponse.data : []);
+      setModulesCatalog(Array.isArray(moduleResponse?.items) ? moduleResponse.items : []);
+      setBatchesCatalog(Array.isArray(batchResponse?.items) ? batchResponse.items : []);
       setLastWorkspaceSync(new Date());
     } catch (error) {
-      console.error('Refresh failed:', error);
+      console.error('Failed to refresh workspace:', error);
+      window.alert(error.message || 'Failed to refresh workspace');
     } finally {
+      setLoadingResources(false);
       setLoadingTimetables(false);
       setLoadingConflicts(false);
+    }
+  };
+
+  const handleRefreshData = async () => {
+    try {
+      await Promise.all([refreshTimetables(), refreshConflicts()]);
+    } catch (error) {
+      console.error('Refresh failed:', error);
     }
   };
 
@@ -127,6 +350,42 @@ const FacultyCoordinatorDashboardEnhanced = ({ user }) => {
     } catch (error) {
       window.alert('Failed to resolve conflict: ' + error.message);
     }
+  };
+
+  const handleApproveTimetable = async (timetable) => {
+    const confirmed = window.confirm(`Approve ${timetable?.name || 'this timetable'}?`);
+    if (!confirmed) return;
+
+    try {
+      setActioningTimetableId(String(timetable.id));
+      await approveTimetable(timetable.id);
+      await refreshTimetables();
+    } catch (error) {
+      window.alert('Failed to approve timetable: ' + error.message);
+    } finally {
+      setActioningTimetableId('');
+    }
+  };
+
+  const handleRejectTimetable = async (timetable) => {
+    const reason = window.prompt(`Reject ${timetable?.name || 'this timetable'} with a short note:`, '') || '';
+    if (reason === null) return;
+
+    try {
+      setActioningTimetableId(String(timetable.id));
+      await rejectTimetable(timetable.id, reason);
+      await refreshTimetables();
+    } catch (error) {
+      window.alert('Failed to reject timetable: ' + error.message);
+    } finally {
+      setActioningTimetableId('');
+    }
+  };
+
+  const resetTimetableFilters = async () => {
+    const cleared = { year: '', semester: '', specialization: '' };
+    setTimetableFilters(cleared);
+    await refreshTimetables(cleared);
   };
 
   const downloadTimetableAsCSV = (timetable) => {
