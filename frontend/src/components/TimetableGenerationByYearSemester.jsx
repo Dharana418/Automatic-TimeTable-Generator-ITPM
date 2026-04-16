@@ -17,6 +17,7 @@ import {
   generateTimetableForYearSemester,
   getTimetablesForYearSemester,
   downloadTimetableAsCSV,
+  validateCoordinatorTimetableRequest,
 } from '../api/timetableGeneration.js';
 
 import {
@@ -602,8 +603,26 @@ const TimetableGenerationByYearSemester = () => {
       selectedSubGroup
     );
 
-    if (!selectedYear || !selectedSemester || !selectedBatchMode || !selectedSpecialization || !selectedGroup || !selectedSubGroup || !batchId) {
-      setError('Fill all required fields');
+    const validation = (() => {
+      try {
+        return validateCoordinatorTimetableRequest({
+          academicYear: selectedYear,
+          semester: selectedSemester,
+          batchMode: selectedBatchMode,
+          specialization: selectedSpecialization,
+          group: selectedGroup,
+          subgroup: selectedSubGroup,
+          batchId,
+          timetableName: resolvedTimetableName,
+          weekdayFreeDay,
+        });
+      } catch (validationError) {
+        setError(validationError.message || 'Fill all required fields');
+        return null;
+      }
+    })();
+
+    if (!validation) {
       return;
     }
 
@@ -611,17 +630,17 @@ const TimetableGenerationByYearSemester = () => {
       setLoading(true);
 
       const res = await generateTimetableForYearSemester(
-        selectedYear,
-        selectedSemester,
+        validation.academicYear,
+        validation.semester,
         {
           algorithms,
-          timetableName: resolvedTimetableName,
-          weekdayFreeDay,
-          batchMode: selectedBatchMode,
-          specialization: selectedSpecialization,
-          group: selectedGroup,
-          subgroup: selectedSubGroup,
-          batchId,
+          timetableName: validation.timetableName,
+          weekdayFreeDay: validation.weekdayFreeDay,
+          batchMode: validation.batchMode,
+          specialization: validation.specialization,
+          group: validation.group,
+          subgroup: validation.subgroup,
+          batchId: validation.batchId,
         }
       );
 
