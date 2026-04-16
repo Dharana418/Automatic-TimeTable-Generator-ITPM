@@ -6,6 +6,7 @@ import {
   getSchedulingConflicts,
   getTimetablesForYearSemester,
   rejectTimetable,
+  validateCoordinatorTimetableFilters,
   resolveSchedulingConflict,
 } from '../api/timetableGeneration.js';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
@@ -267,9 +268,10 @@ const FacultyCoordinatorDashboardEnhanced = ({ user }) => {
   const refreshTimetables = async (filters = timetableFilters) => {
     setLoadingTimetables(true);
     try {
-      const year = String(filters.year || '').trim();
-      const semester = String(filters.semester || '').trim();
-      const specialization = String(filters.specialization || '').trim();
+      const validatedFilters = validateCoordinatorTimetableFilters(filters);
+      const year = validatedFilters.year;
+      const semester = validatedFilters.semester;
+      const specialization = validatedFilters.specialization;
 
       let response;
       if (year && semester) {
@@ -344,8 +346,15 @@ const FacultyCoordinatorDashboardEnhanced = ({ user }) => {
     const confirmed = window.confirm('Mark this conflict as resolved?');
     if (!confirmed) return;
 
+    const resolutionNotes = window.prompt('Add a short resolution note:', '');
+    if (resolutionNotes === null) return;
+    if (String(resolutionNotes).trim().length < 5) {
+      window.alert('Resolution note must be at least 5 characters long');
+      return;
+    }
+
     try {
-      await resolveSchedulingConflict(conflictId, 'Resolved by coordinator');
+      await resolveSchedulingConflict(conflictId, resolutionNotes);
       await handleRefreshData();
     } catch (error) {
       window.alert('Failed to resolve conflict: ' + error.message);
@@ -353,6 +362,15 @@ const FacultyCoordinatorDashboardEnhanced = ({ user }) => {
   };
 
   const handleApproveTimetable = async (timetable) => {
+    if (normalizeStatus(timetable?.status) === 'approved') {
+      window.alert('This timetable is already approved');
+      return;
+    }
+    if (normalizeStatus(timetable?.status) === 'rejected') {
+      window.alert('Rejected timetables must be regenerated before approval');
+      return;
+    }
+
     const confirmed = window.confirm(`Approve ${timetable?.name || 'this timetable'}?`);
     if (!confirmed) return;
 
@@ -368,8 +386,17 @@ const FacultyCoordinatorDashboardEnhanced = ({ user }) => {
   };
 
   const handleRejectTimetable = async (timetable) => {
+    if (normalizeStatus(timetable?.status) === 'rejected') {
+      window.alert('This timetable is already rejected');
+      return;
+    }
+
     const reason = window.prompt(`Reject ${timetable?.name || 'this timetable'} with a short note:`, '');
     if (reason === null) return;
+    if (String(reason).trim().length < 5) {
+      window.alert('Rejection note must be at least 5 characters long');
+      return;
+    }
 
     try {
       setActioningTimetableId(String(timetable.id));
