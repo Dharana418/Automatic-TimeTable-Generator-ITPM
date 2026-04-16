@@ -388,38 +388,6 @@ const FacultyCoordinatorDashboardEnhanced = ({ user }) => {
     await refreshTimetables(cleared);
   };
 
-  const downloadTimetableAsCSV = (timetable) => {
-    const schedule = Array.isArray(timetable?.data) ? timetable.data : [];
-    if (!schedule.length) {
-      window.alert('No schedule data available');
-      return;
-    }
-
-    const headers = ['Module', 'Hall', 'Day', 'Slot', 'Instructor', 'Batch'];
-    const rows = schedule.map((row) => [
-      row.moduleName || '',
-      row.hallName || '',
-      row.day || '',
-      row.slot || '',
-      row.instructorName || '',
-      Array.isArray(row.batchKeys) ? row.batchKeys.join('; ') : '',
-    ]);
-
-    const csv = [headers, ...rows]
-      .map((line) => line.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${timetable.name || 'timetable'}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
   /* ──────────────────────────────────────────────────────────── */
   /* RENDER                                                       */
   /* ──────────────────────────────────────────────────────────── */
@@ -432,8 +400,10 @@ const FacultyCoordinatorDashboardEnhanced = ({ user }) => {
       badge="FC Dashboard Enhanced"
       sidebarSections={[
         { id: 'overview', label: 'Overview' },
+        { id: 'command-center', label: 'Command Center' },
         { id: 'analytics', label: 'Analytics' },
         { id: 'timetables', label: 'Timetables' },
+        { id: 'review-queue', label: 'Review Queue' },
         { id: 'conflicts', label: 'Conflicts' },
         { id: 'operations', label: 'Operations' },
       ]}
