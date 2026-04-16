@@ -483,6 +483,14 @@ const FacultyCoordinatorDashboardEnhanced = ({ user }) => {
               subtitle="Health score"
             />
             <EnhancedStatCard
+              title="Review Queue"
+              value={pendingReviewTimetables.length}
+              icon={Calendar}
+              color="amber"
+              trend={pendingReviewTimetables.length > 0 ? -12 : 4}
+              subtitle="Pending approvals"
+            />
+            <EnhancedStatCard
               title="Unresolved Conflicts"
               value={conflicts.length}
               icon={AlertCircle}
@@ -490,6 +498,61 @@ const FacultyCoordinatorDashboardEnhanced = ({ user }) => {
               trend={conflicts.length > 0 ? -40 : 0}
               subtitle="Pending resolution"
             />
+          </div>
+        </div>
+
+        <div id="command-center" className="fc-section">
+          <div className="fc-section-header">
+            <h2 className="fc-section-title">Coordinator Command Center</h2>
+            <button
+              onClick={refreshWorkspace}
+              className="fc-btn secondary"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+            >
+              <RefreshCw className="w-4 h-4" />
+              Refresh Workspace
+            </button>
+          </div>
+
+          <div className="fc-grid-2">
+            <div className="fc-card">
+              <div className="fc-card-header">
+                <h3>Operational Snapshot</h3>
+              </div>
+              <div className="fc-card-content">
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                  <div>
+                    <p className="fc-text-muted text-xs mb-2">Health Score</p>
+                    <p className="font-bold text-slate-900">{operationalHealth}%</p>
+                  </div>
+                  <div>
+                    <p className="fc-text-muted text-xs mb-2">Resource Utilization</p>
+                    <p className="font-bold text-slate-900">{Math.round(resourceUtilization)}%</p>
+                  </div>
+                  <div>
+                    <p className="fc-text-muted text-xs mb-2">Review Queue</p>
+                    <p className="font-bold text-slate-900">{reviewQueueLoad}%</p>
+                  </div>
+                  <div>
+                    <p className="fc-text-muted text-xs mb-2">Last Sync</p>
+                    <p className="font-bold text-slate-900">{lastWorkspaceSync ? lastWorkspaceSync.toLocaleTimeString() : 'Never'}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="fc-card">
+              <div className="fc-card-header">
+                <h3>Priority Actions</h3>
+              </div>
+              <div className="fc-card-content">
+                <div className="space-y-3">
+                  <button onClick={() => navigate('/faculty/batches')} className="fc-btn outline w-full text-left">Review Batches</button>
+                  <button onClick={() => navigate('/faculty/modules')} className="fc-btn outline w-full text-left">Review Modules</button>
+                  <button onClick={() => navigate('/scheduler/by-year')} className="fc-btn outline w-full text-left">Generate New Timetable</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -522,9 +585,42 @@ const FacultyCoordinatorDashboardEnhanced = ({ user }) => {
         <div id="timetables" className="fc-section">
           <div className="fc-section-header">
             <h2 className="fc-section-title">Saved Timetables</h2>
-            <button onClick={() => navigate('/faculty/timetable-report')} className="fc-btn primary">
-              View All Reports
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => navigate('/faculty/timetable-report')} className="fc-btn primary">
+                View All Reports
+              </button>
+              <button onClick={refreshTimetables} className="fc-btn secondary">
+                Refresh Table
+              </button>
+            </div>
+          </div>
+
+          <div className="mb-5">
+            <AdvancedFilterPanel
+              filters={timetableFilters}
+              onFilterChange={(key, value) => setTimetableFilters((prev) => ({ ...prev, [key]: value }))}
+              onApply={refreshTimetables}
+              onReset={resetTimetableFilters}
+            />
+          </div>
+
+          <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div className="fc-card p-4">
+              <p className="fc-text-muted text-xs mb-2">Loaded Timetables</p>
+              <p className="font-bold text-slate-900">{savedTimetables.length}</p>
+            </div>
+            <div className="fc-card p-4">
+              <p className="fc-text-muted text-xs mb-2">Filtered Results</p>
+              <p className="font-bold text-slate-900">{filteredTimetables.length}</p>
+            </div>
+            <div className="fc-card p-4">
+              <p className="fc-text-muted text-xs mb-2">Pending Review</p>
+              <p className="font-bold text-slate-900">{pendingReviewTimetables.length}</p>
+            </div>
+            <div className="fc-card p-4">
+              <p className="fc-text-muted text-xs mb-2">Conflict Count</p>
+              <p className="font-bold text-slate-900">{conflicts.length}</p>
+            </div>
           </div>
 
           {loadingTimetables ? (
@@ -533,12 +629,12 @@ const FacultyCoordinatorDashboardEnhanced = ({ user }) => {
                 <p className="fc-text-muted">Loading timetables...</p>
               </div>
             </div>
-          ) : savedTimetables.length === 0 ? (
+          ) : filteredTimetables.length === 0 ? (
             <div className="fc-empty-state">
               <div className="fc-empty-state-icon">📅</div>
               <div className="fc-empty-state-title">No Timetables Found</div>
               <div className="fc-empty-state-description">
-                Generate your first timetable using the scheduler
+                Generate your first timetable or adjust the filters to inspect a specific review set
               </div>
               <button
                 onClick={() => navigate('/scheduler/by-year')}
@@ -549,35 +645,52 @@ const FacultyCoordinatorDashboardEnhanced = ({ user }) => {
               </button>
             </div>
           ) : (
-            <div className="fc-grid-2">
-              {savedTimetables.slice(0, 6).map((timetable) => (
+            <EnhancedTable
+              columns={timetableColumns}
+              data={filteredTimetables}
+              emptyMessage="No timetables match the active filter set"
+            />
+          )}
+        </div>
+
+        <div id="review-queue" className="fc-section">
+          <div className="fc-section-header">
+            <h2 className="fc-section-title">Review Queue</h2>
+            <button onClick={refreshTimetables} className="fc-btn secondary">
+              Sync Queue
+            </button>
+          </div>
+
+          {pendingReviewTimetables.length === 0 ? (
+            <div className="fc-empty-state">
+              <div className="fc-empty-state-icon">✅</div>
+              <div className="fc-empty-state-title">No Pending Reviews</div>
+              <div className="fc-empty-state-description">All timetables in the queue are already reviewed or have been filtered out.</div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {pendingReviewTimetables.slice(0, 5).map((timetable) => (
                 <div key={timetable.id} className="fc-card">
-                  <div className="fc-card-header">
-                    <h3>{timetable.name || 'Timetable'}</h3>
-                  </div>
                   <div className="fc-card-content">
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="fc-text-muted">Year:</span>
-                        <span className="font-semibold">{timetable.year || 'N/A'}</span>
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                      <div>
+                        <h4 className="font-bold text-slate-900">{timetable.name || 'Pending timetable'}</h4>
+                        <p className="text-sm text-slate-600">
+                          {String(timetable.year || timetable.academicYear || 'N/A')} · Semester {String(timetable.semester || 'N/A')} · {timetable.specialization || timetable?.data?.scope?.specialization || 'General'}
+                        </p>
                       </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="fc-text-muted">Semester:</span>
-                        <span className="font-semibold">{timetable.semester || 'N/A'}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="fc-text-muted">Status:</span>
-                        <span className="fc-badge success">Active</span>
+                      <div className="flex flex-wrap gap-2">
+                        <button onClick={() => downloadTimetableCsv(timetable)} className="fc-btn outline">
+                          Export CSV
+                        </button>
+                        <button onClick={() => handleApproveTimetable(timetable)} className="fc-btn primary" disabled={actioningTimetableId === String(timetable.id)}>
+                          Approve
+                        </button>
+                        <button onClick={() => handleRejectTimetable(timetable)} className="fc-btn secondary" disabled={actioningTimetableId === String(timetable.id)}>
+                          Reject
+                        </button>
                       </div>
                     </div>
-                  </div>
-                  <div className="fc-card-footer">
-                    <button
-                      onClick={() => downloadTimetableAsCSV(timetable)}
-                      className="fc-btn outline w-full text-center"
-                    >
-                      Download CSV
-                    </button>
                   </div>
                 </div>
               ))}
