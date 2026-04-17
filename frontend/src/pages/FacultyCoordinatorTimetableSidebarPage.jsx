@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Radar, SlidersHorizontal, Search, Download, RefreshCcw } from 'lucide-react';
+import { Radar, SlidersHorizontal, Search, Download, RefreshCcw, Sparkles, ChevronDown, ChevronRight, Filter } from 'lucide-react';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 import schedulerApi from '../api/scheduler.js';
 import { downloadTimetableAsCSV } from '../api/timetableGeneration.js';
@@ -424,6 +424,10 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
   const [favoriteIds, setFavoriteIds] = useState([]);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [showRiskHighlights, setShowRiskHighlights] = useState(true);
+  const [reportViewMode, setReportViewMode] = useState('command');
+  const [expandedYears, setExpandedYears] = useState({});
+  const [expandedSpecializations, setExpandedSpecializations] = useState({});
+  const [pageAnimated, setPageAnimated] = useState(false);
 
   useEffect(() => {
     setFilterPresets(safeReadStorageJson(FILTER_PRESET_STORAGE_KEY, []));
@@ -562,6 +566,213 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
       return true;
     });
   }, [timetables, filterYear, filterSemester, filterSpecialization, favoritesOnly, favoriteIds, searchQuery]);
+
+  const groupedTimetableIndex = useMemo(() => {
+    const yearMap = new Map();
+
+    filteredTimetables.forEach((tt) => {
+      const meta = extractTimetableMeta(tt);
+      const year = String(meta.year || 'ALL').trim() || 'ALL';
+      const specialization = String(meta.specialization || 'ALL').trim() || 'ALL';
+      const semester = String(meta.semester || 'ALL').trim() || 'ALL';
+
+      if (!yearMap.has(year)) yearMap.set(year, new Map());
+      const specializationMap = yearMap.get(year);
+
+      if (!specializationMap.has(specialization)) specializationMap.set(specialization, new Map());
+      const semesterMap = specializationMap.get(specialization);
+
+      if (!semesterMap.has(semester)) semesterMap.set(semester, []);
+      semesterMap.get(semester).push(tt);
+    });
+
+    const sortToken = (left, right) => {
+      const leftNumber = Number(left);
+      const rightNumber = Number(right);
+      const leftIsNumber = Number.isFinite(leftNumber) && String(leftNumber) === String(left);
+      const rightIsNumber = Number.isFinite(rightNumber) && String(rightNumber) === String(right);
+
+      if (leftIsNumber && rightIsNumber) return leftNumber - rightNumber;
+      if (leftIsNumber) return -1;
+      if (rightIsNumber) return 1;
+      return String(left).localeCompare(String(right));
+    };
+
+    return Array.from(yearMap.entries())
+      .map(([year, specializationMap]) => {
+        const specializations = Array.from(specializationMap.entries())
+          .map(([specialization, semesterMap]) => {
+            const semesters = Array.from(semesterMap.entries())
+              .map(([semester, items]) => ({
+                semester,
+                items: [...items].sort(
+                  (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+                ),
+              }))
+              .sort((a, b) => sortToken(a.semester, b.semester));
+
+            return {
+              specialization,
+              semesters,
+              count: semesters.reduce((sum, semesterGroup) => sum + semesterGroup.items.length, 0),
+            };
+          })
+          .sort((a, b) => String(a.specialization).localeCompare(String(b.specialization)));
+
+        return {
+          year,
+          specializations,
+          count: specializations.reduce((sum, specializationGroup) => sum + specializationGroup.count, 0),
+        };
+      })
+      .sort((a, b) => sortToken(a.year, b.year));
+  }, [filteredTimetables]);
+
+  const semesterSpotlightCards = useMemo(() => {
+    const cards = [];
+
+    groupedTimetableIndex.forEach((yearGroup) => {
+      yearGroup.specializations.forEach((specializationGroup) => {
+        specializationGroup.semesters.forEach((semesterGroup) => {
+          const latest = semesterGroup.items[0] || null;
+          cards.push({
+            year: yearGroup.year,
+            specialization: specializationGroup.specialization,
+            semester: semesterGroup.semester,
+            count: semesterGroup.items.length,
+            latestId: latest?.id ? String(latest.id) : '',
+            latestName: latest?.name || '',
+            latestCreatedAt: latest?.created_at || null,
+          });
+        });
+      });
+    });
+
+    return cards
+      .sort((left, right) => {
+        const leftTime = new Date(left.latestCreatedAt || 0).getTime();
+        const rightTime = new Date(right.latestCreatedAt || 0).getTime();
+        return rightTime - leftTime;
+      })
+      .slice(0, 12);
+  }, [groupedTimetableIndex]);
+
+  useEffect(() => {
+    if (!groupedTimetableIndex.length) {
+      setExpandedYears({});
+      setExpandedSpecializations({});
+      return;
+    }
+
+    setExpandedYears((previous) => {
+      const next = { ...previous };
+      groupedTimetableIndex.slice(0, 2).forEach((yearGroup) => {
+        if (next[yearGroup.year] === undefined) next[yearGroup.year] = true;
+      });
+      return next;
+    });
+
+    setExpandedSpecializations((previous) => {
+      const next = { ...previous };
+      groupedTimetableIndex.slice(0, 2).forEach((yearGroup) => {
+        yearGroup.specializations.slice(0, 1).forEach((specializationGroup) => {
+          const key = `${yearGroup.year}::${specializationGroup.specialization}`;
+          if (next[key] === undefined) next[key] = true;
+        });
+      });
+      return next;
+    });
+  }, [groupedTimetableIndex]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setPageAnimated(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  const semesterTrend = useMemo(() => {
+    const periodMap = new Map();
+
+    filteredTimetables.forEach((tt) => {
+      const meta = extractTimetableMeta(tt);
+      const year = String(meta.year || '').trim();
+      const semester = String(meta.semester || '').trim();
+      if (!year || !semester) return;
+
+      const key = `${year}-${semester}`;
+      const label = `Y${year} S${semester}`;
+      const current = periodMap.get(key) || {
+        key,
+        year,
+        semester,
+        label,
+        value: 0,
+      };
+      current.value += 1;
+      periodMap.set(key, current);
+    });
+
+    const sorted = Array.from(periodMap.values()).sort((left, right) => {
+      const leftYear = Number(left.year);
+      const rightYear = Number(right.year);
+      if (Number.isFinite(leftYear) && Number.isFinite(rightYear) && leftYear !== rightYear) {
+        return leftYear - rightYear;
+      }
+
+      const leftSemester = Number(left.semester);
+      const rightSemester = Number(right.semester);
+      if (Number.isFinite(leftSemester) && Number.isFinite(rightSemester) && leftSemester !== rightSemester) {
+        return leftSemester - rightSemester;
+      }
+
+      return left.key.localeCompare(right.key);
+    });
+
+    const maxValue = Math.max(1, ...sorted.map((item) => item.value));
+    const chartHeight = 72;
+    const chartWidth = Math.max(240, sorted.length > 1 ? (sorted.length - 1) * 56 : 240);
+
+    const points = sorted.map((item, index) => {
+      const x = sorted.length <= 1 ? chartWidth / 2 : (index * chartWidth) / (sorted.length - 1);
+      const y = chartHeight - (item.value / maxValue) * chartHeight;
+      return {
+        ...item,
+        x,
+        y,
+      };
+    });
+
+    const linePath = points
+      .map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x},${point.y}`)
+      .join(' ');
+
+    const areaPath = points.length
+      ? `${linePath} L${points[points.length - 1].x},${chartHeight} L${points[0].x},${chartHeight} Z`
+      : '';
+
+    return {
+      points,
+      linePath,
+      areaPath,
+      chartWidth,
+      chartHeight,
+      maxValue,
+    };
+  }, [filteredTimetables]);
+
+  const toggleYearExpansion = (year) => {
+    setExpandedYears((previous) => ({
+      ...previous,
+      [year]: !previous[year],
+    }));
+  };
+
+  const toggleSpecializationExpansion = (year, specialization) => {
+    const key = `${year}::${specialization}`;
+    setExpandedSpecializations((previous) => ({
+      ...previous,
+      [key]: !previous[key],
+    }));
+  };
 
   useEffect(() => {
     if (!yearOptions.includes(filterYear)) {
@@ -785,6 +996,25 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
       sidebarTheme="timetable"
     >
       <div id="top" className="fc-layout-stack fc-layout-stack-tight">
+        <style>{`
+          @keyframes timetableEnterUp {
+            0% { opacity: 0; transform: translateY(14px) scale(0.985); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+          }
+
+          @keyframes timetableFadeIn {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+          }
+
+          .timetable-enter {
+            animation: timetableEnterUp 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+          }
+
+          .timetable-fade {
+            animation: timetableFadeIn 420ms ease-out both;
+          }
+        `}</style>
         <section className="relative overflow-hidden rounded-3xl border border-sky-200/80 bg-gradient-to-br from-sky-50 via-white to-cyan-50 p-6 shadow-[0_20px_45px_rgba(14,116,144,0.12)]">
           <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.25),transparent_70%)]" />
           <div className="pointer-events-none absolute -bottom-24 -left-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(14,165,233,0.16),transparent_70%)]" />
@@ -1044,117 +1274,213 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
             </div>
           </div>
 
-          <div className="mt-4 rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 via-white to-slate-200 p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Display Generated Timetables</p>
-            <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
-              <input
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500"
-                placeholder="Search by name, ID, specialization, status"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <div className="md:col-span-2 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setFavoritesOnly((prev) => !prev)}
-                  className={`rounded-lg border px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] ${favoritesOnly ? 'border-amber-600 bg-amber-600 text-white' : 'border-slate-300 bg-white text-slate-700'}`}
-                >
-                  {favoritesOnly ? 'Showing Favorites' : 'Show Favorites Only'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchQuery('');
-                    setFavoritesOnly(false);
-                  }}
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-700"
-                >
-                  Clear Search
-                </button>
+          <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[360px_1fr]">
+            <aside className={`h-fit rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 via-white to-slate-200 p-4 shadow-sm xl:sticky xl:top-24 ${pageAnimated ? 'timetable-enter' : 'opacity-0'}`} style={{ animationDelay: '60ms' }}>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Display Generated Timetables</p>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-sky-200 bg-sky-50/70 p-2">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-sky-700">
+                  <Sparkles size={14} /> Advanced View Modes
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setReportViewMode('command')}
+                    className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${reportViewMode === 'command' ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-300 bg-white text-slate-700'}`}
+                  >
+                    Command Center
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReportViewMode('compact')}
+                    className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${reportViewMode === 'compact' ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-300 bg-white text-slate-700'}`}
+                  >
+                    Compact Focus
+                  </button>
+                </div>
               </div>
-            </div>
-            <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
-              <select
-                className="rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-2 text-sm text-slate-900"
-                value={filterYear}
-                onChange={(e) => setFilterYear(e.target.value)}
-              >
-                {yearOptions.map((year) => (
-                  <option key={year} value={year}>{year === 'ALL' ? 'All Years' : `Year ${year}`}</option>
-                ))}
-              </select>
-              <select
-                className="rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-2 text-sm text-slate-900"
-                value={filterSemester}
-                onChange={(e) => setFilterSemester(e.target.value)}
-              >
-                {semesterOptions.map((semester) => (
-                  <option key={semester} value={semester}>{semester === 'ALL' ? 'All Semesters' : `Semester ${semester}`}</option>
-                ))}
-              </select>
-              <select
-                className="rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-2 text-sm text-slate-900"
-                value={filterSpecialization}
-                onChange={(e) => setFilterSpecialization(e.target.value)}
-              >
-                {specializationOptions.map((spec) => (
-                  <option key={spec} value={spec}>{spec === 'ALL' ? 'All Specializations' : spec}</option>
-                ))}
-              </select>
-            </div>
 
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-sky-300 bg-white px-3 py-1 text-xs font-semibold text-sky-700">
-                {filteredTimetables.length} timetable(s)
-              </span>
-              {filterYear !== 'ALL' && <span className="rounded-full border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-1 text-xs text-slate-700">Year {filterYear}</span>}
-              {filterSemester !== 'ALL' && <span className="rounded-full border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-1 text-xs text-slate-700">Semester {filterSemester}</span>}
-              {filterSpecialization !== 'ALL' && <span className="rounded-full border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-1 text-xs text-slate-700">{filterSpecialization}</span>}
-            </div>
-
-            <div className="mt-3 rounded-xl border border-slate-300 bg-white p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Saved Filter Presets</p>
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-3 grid grid-cols-1 gap-2">
                 <input
-                  className="min-w-[220px] rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500"
-                  placeholder="Preset name"
-                  value={presetName}
-                  onChange={(e) => setPresetName(e.target.value)}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500"
+                  placeholder="Search by name, ID, specialization, status"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                 />
-                <button
-                  type="button"
-                  onClick={saveFilterPreset}
-                  className="rounded-lg border border-blue-600 bg-blue-600 px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-white"
-                >
-                  Save Preset
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFavoritesOnly((prev) => !prev)}
+                    className={`rounded-lg border px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] ${favoritesOnly ? 'border-amber-600 bg-amber-600 text-white' : 'border-slate-300 bg-white text-slate-700'}`}
+                  >
+                    {favoritesOnly ? 'Showing Favorites' : 'Show Favorites Only'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setFavoritesOnly(false);
+                    }}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-700"
+                  >
+                    Clear Search
+                  </button>
+                </div>
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {!filterPresets.length && (
-                  <span className="text-xs text-slate-500">No presets saved yet.</span>
-                )}
-                {filterPresets.map((preset) => (
-                  <div key={preset.id} className="flex items-center gap-1 rounded-full border border-slate-300 bg-slate-50 px-2 py-1">
-                    <button
-                      type="button"
-                      onClick={() => applyFilterPreset(preset)}
-                      className="text-xs font-semibold text-slate-700"
-                    >
-                      {preset.name}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeFilterPreset(preset.id)}
-                      className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700"
-                    >
-                      X
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
 
-            <div className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-3">
+              <div className="mt-3 grid grid-cols-1 gap-2">
+                <select
+                  className="rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-2 text-sm text-slate-900"
+                  value={filterYear}
+                  onChange={(e) => setFilterYear(e.target.value)}
+                >
+                  {yearOptions.map((year) => (
+                    <option key={year} value={year}>{year === 'ALL' ? 'All Years' : `Year ${year}`}</option>
+                  ))}
+                </select>
+                <select
+                  className="rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-2 text-sm text-slate-900"
+                  value={filterSemester}
+                  onChange={(e) => setFilterSemester(e.target.value)}
+                >
+                  {semesterOptions.map((semester) => (
+                    <option key={semester} value={semester}>{semester === 'ALL' ? 'All Semesters' : `Semester ${semester}`}</option>
+                  ))}
+                </select>
+                <select
+                  className="rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-2 text-sm text-slate-900"
+                  value={filterSpecialization}
+                  onChange={(e) => setFilterSpecialization(e.target.value)}
+                >
+                  {specializationOptions.map((spec) => (
+                    <option key={spec} value={spec}>{spec === 'ALL' ? 'All Specializations' : spec}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-sky-300 bg-white px-3 py-1 text-xs font-semibold text-sky-700">
+                  {filteredTimetables.length} timetable(s)
+                </span>
+                {filterYear !== 'ALL' && <span className="rounded-full border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-1 text-xs text-slate-700">Year {filterYear}</span>}
+                {filterSemester !== 'ALL' && <span className="rounded-full border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-1 text-xs text-slate-700">Semester {filterSemester}</span>}
+                {filterSpecialization !== 'ALL' && <span className="rounded-full border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-1 text-xs text-slate-700">{filterSpecialization}</span>}
+              </div>
+
+              <div className="mt-3 rounded-xl border border-slate-300 bg-white p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Saved Filter Presets</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <input
+                    className="min-w-[220px] rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500"
+                    placeholder="Preset name"
+                    value={presetName}
+                    onChange={(e) => setPresetName(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={saveFilterPreset}
+                    className="rounded-lg border border-blue-600 bg-blue-600 px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-white"
+                  >
+                    Save Preset
+                  </button>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {!filterPresets.length && (
+                    <span className="text-xs text-slate-500">No presets saved yet.</span>
+                  )}
+                  {filterPresets.map((preset) => (
+                    <div key={preset.id} className="flex items-center gap-1 rounded-full border border-slate-300 bg-slate-50 px-2 py-1">
+                      <button
+                        type="button"
+                        onClick={() => applyFilterPreset(preset)}
+                        className="text-xs font-semibold text-slate-700"
+                      >
+                        {preset.name}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeFilterPreset(preset.id)}
+                        className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700"
+                      >
+                        X
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-xl border border-slate-300 bg-white p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Generated Timetable Trend</p>
+                  <span className="text-[11px] font-semibold text-slate-500">Per semester</span>
+                </div>
+
+                {!semesterTrend.points.length ? (
+                  <p className="text-xs text-slate-500">Trend appears once timetables exist for filtered periods.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <svg
+                      width={semesterTrend.chartWidth + 16}
+                      height={semesterTrend.chartHeight + 28}
+                      viewBox={`0 0 ${semesterTrend.chartWidth + 16} ${semesterTrend.chartHeight + 28}`}
+                      className="block"
+                    >
+                      <defs>
+                        <linearGradient id="semesterTrendFill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.35" />
+                          <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0.02" />
+                        </linearGradient>
+                      </defs>
+                      <g transform="translate(8 6)">
+                        <line x1="0" y1={semesterTrend.chartHeight} x2={semesterTrend.chartWidth} y2={semesterTrend.chartHeight} stroke="#cbd5e1" strokeWidth="1" />
+                        {semesterTrend.areaPath && <path d={semesterTrend.areaPath} fill="url(#semesterTrendFill)" />}
+                        {semesterTrend.linePath && <path d={semesterTrend.linePath} fill="none" stroke="#0284c7" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />}
+                        {semesterTrend.points.map((point) => (
+                          <g key={`point-${point.key}`}>
+                            <circle cx={point.x} cy={point.y} r="3.5" fill="#0ea5e9" stroke="#ffffff" strokeWidth="1.5" />
+                            <text x={point.x} y={semesterTrend.chartHeight + 14} textAnchor="middle" fontSize="9" fill="#475569">{point.label}</text>
+                          </g>
+                        ))}
+                      </g>
+                    </svg>
+                  </div>
+                )}
+              </div>
+            </aside>
+
+            <div className={`rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 via-white to-slate-200 p-4 shadow-sm ${pageAnimated ? 'timetable-fade' : 'opacity-0'}`} style={{ animationDelay: '120ms' }}>
+              {reportViewMode === 'command' && (
+                <div className="mt-1 rounded-xl border border-indigo-200 bg-indigo-50/60 p-3">
+                  <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-indigo-700">
+                    <Filter size={13} /> Semester Spotlight
+                  </div>
+                  {!semesterSpotlightCards.length ? (
+                    <p className="text-xs text-slate-500">No semester spotlight cards for the current filters.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                      {semesterSpotlightCards.map((card, index) => (
+                        <button
+                          key={`spotlight-${card.year}-${card.specialization}-${card.semester}`}
+                          type="button"
+                          onClick={() => {
+                            setFilterYear(card.year);
+                            setFilterSpecialization(card.specialization);
+                            setFilterSemester(card.semester);
+                            if (card.latestId) setSelectedId(card.latestId);
+                          }}
+                          className={`rounded-lg border border-indigo-200 bg-white p-2 text-left transition hover:border-indigo-300 hover:bg-indigo-50 ${pageAnimated ? 'timetable-enter' : 'opacity-0'}`}
+                          style={{ animationDelay: `${140 + index * 35}ms` }}
+                        >
+                          <p className="text-xs font-semibold text-slate-900">Year {card.year} • {card.specialization}</p>
+                          <p className="text-[11px] text-slate-600">Semester {card.semester} • {card.count} timetable(s)</p>
+                          <p className="mt-1 truncate text-[11px] text-indigo-700">{card.latestName || 'Latest timetable selected'}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className={`mt-3 grid grid-cols-1 gap-2 ${reportViewMode === 'compact' ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
               {filteredTimetables.slice(0, 9).map((tt) => {
                 const meta = extractTimetableMeta(tt);
                 const active = String(selectedId) === String(tt.id);
@@ -1164,7 +1490,8 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                     key={tt.id}
                     type="button"
                     onClick={() => setSelectedId(String(tt.id))}
-                    className={`rounded-xl border px-3 py-3 text-left transition ${active ? 'border-sky-500 bg-sky-100/70 shadow-sm' : 'border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50'}`}
+                    className={`rounded-xl border px-3 py-3 text-left transition ${active ? 'border-sky-500 bg-sky-100/70 shadow-sm' : 'border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50'} ${pageAnimated ? 'timetable-enter' : 'opacity-0'}`}
+                    style={{ animationDelay: `${220 + (Number(tt.id) % 9) * 35}ms` }}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <p className="truncate text-sm font-semibold text-slate-900">{tt.name || `Timetable #${tt.id}`}</p>
@@ -1201,6 +1528,89 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                   No generated timetables match this filter.
                 </div>
               )}
+              </div>
+
+              <div className="mt-4 rounded-xl border border-slate-300 bg-white p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                Year / Specialization / Semester Browser
+              </p>
+
+              {!groupedTimetableIndex.length ? (
+                <p className="mt-2 text-xs text-slate-500">No timetable groups available for the current filters.</p>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  {groupedTimetableIndex.map((yearGroup, yearIndex) => (
+                    <div key={`year-${yearGroup.year}`} className={`rounded-lg border border-slate-200 bg-slate-50 p-2 ${pageAnimated ? 'timetable-enter' : 'opacity-0'}`} style={{ animationDelay: `${260 + yearIndex * 45}ms` }}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFilterYear(yearGroup.year);
+                            toggleYearExpansion(yearGroup.year);
+                          }}
+                          className="rounded-full border border-sky-300 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700"
+                        >
+                          {expandedYears[yearGroup.year] ? <ChevronDown size={12} className="inline mr-1" /> : <ChevronRight size={12} className="inline mr-1" />}
+                          Year {yearGroup.year}
+                        </button>
+                        <span className="text-[11px] font-semibold text-slate-600">{yearGroup.count} timetable(s)</span>
+                      </div>
+
+                      {expandedYears[yearGroup.year] && (
+                        <div className="mt-2 space-y-2">
+                          {yearGroup.specializations.map((specializationGroup, specializationIndex) => {
+                            const specKey = `${yearGroup.year}::${specializationGroup.specialization}`;
+                            const isSpecExpanded = Boolean(expandedSpecializations[specKey]);
+                            return (
+                              <div key={`spec-${yearGroup.year}-${specializationGroup.specialization}`} className={`rounded-md border border-slate-200 bg-white p-2 ${pageAnimated ? 'timetable-fade' : 'opacity-0'}`} style={{ animationDelay: `${320 + specializationIndex * 40}ms` }}>
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setFilterYear(yearGroup.year);
+                                      setFilterSpecialization(specializationGroup.specialization);
+                                      toggleSpecializationExpansion(yearGroup.year, specializationGroup.specialization);
+                                    }}
+                                    className="rounded-full border border-indigo-300 bg-indigo-50 px-2 py-1 text-[11px] font-semibold text-indigo-700"
+                                  >
+                                    {isSpecExpanded ? <ChevronDown size={12} className="inline mr-1" /> : <ChevronRight size={12} className="inline mr-1" />}
+                                    {specializationGroup.specialization}
+                                  </button>
+                                  <span className="text-[11px] font-semibold text-slate-600">{specializationGroup.count} timetable(s)</span>
+                                </div>
+
+                                {isSpecExpanded && (
+                                  <div className="mt-2 flex flex-wrap gap-2">
+                                    {specializationGroup.semesters.map((semesterGroup, semesterIndex) => (
+                                      <button
+                                        key={`sem-${yearGroup.year}-${specializationGroup.specialization}-${semesterGroup.semester}`}
+                                        type="button"
+                                        onClick={() => {
+                                          setFilterYear(yearGroup.year);
+                                          setFilterSpecialization(specializationGroup.specialization);
+                                          setFilterSemester(semesterGroup.semester);
+                                          if (semesterGroup.items[0]?.id) {
+                                            setSelectedId(String(semesterGroup.items[0].id));
+                                          }
+                                        }}
+                                        className={`rounded-full border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 ${pageAnimated ? 'timetable-fade' : 'opacity-0'}`}
+                                        style={{ animationDelay: `${360 + semesterIndex * 32}ms` }}
+                                      >
+                                        Semester {semesterGroup.semester} ({semesterGroup.items.length})
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              </div>
             </div>
           </div>
 
