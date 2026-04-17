@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Radar, SlidersHorizontal, Search, Download, RefreshCcw, Sparkles, ChevronDown, ChevronRight, Filter } from 'lucide-react';
+import { Radar, SlidersHorizontal, Search, Download, RefreshCcw, Sparkles, ChevronDown, ChevronRight, Filter, Sun, Moon } from 'lucide-react';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 import schedulerApi from '../api/scheduler.js';
 import { downloadTimetableAsCSV } from '../api/timetableGeneration.js';
@@ -12,6 +12,15 @@ const WEEKEND_DAYS = ['Sat', 'Sun'];
 const INSTITUTION_NAME = 'Sri Lanka Institute of Information Technology';
 const FILTER_PRESET_STORAGE_KEY = 'faculty_timetable_filter_presets_v1';
 const FAVORITES_STORAGE_KEY = 'faculty_timetable_favorites_v1';
+const REPORT_THEME_STORAGE_KEY = 'faculty_timetable_report_theme_v1';
+const REPORT_SCROLL_SECTIONS = [
+  { id: 'report-hero', label: 'Overview' },
+  { id: 'report-signals', label: 'Signals' },
+  { id: 'report-risk', label: 'Risk' },
+  { id: 'report-operations', label: 'Operations' },
+  { id: 'report-explorer', label: 'Explorer' },
+  { id: 'report-render', label: 'Render' },
+];
 const WEEKDAY_CLASS_SLOTS = [
   '09:00-10:00',
   '10:00-11:00',
@@ -134,6 +143,52 @@ const parseBatchMeta = (batchKey = '') => {
   };
 };
 
+const extractScheduleDayType = (row = {}) => {
+  const raw = String(
+    row?.day_type
+      || row?.dayType
+      || row?.module_day_type
+      || row?.moduleDayType
+      || row?.details?.day_type
+      || ''
+  ).trim().toLowerCase();
+
+  if (raw === 'weekday') return 'weekday';
+  if (raw === 'weekend') return 'weekend';
+  return '';
+};
+
+const extractRowBatchMode = (row = {}) => {
+  const keys = extractBatchKeys(row);
+  let hasWeekday = false;
+  let hasWeekend = false;
+
+  keys.forEach((key) => {
+    const mode = extractBatchMode(key);
+    if (mode === 'WD') hasWeekday = true;
+    if (mode === 'WE') hasWeekend = true;
+  });
+
+  if (hasWeekday && !hasWeekend) return 'weekday';
+  if (hasWeekend && !hasWeekday) return 'weekend';
+  return '';
+};
+
+const sanitizeScheduleRowsByDayType = (rows = []) => {
+  return (Array.isArray(rows) ? rows : []).filter((row) => {
+    const day = normalizeDay(row?.day);
+    if (day === 'TBA') return true;
+
+    const dayTypeFromBatch = extractRowBatchMode(row);
+    const dayTypeFromRow = extractScheduleDayType(row);
+    const effectiveDayType = dayTypeFromBatch || dayTypeFromRow;
+
+    if (effectiveDayType === 'weekday' && WEEKEND_DAYS.includes(day)) return false;
+    if (effectiveDayType === 'weekend' && WEEKDAY_DAYS.includes(day)) return false;
+    return true;
+  });
+};
+
 const parseSchedule = (timetable) => {
   const rawData = timetable?.data;
   if (!rawData) return [];
@@ -173,14 +228,14 @@ const parseSchedule = (timetable) => {
   if (typeof rawData === 'string') {
     try {
       const parsed = JSON.parse(rawData);
-      return pickScheduleFromObject(parsed);
+      return sanitizeScheduleRowsByDayType(pickScheduleFromObject(parsed));
     } catch {
       return [];
     }
   }
 
   if (typeof rawData === 'object' && rawData !== null) {
-    return pickScheduleFromObject(rawData);
+    return sanitizeScheduleRowsByDayType(pickScheduleFromObject(rawData));
   }
 
   return [];
@@ -428,6 +483,11 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
   const [expandedYears, setExpandedYears] = useState({});
   const [expandedSpecializations, setExpandedSpecializations] = useState({});
   const [pageAnimated, setPageAnimated] = useState(false);
+  const [animatedInsightMetrics, setAnimatedInsightMetrics] = useState({ timetables: 0, modules: 0, groups: 0, favorites: 0 });
+  const [reportTheme, setReportTheme] = useState(() => safeReadStorageJson(REPORT_THEME_STORAGE_KEY, 'light'));
+  const [activeReportSection, setActiveReportSection] = useState(REPORT_SCROLL_SECTIONS[0].id);
+  const [trendHoverIndex, setTrendHoverIndex] = useState(-1);
+  const animatedInsightRef = useRef({ timetables: 0, modules: 0, groups: 0, favorites: 0 });
 
   useEffect(() => {
     setFilterPresets(safeReadStorageJson(FILTER_PRESET_STORAGE_KEY, []));
@@ -441,6 +501,10 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
   useEffect(() => {
     localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favoriteIds));
   }, [favoriteIds]);
+
+  useEffect(() => {
+    localStorage.setItem(REPORT_THEME_STORAGE_KEY, JSON.stringify(reportTheme));
+  }, [reportTheme]);
 
   useEffect(() => {
     let mounted = true;
@@ -798,6 +862,10 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
   }, [selectedId, filteredTimetables]);
 
   const schedule = useMemo(() => parseSchedule(selectedTimetable), [selectedTimetable]);
+  const scopedSchedule = useMemo(
+    () => (Array.isArray(schedule) ? schedule.filter((row) => rowMatchesModeFilter(row, dayModeFilter)) : []),
+    [schedule, dayModeFilter]
+  );
 
   const batchTables = useMemo(() => buildBatchTable(schedule, dayModeFilter), [schedule, dayModeFilter]);
   const unifiedTable = useMemo(() => buildUnifiedTable(schedule, dayModeFilter), [schedule, dayModeFilter]);
@@ -822,7 +890,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
   const activeTimeline = useMemo(() => buildCampusTimeline(dayModeFilter), [dayModeFilter]);
 
   const insightMetrics = useMemo(() => {
-    const uniqueModules = new Set(schedule.map((row) => row.moduleName || row.moduleId || 'Module')).size;
+    const uniqueModules = new Set(scopedSchedule.map((row) => row.moduleName || row.moduleId || 'Module')).size;
     const uniqueGroups = new Set(filteredBatchTables.map((batch) => batch.batchKey)).size;
     const generatedAt = selectedTimetable?.created_at
       ? new Date(selectedTimetable.created_at).toLocaleString()
@@ -834,7 +902,47 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
       groups: uniqueGroups,
       generatedAt,
     };
-  }, [filteredTimetables.length, filteredBatchTables, schedule, selectedTimetable]);
+  }, [filteredTimetables.length, filteredBatchTables, scopedSchedule, selectedTimetable]);
+
+  useEffect(() => {
+    const targets = {
+      timetables: insightMetrics.timetables,
+      modules: insightMetrics.modules,
+      groups: insightMetrics.groups,
+      favorites: favoriteIds.length,
+    };
+
+    const startValues = { ...animatedInsightRef.current };
+    const startTime = performance.now();
+    const duration = 460;
+
+    let rafId = 0;
+    const tick = (now) => {
+      const progress = Math.min(1, (now - startTime) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+
+      setAnimatedInsightMetrics({
+        timetables: Math.round(startValues.timetables + (targets.timetables - startValues.timetables) * eased),
+        modules: Math.round(startValues.modules + (targets.modules - startValues.modules) * eased),
+        groups: Math.round(startValues.groups + (targets.groups - startValues.groups) * eased),
+        favorites: Math.round(startValues.favorites + (targets.favorites - startValues.favorites) * eased),
+      });
+
+      animatedInsightRef.current = {
+        timetables: Math.round(startValues.timetables + (targets.timetables - startValues.timetables) * eased),
+        modules: Math.round(startValues.modules + (targets.modules - startValues.modules) * eased),
+        groups: Math.round(startValues.groups + (targets.groups - startValues.groups) * eased),
+        favorites: Math.round(startValues.favorites + (targets.favorites - startValues.favorites) * eased),
+      };
+
+      if (progress < 1) {
+        rafId = window.requestAnimationFrame(tick);
+      }
+    };
+
+    rafId = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(rafId);
+  }, [insightMetrics.timetables, insightMetrics.modules, insightMetrics.groups, favoriteIds.length]);
 
   const planningInsights = useMemo(() => {
     const scopedRows = Array.isArray(schedule)
@@ -985,6 +1093,37 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
     }
   }, [dayModeFilter, filteredBatchTables.length, schedule.length]);
 
+  useEffect(() => {
+    const elements = REPORT_SCROLL_SECTIONS
+      .map((section) => document.getElementById(section.id))
+      .filter(Boolean);
+
+    if (!elements.length) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (!visible?.target?.id) return;
+        setActiveReportSection(visible.target.id);
+      },
+      { threshold: [0.25, 0.45, 0.65], rootMargin: '-30% 0px -35% 0px' }
+    );
+
+    elements.forEach((element) => observer.observe(element));
+    return () => observer.disconnect();
+  }, [loading, selectedTimetable, layoutMode, reportViewMode]);
+
+  const activeSectionIndex = Math.max(0, REPORT_SCROLL_SECTIONS.findIndex((item) => item.id === activeReportSection));
+  const sectionProgress = Math.max(10, Math.round(((activeSectionIndex + 1) / REPORT_SCROLL_SECTIONS.length) * 100));
+
+  const jumpToSection = (sectionId) => {
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
     <FacultyCoordinatorShell
       user={user}
@@ -995,7 +1134,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
       footerNote="Faculty Coordinator timetable report view"
       sidebarTheme="timetable"
     >
-      <div id="top" className="fc-layout-stack fc-layout-stack-tight">
+      <div id="top" className={`fc-layout-stack fc-layout-stack-tight ${reportTheme === 'dark' ? 'report-theme-dark' : 'report-theme-light'}`}>
         <style>{`
           @keyframes timetableEnterUp {
             0% { opacity: 0; transform: translateY(14px) scale(0.985); }
@@ -1014,39 +1153,118 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
           .timetable-fade {
             animation: timetableFadeIn 420ms ease-out both;
           }
+
+          .report-theme-dark {
+            color: #e2e8f0;
+          }
+
+          .report-theme-dark .theme-shell {
+            border-color: #334155;
+            background: linear-gradient(138deg, #0f172a 0%, #111827 45%, #082f49 100%);
+            box-shadow: 0 20px 42px rgba(2, 6, 23, 0.5);
+          }
+
+          .report-theme-dark .theme-panel {
+            border-color: #334155;
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.82), rgba(30, 41, 59, 0.72));
+            box-shadow: 0 12px 30px rgba(2, 6, 23, 0.45);
+          }
+
+          .report-theme-dark .theme-soft {
+            border-color: #475569;
+            background: rgba(15, 23, 42, 0.78);
+          }
+
+          .report-theme-dark .theme-soft-plain {
+            border-color: #475569;
+            background: rgba(30, 41, 59, 0.62);
+          }
+
+          .report-theme-dark .theme-text-strong {
+            color: #f8fafc;
+          }
+
+          .report-theme-dark .theme-text-medium {
+            color: #cbd5e1;
+          }
+
+          .report-theme-dark .theme-text-soft {
+            color: #94a3b8;
+          }
+
+          .report-theme-dark .theme-chip {
+            border-color: #475569;
+            background: rgba(15, 23, 42, 0.86);
+            color: #dbeafe;
+          }
         `}</style>
-        <section className="relative overflow-hidden rounded-3xl border border-sky-200/80 bg-gradient-to-br from-sky-50 via-white to-cyan-50 p-6 shadow-[0_20px_45px_rgba(14,116,144,0.12)]">
+        <section className="theme-panel rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-[0_10px_26px_rgba(15,23,42,0.08)]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 theme-text-soft">Section Progress Navigator</p>
+              <p className="text-[11px] text-slate-600 theme-text-medium">Scroll and jump between report sections with live progress tracking.</p>
+            </div>
+            <div className="w-full max-w-[300px] rounded-full bg-slate-200 theme-soft-plain">
+              <div className="h-2 rounded-full bg-gradient-to-r from-sky-500 to-cyan-500 transition-all duration-500" style={{ width: `${sectionProgress}%` }} />
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {REPORT_SCROLL_SECTIONS.map((section) => {
+              const isActive = section.id === activeReportSection;
+              return (
+                <button
+                  key={section.id}
+                  type="button"
+                  onClick={() => jumpToSection(section.id)}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${isActive ? 'border-sky-600 bg-sky-600 text-white shadow-[0_4px_14px_rgba(2,132,199,0.35)]' : 'border-slate-300 bg-white text-slate-700 hover:border-sky-300 hover:bg-sky-50'} ${pageAnimated ? 'timetable-enter' : 'opacity-0'}`}
+                >
+                  {section.label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section id="report-hero" className="theme-shell relative overflow-hidden rounded-3xl border border-sky-200/80 bg-gradient-to-br from-sky-50 via-white to-cyan-50 p-6 shadow-[0_20px_45px_rgba(14,116,144,0.12)]">
           <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.25),transparent_70%)]" />
           <div className="pointer-events-none absolute -bottom-24 -left-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(14,165,233,0.16),transparent_70%)]" />
           <div className="relative grid grid-cols-1 gap-4 lg:grid-cols-[1.35fr_1fr]">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Creative Timetable Studio</p>
-              <h2 className="mt-2 text-2xl font-extrabold text-slate-900">Timetable View Intelligence Panel</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-700">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700 theme-text-medium">Creative Timetable Studio</p>
+              <h2 className="theme-text-strong mt-2 text-2xl font-extrabold text-slate-900">Timetable View Intelligence Panel</h2>
+              <p className="theme-text-medium mt-2 max-w-2xl text-sm leading-6 text-slate-700">
                 Explore generated timetables by year, semester, and specialization with a dynamic master grid and grouped academic layouts.
               </p>
               <div className="mt-4 flex flex-wrap items-center gap-2">
-                <span className="rounded-full border border-sky-300 bg-white px-3 py-1 text-xs font-semibold text-sky-700">{insightMetrics.timetables} filtered timetable(s)</span>
-                <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700">{dayModeFilter === 'WD' ? 'Weekday Mode' : dayModeFilter === 'WE' ? 'Weekend Mode' : 'All Batch Modes'}</span>
-                <span className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs text-emerald-700">Layout: {layoutMode === 'unified' ? 'Master View' : 'Grouped View'}</span>
+                <span className="theme-chip rounded-full border border-sky-300 bg-white px-3 py-1 text-xs font-semibold text-sky-700">{animatedInsightMetrics.timetables} filtered timetable(s)</span>
+                <span className="theme-chip rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700">{dayModeFilter === 'WD' ? 'Weekday Mode' : dayModeFilter === 'WE' ? 'Weekend Mode' : 'All Batch Modes'}</span>
+                <span className="theme-chip rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs text-emerald-700">Layout: {layoutMode === 'unified' ? 'Master View' : 'Grouped View'}</span>
+                <button
+                  type="button"
+                  onClick={() => setReportTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+                  className="theme-chip inline-flex items-center gap-1 rounded-full border border-indigo-300 bg-white px-3 py-1 text-xs font-semibold text-indigo-700"
+                >
+                  {reportTheme === 'dark' ? <Sun size={12} /> : <Moon size={12} />}
+                  {reportTheme === 'dark' ? 'Light Canvas' : 'Dark Canvas'}
+                </button>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-2xl border border-sky-200 bg-white/95 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Modules</p>
-                <p className="mt-1 text-2xl font-extrabold text-slate-900">{insightMetrics.modules}</p>
+              <div className="theme-soft rounded-2xl border border-sky-200 bg-white/95 p-3">
+                <p className="theme-text-soft text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Modules</p>
+                <p className="theme-text-strong mt-1 text-2xl font-extrabold text-slate-900">{animatedInsightMetrics.modules}</p>
               </div>
-              <div className="rounded-2xl border border-sky-200 bg-white/95 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Groups</p>
-                <p className="mt-1 text-2xl font-extrabold text-slate-900">{insightMetrics.groups}</p>
+              <div className="theme-soft rounded-2xl border border-sky-200 bg-white/95 p-3">
+                <p className="theme-text-soft text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Groups</p>
+                <p className="theme-text-strong mt-1 text-2xl font-extrabold text-slate-900">{animatedInsightMetrics.groups}</p>
               </div>
-              <div className="col-span-2 rounded-2xl border border-sky-200 bg-white/95 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Last Generated</p>
-                <p className="mt-1 text-sm font-semibold text-slate-800">{insightMetrics.generatedAt}</p>
+              <div className="theme-soft col-span-2 rounded-2xl border border-sky-200 bg-white/95 p-3">
+                <p className="theme-text-soft text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Last Generated</p>
+                <p className="theme-text-medium mt-1 text-sm font-semibold text-slate-800">{insightMetrics.generatedAt}</p>
               </div>
-              <div className="col-span-2 rounded-2xl border border-amber-200 bg-amber-50/90 p-3">
+              <div className="theme-soft col-span-2 rounded-2xl border border-amber-200 bg-amber-50/90 p-3">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-700">Planning Alerts</p>
-                <p className="mt-1 text-sm font-semibold text-amber-900">
+                <p className="theme-text-strong mt-1 text-sm font-semibold text-amber-900">
                   Overlapping cells: {planningInsights.overlapCells} • Risky cells: {riskInsights.summary.riskyCellCount}
                 </p>
               </div>
@@ -1054,26 +1272,26 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
           </div>
         </section>
 
-        <section className="grid grid-cols-1 gap-4 lg:grid-cols-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+        <section id="report-signals" className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+          <div className="theme-panel rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Busiest Day</p>
-            <p className="mt-2 text-base font-bold text-slate-900">{planningInsights.busiestDay}</p>
+            <p className="theme-text-strong mt-2 text-base font-bold text-slate-900">{planningInsights.busiestDay}</p>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+          <div className="theme-panel rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Peak Slot</p>
-            <p className="mt-2 text-base font-bold text-slate-900">{planningInsights.peakSlot}</p>
+            <p className="theme-text-strong mt-2 text-base font-bold text-slate-900">{planningInsights.peakSlot}</p>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+          <div className="theme-panel rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Most Used Hall</p>
-            <p className="mt-2 text-base font-bold text-slate-900">{planningInsights.busiestHall}</p>
+            <p className="theme-text-strong mt-2 text-base font-bold text-slate-900">{planningInsights.busiestHall}</p>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+          <div className="theme-panel rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Favorite Timetables</p>
-            <p className="mt-2 text-base font-bold text-slate-900">{favoriteIds.length}</p>
+            <p className="theme-text-strong mt-2 text-base font-bold text-slate-900">{animatedInsightMetrics.favorites}</p>
           </div>
         </section>
 
-        <section className="rounded-2xl border border-rose-200 bg-rose-50/60 p-4 shadow-[0_8px_24px_rgba(244,63,94,0.12)]">
+        <section id="report-risk" className="theme-panel rounded-2xl border border-rose-200 bg-rose-50/60 p-4 shadow-[0_8px_24px_rgba(244,63,94,0.12)]">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-rose-700">High-Risk Conflict Detection</p>
@@ -1091,7 +1309,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
           </div>
         </section>
 
-        <section className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-sky-50 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
+        <section id="report-operations" className="theme-shell rounded-3xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-sky-50 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.4fr_1fr]">
             <div className="rounded-2xl border border-slate-200 bg-white/90 p-4">
               <div className="flex items-center justify-between gap-2">
@@ -1108,14 +1326,14 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                   onClick={() => {
                     if (!selectedTimetable) return;
                     downloadTimetableAsCSV(
-                      schedule,
+                      scopedSchedule,
                       extractTimetableMeta(selectedTimetable).year,
                       extractTimetableMeta(selectedTimetable).semester,
                       extractTimetableMeta(selectedTimetable).group,
                       extractTimetableMeta(selectedTimetable).subgroup
                     );
                   }}
-                  disabled={!selectedTimetable || !schedule.length}
+                  disabled={!selectedTimetable || !scopedSchedule.length}
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Download size={14} /> Quick Download CSV
@@ -1172,7 +1390,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
           </div>
         </section>
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_35px_rgba(15,23,42,0.06)]">
+        <section id="report-explorer" className="theme-panel rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_35px_rgba(15,23,42,0.06)]">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">Institution Name</h2>
@@ -1207,14 +1425,14 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                 onClick={() => {
                   if (!selectedTimetable) return;
                   downloadTimetableAsCSV(
-                    schedule,
+                      scopedSchedule,
                     extractTimetableMeta(selectedTimetable).year,
                     extractTimetableMeta(selectedTimetable).semester,
                     extractTimetableMeta(selectedTimetable).group,
                     extractTimetableMeta(selectedTimetable).subgroup
                   );
                 }}
-                disabled={!selectedTimetable || !schedule.length}
+                disabled={!selectedTimetable || !scopedSchedule.length}
                 className="rounded-xl border border-emerald-500 bg-gradient-to-r from-emerald-500 to-green-600 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:border-slate-300 disabled:from-slate-300 disabled:to-slate-400"
               >
                 Download CSV
@@ -1408,7 +1626,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                 </div>
               </div>
 
-              <div className="mt-3 rounded-xl border border-slate-300 bg-white p-3">
+              <div className="theme-soft mt-3 rounded-xl border border-slate-300 bg-white p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Generated Timetable Trend</p>
                   <span className="text-[11px] font-semibold text-slate-500">Per semester</span>
@@ -1419,6 +1637,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                 ) : (
                   <div className="overflow-x-auto">
                     <svg
+                      onMouseLeave={() => setTrendHoverIndex(-1)}
                       width={semesterTrend.chartWidth + 16}
                       height={semesterTrend.chartHeight + 28}
                       viewBox={`0 0 ${semesterTrend.chartWidth + 16} ${semesterTrend.chartHeight + 28}`}
@@ -1434,9 +1653,56 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                         <line x1="0" y1={semesterTrend.chartHeight} x2={semesterTrend.chartWidth} y2={semesterTrend.chartHeight} stroke="#cbd5e1" strokeWidth="1" />
                         {semesterTrend.areaPath && <path d={semesterTrend.areaPath} fill="url(#semesterTrendFill)" />}
                         {semesterTrend.linePath && <path d={semesterTrend.linePath} fill="none" stroke="#0284c7" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />}
-                        {semesterTrend.points.map((point) => (
+                        {trendHoverIndex >= 0 && semesterTrend.points[trendHoverIndex] && (
+                          <g>
+                            <line
+                              x1={semesterTrend.points[trendHoverIndex].x}
+                              y1="0"
+                              x2={semesterTrend.points[trendHoverIndex].x}
+                              y2={semesterTrend.chartHeight}
+                              stroke="#0284c7"
+                              strokeWidth="1.1"
+                              strokeDasharray="4 4"
+                              opacity="0.7"
+                            />
+                            <line
+                              x1="0"
+                              y1={semesterTrend.points[trendHoverIndex].y}
+                              x2={semesterTrend.chartWidth}
+                              y2={semesterTrend.points[trendHoverIndex].y}
+                              stroke="#0f172a"
+                              strokeWidth="0.8"
+                              strokeDasharray="3 3"
+                              opacity="0.38"
+                            />
+                            {(() => {
+                              const point = semesterTrend.points[trendHoverIndex];
+                              const tooltipX = Math.min(Math.max(point.x + 8, 4), Math.max(4, semesterTrend.chartWidth - 104));
+                              const tooltipY = Math.max(point.y - 34, 4);
+                              return (
+                                <g transform={`translate(${tooltipX} ${tooltipY})`}>
+                                  <rect width="102" height="26" rx="6" ry="6" fill="#0f172a" opacity="0.92" />
+                                  <text x="8" y="16" fontSize="9" fill="#f8fafc" fontWeight="600">
+                                    {`${point.label}: ${point.value}`}
+                                  </text>
+                                </g>
+                              );
+                            })()}
+                          </g>
+                        )}
+                        {semesterTrend.points.map((point, pointIndex) => (
                           <g key={`point-${point.key}`}>
-                            <circle cx={point.x} cy={point.y} r="3.5" fill="#0ea5e9" stroke="#ffffff" strokeWidth="1.5" />
+                            <title>{`${point.label}: ${point.value} timetable(s)`}</title>
+                            <circle
+                              cx={point.x}
+                              cy={point.y}
+                              r={trendHoverIndex === pointIndex ? '5.2' : '3.5'}
+                              fill={trendHoverIndex === pointIndex ? '#0284c7' : '#0ea5e9'}
+                              stroke="#ffffff"
+                              strokeWidth="1.5"
+                              onMouseEnter={() => setTrendHoverIndex(pointIndex)}
+                              className="cursor-pointer transition-all"
+                            />
                             <text x={point.x} y={semesterTrend.chartHeight + 14} textAnchor="middle" fontSize="9" fill="#475569">{point.label}</text>
                           </g>
                         ))}
@@ -1479,6 +1745,28 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                   )}
                 </div>
               )}
+
+              <div className="mt-3 rounded-xl border border-slate-300 bg-white p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Quick Jump</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {groupedTimetableIndex.slice(0, 8).map((yearGroup) =>
+                    yearGroup.specializations.slice(0, 2).map((specializationGroup) => (
+                      <button
+                        key={`jump-${yearGroup.year}-${specializationGroup.specialization}`}
+                        type="button"
+                        onClick={() => {
+                          setFilterYear(yearGroup.year);
+                          setFilterSpecialization(specializationGroup.specialization);
+                          setFilterSemester('ALL');
+                        }}
+                        className="rounded-full border border-cyan-300 bg-cyan-50 px-2 py-1 text-[11px] font-semibold text-cyan-700"
+                      >
+                        Y{yearGroup.year} • {specializationGroup.specialization}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
 
               <div className={`mt-3 grid grid-cols-1 gap-2 ${reportViewMode === 'compact' ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
               {filteredTimetables.slice(0, 9).map((tt) => {
@@ -1684,7 +1972,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
         </section>
 
         {!loading && !!selectedTimetable && layoutMode === 'unified' && (
-          <section className="overflow-hidden rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50/80 via-white to-cyan-50/70 p-4 shadow-[0_16px_40px_rgba(5,150,105,0.14)]">
+          <section id="report-render" className="theme-shell overflow-hidden rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50/80 via-white to-cyan-50/70 p-4 shadow-[0_16px_40px_rgba(5,150,105,0.14)]">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h4 className="text-base font-bold text-slate-900">Unified Timetable (All Modules)</h4>
               <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
@@ -1792,7 +2080,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
         )}
 
         {!loading && !!selectedTimetable && layoutMode === 'grouped' && (
-          <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_35px_rgba(15,23,42,0.06)]">
+          <section id="report-render" className="theme-panel rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_35px_rgba(15,23,42,0.06)]">
             <h3 className="text-lg font-bold text-slate-900">Table of Contents</h3>
             {!groupedByYearSemester.length ? (
               <p className="mt-3 text-sm text-slate-600">
