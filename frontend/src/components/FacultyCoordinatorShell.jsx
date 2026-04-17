@@ -147,7 +147,7 @@ export default function FacultyCoordinatorShell({
   };
 
   return (
-    <div className={`relative min-h-screen overflow-hidden ${isLightTheme ? 'bg-slate-100 text-slate-900' : isAcademicTheme ? 'bg-[#040a16] text-slate-100' : 'bg-[#07111f] text-slate-100'}`}>
+    <div className={`fc-spacing-system relative min-h-screen overflow-hidden ${isLightTheme ? 'bg-slate-100 text-slate-900' : isAcademicTheme ? 'bg-[#040a16] text-slate-100' : 'bg-[#07111f] text-slate-100'}`}>
       <div className={`pointer-events-none absolute inset-0 ${isLightTheme
         ? 'bg-[radial-gradient(circle_at_top_left,_rgba(14,116,144,0.10),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(30,64,175,0.08),_transparent_25%),linear-gradient(180deg,_rgba(255,255,255,0.95),_rgba(241,245,249,0.98))]'
         : isAcademicTheme
@@ -290,7 +290,7 @@ export default function FacultyCoordinatorShell({
           </header>
 
           <main className="flex-1 px-4 pb-12 lg:px-0 lg:pb-16">
-            <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+            <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 fc-layout-stack fc-layout-stack-loose">
               <section className={`relative overflow-hidden rounded-[32px] border p-6 backdrop-blur-xl lg:p-8 ${isLightTheme ? 'border-slate-200 bg-white/85 shadow-[0_18px_50px_rgba(15,23,42,0.10)]' : 'border-white/10 bg-white/5 shadow-[0_18px_50px_rgba(2,6,23,0.24)]'}`}>
                 <div className={`absolute inset-0 ${isLightTheme ? 'bg-[radial-gradient(circle_at_top_right,_rgba(34,211,238,0.12),_transparent_26%),radial-gradient(circle_at_bottom_left,_rgba(99,102,241,0.10),_transparent_30%)]' : 'bg-[radial-gradient(circle_at_top_right,_rgba(34,211,238,0.18),_transparent_26%),radial-gradient(circle_at_bottom_left,_rgba(99,102,241,0.18),_transparent_30%)]'}`} />
                 <div className="relative grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
@@ -335,7 +335,7 @@ export default function FacultyCoordinatorShell({
                 </div>
               </section>
 
-              <section className={`rounded-[32px] border p-4 backdrop-blur-xl sm:p-6 ${isLightTheme ? 'border-slate-200 bg-white/85 shadow-[0_18px_50px_rgba(15,23,42,0.08)]' : 'border-white/10 bg-slate-950/55 shadow-[0_18px_50px_rgba(2,6,23,0.2)]'}`}>
+              <section className={`fc-shell-content rounded-[32px] border backdrop-blur-xl ${isLightTheme ? 'border-slate-200 bg-white/85 shadow-[0_18px_50px_rgba(15,23,42,0.08)]' : 'border-white/10 bg-slate-950/55 shadow-[0_18px_50px_rgba(2,6,23,0.2)]'}`}>
                 {children}
               </section>
             </div>

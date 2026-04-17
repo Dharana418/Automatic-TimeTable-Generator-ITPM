@@ -71,7 +71,7 @@ const FacultyCoordinatorSchedulerPage = ({ user }) => {
         </button>
       }
     >
-      <div className="flex flex-col gap-8">
+      <div className="fc-layout-stack fc-layout-stack-loose">
         {/* HERO SECTION */}
         <section id="schedulerHero" className="relative overflow-hidden rounded-3xl border border-slate-200/60 bg-gradient-to-br from-slate-50 via-white to-blue-50/40 p-8 text-slate-900 shadow-lg md:p-12">
           <div className="absolute top-0 right-0 h-40 w-40 rounded-full bg-gradient-to-br from-sky-200/20 to-cyan-200/20 blur-3xl" />

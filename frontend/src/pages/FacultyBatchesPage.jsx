@@ -60,7 +60,7 @@ const FacultyBatchesPage = ({ user }) => {
         .fc-section-card { background: linear-gradient(135deg, rgba(15,23,42,0.92), rgba(7,20,43,0.96)); border: 1px solid rgba(148,163,184,0.1); border-radius: 22px; backdrop-filter: blur(20px); box-shadow: 0 8px 40px rgba(0,0,0,0.35); }
       `}</style>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+      <div className="fc-layout-stack fc-layout-stack-tight">
 
         {/* ── Hero header card ── */}
         <section id="batchOverview" className="fc-section-card" style={{ padding: '32px', position: 'relative', overflow: 'hidden' }}>

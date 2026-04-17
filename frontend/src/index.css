@@ -172,6 +172,55 @@
     @apply rounded-xl border border-sky-200 bg-white px-4 py-2.5 text-sm font-semibold text-sky-800 transition hover:bg-sky-50;
   }
 
+  /* Faculty Coordinator spacing discipline */
+  .fc-spacing-system {
+    --fc-space-2xs: clamp(0.5rem, 0.35rem + 0.25vw, 0.625rem);
+    --fc-space-xs: clamp(0.75rem, 0.55rem + 0.35vw, 0.95rem);
+    --fc-space-sm: clamp(1rem, 0.85rem + 0.35vw, 1.2rem);
+    --fc-space-md: clamp(1.25rem, 1rem + 0.55vw, 1.6rem);
+    --fc-space-lg: clamp(1.5rem, 1.2rem + 0.75vw, 2rem);
+    --fc-space-xl: clamp(2rem, 1.6rem + 1vw, 2.6rem);
+    --fc-content-pad: clamp(1rem, 0.85rem + 0.55vw, 1.5rem);
+  }
+
+  .fc-layout-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fc-space-lg);
+  }
+
+  .fc-layout-stack-tight {
+    gap: var(--fc-space-md);
+  }
+
+  .fc-layout-stack-loose {
+    gap: var(--fc-space-xl);
+  }
+
+  .fc-layout-section {
+    padding: var(--fc-content-pad);
+  }
+
+  .fc-layout-grid-gap {
+    gap: var(--fc-space-md);
+  }
+
+  .fc-shell-content {
+    padding: var(--fc-content-pad);
+  }
+
+  .fc-shell-content > * + * {
+    margin-top: var(--fc-space-lg);
+  }
+
+  .fc-shell-content .fc-section {
+    margin-bottom: 0;
+  }
+
+  .fc-shell-content .fc-section + .fc-section {
+    margin-top: var(--fc-space-xl);
+  }
+
   /* Academic Coordinator Main Menu */
   .ac-main-menu-wrap {
     @apply mx-auto mb-8 mt-2 max-w-7xl;
