@@ -7,6 +7,8 @@ import { downloadTimetableAsCSV } from '../api/timetableGeneration.js';
 import facultyDashboardBg from '../assets/Gemini_Generated_Image_hqfdrqhqfdrqhqfd.png';
 
 const DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const WEEKDAY_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+const WEEKEND_DAYS = ['Sat', 'Sun'];
 const INSTITUTION_NAME = 'Sri Lanka Institute of Information Technology';
 const FILTER_PRESET_STORAGE_KEY = 'faculty_timetable_filter_presets_v1';
 const FAVORITES_STORAGE_KEY = 'faculty_timetable_favorites_v1';
@@ -57,6 +59,17 @@ const normalizeDay = (value) => {
     sun: 'Sun',
   };
   return map[raw] || String(value);
+};
+
+const getAllowedDaysForMode = (mode = 'ALL') => {
+  if (mode === 'WD') return WEEKDAY_DAYS;
+  if (mode === 'WE') return WEEKEND_DAYS;
+  return DAY_ORDER;
+};
+
+const isDayAllowedForMode = (day, mode = 'ALL') => {
+  const normalizedDay = normalizeDay(day);
+  return getAllowedDaysForMode(mode).includes(normalizedDay);
 };
 
 const normalizeSlot = (row) => {
@@ -217,11 +230,14 @@ const safeReadStorageJson = (key, fallback) => {
   }
 };
 
-const buildBatchTable = (scheduleRows = []) => {
+const buildBatchTable = (scheduleRows = [], dayModeFilter = 'ALL') => {
   const batchMap = new Map();
+  const allowedDays = getAllowedDaysForMode(dayModeFilter);
 
   scheduleRows.forEach((row) => {
     const day = normalizeDay(row.day);
+    if (!allowedDays.includes(day)) return;
+
     const slot = normalizeSlot(row);
 
     extractBatchKeys(row).forEach((batchKey) => {
@@ -244,7 +260,7 @@ const buildBatchTable = (scheduleRows = []) => {
   });
 
   const batches = Array.from(batchMap.values()).map((batch) => {
-    const days = [...DAY_ORDER];
+    const days = [...allowedDays];
 
     const slots = [...WEEKEND_CLASS_SLOTS];
 
@@ -274,9 +290,12 @@ const buildBatchTable = (scheduleRows = []) => {
 const buildUnifiedTable = (scheduleRows = [], dayModeFilter = 'WD') => {
   const cellMap = new Map();
   const dedupe = new Set();
+  const allowedDays = getAllowedDaysForMode(dayModeFilter);
 
   scheduleRows.forEach((row) => {
     const day = normalizeDay(row.day);
+    if (!allowedDays.includes(day)) return;
+
     const slot = normalizeSlot(row);
     const rawBatchKeys = extractBatchKeys(row);
 
@@ -311,7 +330,7 @@ const buildUnifiedTable = (scheduleRows = [], dayModeFilter = 'WD') => {
   });
 
   return {
-    days: [...DAY_ORDER],
+    days: [...allowedDays],
     // Use the complete campus timeline slot set for unified rendering.
     slots: [...WEEKEND_CLASS_SLOTS],
     cellMap,
@@ -319,7 +338,9 @@ const buildUnifiedTable = (scheduleRows = [], dayModeFilter = 'WD') => {
 };
 
 const rowMatchesModeFilter = (row, dayModeFilter = 'ALL') => {
+  if (!isDayAllowedForMode(row?.day, dayModeFilter)) return false;
   if (dayModeFilter === 'ALL') return true;
+
   const batchKeys = extractBatchKeys(row);
   return batchKeys.some((key) => extractBatchMode(key) === dayModeFilter);
 };
@@ -567,7 +588,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
 
   const schedule = useMemo(() => parseSchedule(selectedTimetable), [selectedTimetable]);
 
-  const batchTables = useMemo(() => buildBatchTable(schedule), [schedule]);
+  const batchTables = useMemo(() => buildBatchTable(schedule, dayModeFilter), [schedule, dayModeFilter]);
   const unifiedTable = useMemo(() => buildUnifiedTable(schedule, dayModeFilter), [schedule, dayModeFilter]);
 
   const filteredBatchTables = useMemo(() => {
@@ -605,7 +626,11 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
   }, [filteredTimetables.length, filteredBatchTables, schedule, selectedTimetable]);
 
   const planningInsights = useMemo(() => {
-    if (!Array.isArray(schedule) || !schedule.length) {
+    const scopedRows = Array.isArray(schedule)
+      ? schedule.filter((row) => rowMatchesModeFilter(row, dayModeFilter))
+      : [];
+
+    if (!scopedRows.length) {
       return {
         busiestDay: 'N/A',
         peakSlot: 'N/A',
@@ -619,7 +644,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
     const hallMap = new Map();
     const cellMap = new Map();
 
-    schedule.forEach((row) => {
+    scopedRows.forEach((row) => {
       const day = normalizeDay(row.day);
       const slot = normalizeSlot(row);
       const hall = String(row.hallName || row.hallId || 'Hall TBA').trim();
@@ -652,12 +677,12 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
       busiestHall: pickTop(hallMap),
       overlapCells,
     };
-  }, [schedule]);
+  }, [schedule, dayModeFilter]);
 
   const riskInsights = useMemo(() => buildRiskInsights(schedule, dayModeFilter), [schedule, dayModeFilter]);
 
   const dayLoadDistribution = useMemo(() => {
-    const counts = DAY_ORDER.map((day) => ({ day, count: 0 }));
+    const counts = getAllowedDaysForMode(dayModeFilter).map((day) => ({ day, count: 0 }));
     const indexMap = new Map(counts.map((item, idx) => [item.day, idx]));
 
     schedule.forEach((row) => {
