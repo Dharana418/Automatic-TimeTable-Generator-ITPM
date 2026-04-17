@@ -7,10 +7,13 @@ import pool from '../config/db.js';
 
 const allowedTypes = ['halls', 'modules', 'lics', 'instructors', 'departments', 'batches'];
 
-const ENGINEERING_SPECIALIZATIONS = new Set(['CS', 'ISE', 'CSNE', 'IM']);
+const ENGINEERING_SPECIALIZATIONS = new Set(['CS', 'ISE', 'CSNE', 'IME']);
 
 const normalizeAlgorithmKey = (value) => String(value || '').trim().toLowerCase();
 const normalizeRole = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const MAX_SUBGROUP_CAPACITY = 60;
+const MAX_GROUP_CAPACITY = 120;
+const MAX_MODULES_PER_SPECIALIZATION_SCOPE = 5;
 
 const HALL_ID_REGEX = /^[A-Za-z0-9][A-Za-z0-9_-]{1,39}$/;
 const HALL_TEXT_REGEX = /^[A-Za-z0-9][A-Za-z0-9 .,&()\/-]{1,79}$/;
@@ -131,6 +134,50 @@ const parseBatchLabel = (name) => {
   };
 };
 
+const parseHallStructure = (hall = {}) => {
+  const features = parseJsonSafe(hall.features, {});
+  const building = String(features.building || hall.building || '').trim();
+  const floorValue = String(features.floor || hall.floor || '').trim();
+  const hallType = String(features.hallType || features.roomType || hall.hallType || hall.roomType || '').trim();
+  const floorNumber = Number(floorValue.replace(/[^0-9]/g, ''));
+
+  return {
+    building,
+    floorValue,
+    hallType,
+    floorNumber: Number.isFinite(floorNumber) && floorNumber > 0 ? floorNumber : Number.MAX_SAFE_INTEGER,
+  };
+};
+
+const sortHallsByStructure = (halls = []) => {
+  const buildingOrder = new Map([
+    ['MAIN BUILDING', 0],
+    ['NEW BUILDING', 1],
+  ]);
+
+  return [...halls].sort((left, right) => {
+    const leftStructure = parseHallStructure(left);
+    const rightStructure = parseHallStructure(right);
+
+    const leftBuildingRank = buildingOrder.has(leftStructure.building.toUpperCase())
+      ? buildingOrder.get(leftStructure.building.toUpperCase())
+      : 99;
+    const rightBuildingRank = buildingOrder.has(rightStructure.building.toUpperCase())
+      ? buildingOrder.get(rightStructure.building.toUpperCase())
+      : 99;
+
+    if (leftBuildingRank !== rightBuildingRank) return leftBuildingRank - rightBuildingRank;
+    if (leftStructure.floorNumber !== rightStructure.floorNumber) return leftStructure.floorNumber - rightStructure.floorNumber;
+    if (leftStructure.hallType !== rightStructure.hallType) return leftStructure.hallType.localeCompare(rightStructure.hallType);
+
+    const leftCapacity = Number(left.capacity || 0);
+    const rightCapacity = Number(right.capacity || 0);
+    if (leftCapacity !== rightCapacity) return leftCapacity - rightCapacity;
+
+    return String(left.name || left.id || '').localeCompare(String(right.name || right.id || ''));
+  });
+};
+
 const parseJsonSafe = (value, fallback = {}) => {
   if (!value) return fallback;
   if (typeof value === 'object') return value;
@@ -153,6 +200,11 @@ const normalizeSpecializationCode = (value = '') => {
     INFORMATIONSYSTEMSENGINEERING: 'ISE',
     COMPUTER_SYSTEMS_NETWORK_ENGINEERING: 'CSNE',
     INFORMATICS: 'IM',
+    INTERACTIVEMEDIA: 'IME',
+    IM: 'IME',
+    IE: 'IME',
+    CYBERSECURITY: 'CYBER SECURITY',
+    CYBER: 'CYBER SECURITY',
     ENGINEERING: 'ENGINEERING',
   };
 
@@ -172,15 +224,16 @@ const inferModuleSpecialization = (module) => {
 
   const normalizedExplicit = normalizeSpecializationCode(explicitSpecialization);
   if (normalizedExplicit) {
-    return ENGINEERING_SPECIALIZATIONS.has(normalizedExplicit) ? 'Engineering' : normalizedExplicit;
+    return normalizedExplicit;
   }
 
   const code = String(module?.code || '').toUpperCase();
   if (code.startsWith('IT')) return 'IT';
   if (code.startsWith('SE')) return 'SE';
-  if (code.startsWith('CS')) return 'Engineering';
-  if (code.startsWith('IS')) return 'Engineering';
-  if (code.startsWith('IE')) return 'Engineering';
+  if (code.startsWith('CS')) return 'CS';
+  if (code.startsWith('IS')) return 'ISE';
+  if (code.startsWith('IE') || code.startsWith('IM')) return 'IME';
+  if (code.startsWith('CN')) return 'CSNE';
   return 'General';
 };
 
@@ -236,7 +289,29 @@ const parseBatchSubgroupIdentity = (batchId = '') => {
       String(specializationToken).toUpperCase(),
       String(groupToken).trim(),
     ].join('.'),
+    group: String(groupToken).trim(),
     subgroup: String(subgroupToken).trim(),
+  };
+};
+
+const parseBatchSchedulingScope = (batch = {}) => {
+  const source = String(batch?.id || batch?.name || '').trim();
+  const [yearToken = '', semesterToken = '', modeToken = '', specializationToken = '', groupToken = '', subgroupToken = ''] = source.split('.');
+
+  const year = Number(String(yearToken).replace(/[^0-9]/g, ''));
+  const semester = Number(String(semesterToken).replace(/[^0-9]/g, ''));
+
+  const specialization = normalizeSpecializationCode(specializationToken);
+  const group = String(groupToken || '').trim();
+  const subgroup = String(subgroupToken || '').trim();
+
+  return {
+    year: Number.isInteger(year) && year > 0 ? year : null,
+    semester: Number.isInteger(semester) && semester > 0 ? semester : null,
+    mode: String(modeToken || '').trim().toUpperCase(),
+    specialization,
+    group,
+    subgroup,
   };
 };
 
@@ -244,6 +319,10 @@ const validateBatchSubgroupRules = async ({ batchId, ignoreId = null }) => {
   const candidate = parseBatchSubgroupIdentity(batchId);
   if (!candidate) {
     return null;
+  }
+
+  if (!/^\d+$/.test(candidate.group)) {
+    return 'Group must be numeric (for example 01, 02, 03)';
   }
 
   if (!/^\d+$/.test(candidate.subgroup)) {
@@ -286,7 +365,51 @@ const validateBatchSubgroupRules = async ({ batchId, ignoreId = null }) => {
   return null;
 };
 
-const runSelectedAlgorithms = (constraints, algorithms, options) => {
+const validateBatchCapacityRules = async ({ batchId, capacity, ignoreId = null }) => {
+  const candidate = parseBatchSubgroupIdentity(batchId);
+  if (!candidate) {
+    return null;
+  }
+
+  const normalizedCapacity = Number(capacity);
+  if (!Number.isInteger(normalizedCapacity) || normalizedCapacity < 1) {
+    return 'Batch capacity must be a positive integer';
+  }
+
+  if (normalizedCapacity > MAX_SUBGROUP_CAPACITY) {
+    return `Subgroup capacity cannot exceed ${MAX_SUBGROUP_CAPACITY} students`;
+  }
+
+  const { rows } = await pool.query(
+    'SELECT id, capacity FROM batches WHERE UPPER(id) LIKE $1',
+    [`${candidate.scopeKey}.%`]
+  );
+
+  let siblingCapacity = 0;
+  for (const row of rows) {
+    if (ignoreId && row.id === ignoreId) {
+      continue;
+    }
+
+    const identity = parseBatchSubgroupIdentity(row.id);
+    if (!identity || identity.scopeKey !== candidate.scopeKey) {
+      continue;
+    }
+
+    const currentCapacity = Number(row.capacity || 0);
+    if (Number.isFinite(currentCapacity) && currentCapacity > 0) {
+      siblingCapacity += currentCapacity;
+    }
+  }
+
+  if (siblingCapacity + normalizedCapacity > MAX_GROUP_CAPACITY) {
+    return `Total students in one group cannot exceed ${MAX_GROUP_CAPACITY}. Add a new group for additional students.`;
+  }
+
+  return null;
+};
+
+const runSelectedAlgorithms = async (constraints, algorithms, options) => {
   const normalizedAlgorithms = (algorithms || []).map(normalizeAlgorithmKey);
   const results = {};
 
@@ -311,6 +434,165 @@ const runSelectedAlgorithms = (constraints, algorithms, options) => {
   }
 
   return results;
+};
+
+const pickPrimaryScheduleFromResults = (results = {}, requestedAlgorithms = []) => {
+  const normalizedRequested = (requestedAlgorithms || []).map(normalizeAlgorithmKey);
+  const priority = [...normalizedRequested, 'hybrid', 'tabu', 'genetic', 'pso', 'ant'];
+
+  for (const key of priority) {
+    const result = results?.[key];
+    if (result && Array.isArray(result.schedule)) {
+      return { algorithm: key, schedule: result.schedule };
+    }
+  }
+
+  return { algorithm: null, schedule: [] };
+};
+
+const saveGeneratedTimetable = async ({
+  name,
+  year,
+  semester,
+  generatedBy,
+  status = 'pending',
+  data = {},
+}) => {
+  const { rows } = await pool.query(
+    `INSERT INTO timetables (name, semester, year, status, generated_by, data)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id, name, semester, year, status, generated_by, created_at, data`,
+    [
+      name,
+      semester,
+      year,
+      status,
+      generatedBy || null,
+      JSON.stringify(data || {}),
+    ]
+  );
+
+  return rows[0] || null;
+};
+
+const extractScheduleEntryBatchKeys = (entry = {}) => {
+  const rawKeys = [];
+
+  if (Array.isArray(entry.batchKeys) && entry.batchKeys.length) {
+    rawKeys.push(...entry.batchKeys);
+  } else if (entry.batchKey) {
+    rawKeys.push(entry.batchKey);
+  } else if (entry.batch) {
+    rawKeys.push(entry.batch);
+  }
+
+  return [...new Set(rawKeys.map((key) => String(key || '').trim()).filter(Boolean))];
+};
+
+const parseScheduleBatchScope = (batchKey = '') => {
+  const [yearToken = '', semesterToken = '', modeToken = '', specializationToken = '', groupToken = '', subgroupToken = ''] = String(batchKey || '')
+    .trim()
+    .split('.');
+
+  if (!yearToken || !semesterToken || !modeToken || !specializationToken || !groupToken || !subgroupToken) {
+    return null;
+  }
+
+  const year = Number(String(yearToken).replace(/[^0-9]/g, ''));
+  const semester = Number(String(semesterToken).replace(/[^0-9]/g, ''));
+  if (!Number.isInteger(year) || year < 1 || !Number.isInteger(semester) || semester < 1) {
+    return null;
+  }
+
+  const group = String(groupToken).trim();
+  const subgroup = String(subgroupToken).trim();
+  if (!group || !subgroup) {
+    return null;
+  }
+
+  return {
+    year,
+    semester,
+    mode: String(modeToken).trim().toUpperCase(),
+    specialization: normalizeSpecializationCode(specializationToken),
+    group,
+    subgroup,
+    scopeKey: [
+      String(yearToken).toUpperCase(),
+      String(semesterToken).toUpperCase(),
+      String(modeToken).toUpperCase(),
+      String(specializationToken).toUpperCase(),
+      group,
+      subgroup,
+    ].join('.'),
+  };
+};
+
+const buildTimetableScope = ({ year = null, semester = null, specialization = null, group = null, subgroup = null } = {}) => ({
+  year: year != null && year !== '' ? String(year) : 'ALL',
+  semester: semester != null && semester !== '' ? String(semester) : 'ALL',
+  specialization: specialization ? String(specialization).toUpperCase() : null,
+  group: group != null && group !== '' ? String(group) : null,
+  subgroup: subgroup != null && subgroup !== '' ? String(subgroup) : null,
+});
+
+const buildGroupedSchedulePayload = (schedule = [], fallbackScope = {}) => {
+  const grouped = new Map();
+  const fallbackScopeKey = [
+    fallbackScope.year || 'ALL',
+    fallbackScope.semester || 'ALL',
+    fallbackScope.specialization || 'ALL',
+    fallbackScope.group || 'ALL',
+    fallbackScope.subgroup || 'ALL',
+  ].join('.');
+
+  const addEntryToGroup = (scope, entry, batchKeys = []) => {
+    const scopeKey = scope?.scopeKey || fallbackScopeKey;
+    if (!grouped.has(scopeKey)) {
+      grouped.set(scopeKey, {
+        scope: {
+          year: scope?.year != null ? String(scope.year) : fallbackScope.year || 'ALL',
+          semester: scope?.semester != null ? String(scope.semester) : fallbackScope.semester || 'ALL',
+          specialization: scope?.specialization || fallbackScope.specialization || null,
+          group: scope?.group || fallbackScope.group || null,
+          subgroup: scope?.subgroup || fallbackScope.subgroup || null,
+        },
+        scopeKey,
+        batchKeys: new Set(),
+        subgroupSet: new Set(),
+        entries: [],
+      });
+    }
+
+    const bucket = grouped.get(scopeKey);
+    batchKeys.forEach((batchKey) => bucket.batchKeys.add(batchKey));
+    if (scope?.subgroup) {
+      bucket.subgroupSet.add(scope.subgroup);
+    }
+    bucket.entries.push(entry);
+  };
+
+  schedule.forEach((entry) => {
+    const batchKeys = extractScheduleEntryBatchKeys(entry);
+    const scopes = batchKeys.map(parseScheduleBatchScope).filter(Boolean);
+
+    if (!scopes.length) {
+      addEntryToGroup({ ...fallbackScope, scopeKey: fallbackScopeKey }, entry, batchKeys);
+      return;
+    }
+
+    scopes.forEach((scope) => {
+      addEntryToGroup(scope, entry, batchKeys);
+    });
+  });
+
+  return Array.from(grouped.values()).map((bucket) => ({
+    scope: bucket.scope,
+    scopeKey: bucket.scopeKey,
+    batchKeys: Array.from(bucket.batchKeys).sort((left, right) => left.localeCompare(right)),
+    subgroups: Array.from(bucket.subgroupSet).sort((left, right) => left.localeCompare(right)),
+    entries: bucket.entries,
+  }));
 };
 
 const buildSemesterSpecializationSegments = ({ batches = [], modules = [], lics = [], instructors = [] }) => {
@@ -346,8 +628,8 @@ const buildSemesterSpecializationSegments = ({ batches = [], modules = [], lics 
         const moduleSemester = inferModuleSemester(module);
         const specializationMatch =
           segment.departmentGroup === 'Engineering'
-            ? moduleSpec === 'Engineering'
-            : moduleSpec === segment.specialization;
+            ? ENGINEERING_SPECIALIZATIONS.has(normalizeSpecializationCode(moduleSpec))
+            : normalizeSpecializationCode(moduleSpec) === normalizeSpecializationCode(segment.specialization);
         const yearMatch = moduleYear ? moduleYear === segment.year : true;
         const semesterMatch = moduleSemester ? moduleSemester === segment.semester : true;
         const capacityMatch = moduleFitsBatchCapacity(module, segment.batches);
@@ -364,7 +646,7 @@ const buildSemesterSpecializationSegments = ({ batches = [], modules = [], lics 
     const licsForSegment = lics.filter((lic) => {
       const department = String(lic.department || '').toUpperCase();
       if (segment.departmentGroup === 'Engineering') {
-        return ['ENGINEERING', 'CS', 'ISE', 'CSNE', 'IM'].some((value) => department.includes(value));
+        return ['ENGINEERING', 'CS', 'ISE', 'CSNE', 'IME'].some((value) => department.includes(value));
       }
       return department.includes(segment.specialization);
     });
@@ -372,7 +654,7 @@ const buildSemesterSpecializationSegments = ({ batches = [], modules = [], lics 
     const instructorsForSegment = instructors.filter((instructor) => {
       const department = String(instructor.department || '').toUpperCase();
       if (segment.departmentGroup === 'Engineering') {
-        return ['ENGINEERING', 'CS', 'ISE', 'CSNE', 'IM'].some((value) => department.includes(value));
+        return ['ENGINEERING', 'CS', 'ISE', 'CSNE', 'IME'].some((value) => department.includes(value));
       }
       return department.includes(segment.specialization);
     });
@@ -549,6 +831,59 @@ const inferAcademicYearFromModuleCode = (code = '') => {
   return String(year);
 };
 
+const enforceAcademicCoordinatorScopeModuleLimit = async ({
+  specialization = '',
+  academicYear = null,
+  semester = null,
+  excludeModuleId = null,
+} = {}) => {
+  const normalizedSpecialization = normalizeSpecializationCode(specialization);
+  const normalizedYear = Number(academicYear || 0);
+  const normalizedSemester = Number(semester || 0);
+
+  if (!normalizedSpecialization || ![1, 2, 3, 4].includes(normalizedYear) || ![1, 2].includes(normalizedSemester)) {
+    return null;
+  }
+
+  const { rows } = await pool.query('SELECT id, code, details, academic_year, semester FROM modules');
+
+  const currentCount = rows.reduce((count, module) => {
+    if (excludeModuleId && String(module.id) === String(excludeModuleId)) {
+      return count;
+    }
+
+    const moduleSpecialization = normalizeSpecializationCode(inferModuleSpecialization(module));
+    const moduleYear = inferModuleYear(module);
+    const moduleSemester = inferModuleSemester(module);
+
+    if (
+      moduleSpecialization === normalizedSpecialization
+      && moduleYear === normalizedYear
+      && moduleSemester === normalizedSemester
+    ) {
+      return count + 1;
+    }
+
+    return count;
+  }, 0);
+
+  if (currentCount >= MAX_MODULES_PER_SPECIALIZATION_SCOPE) {
+    return {
+      error: `Maximum ${MAX_MODULES_PER_SPECIALIZATION_SCOPE} modules are allowed for specialization ${normalizedSpecialization} in Year ${normalizedYear}, Semester ${normalizedSemester}. Update an existing module or move one to another scope.`,
+      code: 'MODULE_SCOPE_LIMIT_REACHED',
+      scope: {
+        specialization: normalizedSpecialization,
+        academicYear: normalizedYear,
+        semester: normalizedSemester,
+        maxAllowed: MAX_MODULES_PER_SPECIALIZATION_SCOPE,
+        currentCount,
+      },
+    };
+  }
+
+  return null;
+};
+
 export const addItem = async (req, res) => {
   try {
     const { type } = req.params;
@@ -640,6 +975,7 @@ export const addItem = async (req, res) => {
         credits = null,
         lectures_per_week = null,
         details = null,
+        specialization = null,
         batch_size = null,
         day_type = null,
         academic_year = null,
@@ -665,10 +1001,31 @@ export const addItem = async (req, res) => {
 
       const derivedAcademicYear = inferAcademicYearFromModuleCode(code);
       const effectiveAcademicYear = academic_year || derivedAcademicYear;
+      const baseDetails = details && typeof details === 'object' ? details : {};
+      const mergedDetails = {
+        ...baseDetails,
+        ...(specialization ? { specialization } : {}),
+        ...(effectiveAcademicYear ? { academic_year: Number(effectiveAcademicYear) } : {}),
+        ...(semester ? { semester: Number(semester) } : {}),
+      };
+
+      if (isAcademicCoordinator(req.user)) {
+        const targetSpecialization = normalizeSpecializationCode(
+          specialization || mergedDetails.specialization || inferModuleSpecialization({ code, details: mergedDetails })
+        );
+        const limitError = await enforceAcademicCoordinatorScopeModuleLimit({
+          specialization: targetSpecialization,
+          academicYear: effectiveAcademicYear,
+          semester,
+        });
+        if (limitError) {
+          return res.status(409).json(limitError);
+        }
+      }
 
       const { rows } = await pool.query(
-        `INSERT INTO modules(id, code, name, batch_size, day_type, credits, lectures_per_week, details, lic_id, academic_year, semester)
-         VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        `INSERT INTO modules(id, code, name, batch_size, day_type, credits, lectures_per_week, details, lic_id, academic_year, semester, created_by)
+         VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
          RETURNING *`,
         [
           id,
@@ -678,10 +1035,11 @@ export const addItem = async (req, res) => {
           day_type || null,
           credits || null,
           lectures_per_week || null,
-          details ? JSON.stringify(details) : null,
+          Object.keys(mergedDetails).length ? JSON.stringify(mergedDetails) : null,
           licId,
           effectiveAcademicYear,
           semester || null,
+          req.user?.id || null,
         ]
       );
       return res.status(201).json({ success: true, item: rows[0] });
@@ -767,9 +1125,16 @@ export const addItem = async (req, res) => {
       const { name = null, department_id = null, capacity = null } = payload;
       if (!name) return res.status(400).json({ error: 'Batch name is required' });
 
+      const normalizedCapacity = Number(capacity || MAX_SUBGROUP_CAPACITY);
+
       const batchValidationError = await validateBatchSubgroupRules({ batchId: id });
       if (batchValidationError) {
         return res.status(400).json({ error: batchValidationError });
+      }
+
+      const batchCapacityValidationError = await validateBatchCapacityRules({ batchId: id, capacity: normalizedCapacity });
+      if (batchCapacityValidationError) {
+        return res.status(400).json({ error: batchCapacityValidationError });
       }
 
       const { rows } = await pool.query(
@@ -780,7 +1145,7 @@ export const addItem = async (req, res) => {
            department_id = EXCLUDED.department_id,
            capacity = EXCLUDED.capacity
          RETURNING *`,
-        [id, name, department_id, capacity]
+        [id, name, department_id, normalizedCapacity]
       );
       return res.status(201).json({ success: true, item: rows[0] });
     }
@@ -827,7 +1192,21 @@ export const listItems = async (req, res) => {
       const requestedSemester = Number(req.query?.semester || 0);
       const requestedSpecialization = normalizeSpecializationCode(req.query?.specialization || '');
 
-      const { rows } = await pool.query(`SELECT * FROM modules ORDER BY created_at DESC`);
+      let rows = [];
+      if (isFacultyCoordinator(req.user)) {
+        const listResult = await pool.query(
+          `SELECT m.*
+           FROM modules m
+           JOIN users u ON u.id = m.created_by
+           WHERE regexp_replace(lower(COALESCE(u.role, '')), '[^a-z0-9]', '', 'g') = 'academiccoordinator'
+           ORDER BY m.created_at DESC`
+        );
+        rows = listResult.rows;
+      } else {
+        const listResult = await pool.query(`SELECT * FROM modules ORDER BY created_at DESC`);
+        rows = listResult.rows;
+      }
+
       const filtered = rows.filter((module) => {
         const moduleYear = inferModuleYear(module);
         const moduleSemester = inferModuleSemester(module);
@@ -873,6 +1252,10 @@ export const deleteItem = async (req, res) => {
       return res.status(400).json({ error: 'Invalid data type' });
     }
 
+    if (type === 'modules' && isFacultyCoordinator(req.user)) {
+      return res.status(403).json({ error: 'Faculty Coordinator can only view modules managed by Academic Coordinator' });
+    }
+
     const { rowCount } = await pool.query(`DELETE FROM ${type} WHERE id = $1`, [id]);
     if (!rowCount) return res.status(404).json({ error: 'Item not found' });
 
@@ -890,6 +1273,10 @@ export const updateItem = async (req, res) => {
 
     if (!allowedTypes.includes(type)) return res.status(400).json({ error: 'Invalid data type' });
     if (!id) return res.status(400).json({ error: 'Item id is required' });
+
+    if (type === 'modules' && isFacultyCoordinator(req.user)) {
+      return res.status(403).json({ error: 'Faculty Coordinator can only view modules managed by Academic Coordinator' });
+    }
 
     if (type === 'halls') {
       const {
@@ -953,10 +1340,83 @@ export const updateItem = async (req, res) => {
     }
 
     if (type === 'modules') {
-      const { code = null, name = null, credits = null, lectures_per_week = null, details = null, batch_size = null, day_type = null, lic_id = null } = payload;
+      const {
+        code = null,
+        name = null,
+        credits = null,
+        lectures_per_week = null,
+        details = null,
+        specialization = null,
+        batch_size = null,
+        day_type = null,
+        lic_id = null,
+        academic_year = null,
+        semester = null,
+      } = payload;
+
+      const existingModuleResult = await pool.query('SELECT id, code, details, academic_year, semester FROM modules WHERE id = $1', [id]);
+      if (!existingModuleResult.rowCount) return res.status(404).json({ error: 'Item not found' });
+
+      const existingModule = existingModuleResult.rows[0];
+      const existingDetails = parseJsonSafe(existingModule.details, {});
+      const mergedDetails = {
+        ...existingDetails,
+        ...(details && typeof details === 'object' ? details : {}),
+      };
+
+      if (specialization !== null && specialization !== undefined && String(specialization).trim()) {
+        mergedDetails.specialization = specialization;
+      }
+
+      const nextAcademicYear = academic_year || existingModule.academic_year || null;
+      const nextSemester = semester || existingModule.semester || null;
+      if (nextAcademicYear) mergedDetails.academic_year = Number(nextAcademicYear);
+      if (nextSemester) mergedDetails.semester = Number(nextSemester);
+
+      if (isAcademicCoordinator(req.user)) {
+        const targetSpecialization = normalizeSpecializationCode(
+          specialization
+          || mergedDetails.specialization
+          || inferModuleSpecialization({ ...existingModule, code: code || existingModule.code, details: mergedDetails })
+        );
+        const limitError = await enforceAcademicCoordinatorScopeModuleLimit({
+          specialization: targetSpecialization,
+          academicYear: nextAcademicYear,
+          semester: nextSemester,
+          excludeModuleId: id,
+        });
+        if (limitError) {
+          return res.status(409).json(limitError);
+        }
+      }
+
       const { rows, rowCount } = await pool.query(
-        `UPDATE modules SET code=$1, name=$2, batch_size=$3, day_type=$4, credits=$5, lectures_per_week=$6, details=$7, lic_id=$8 WHERE id=$9 RETURNING *`,
-        [code, name, batch_size, day_type, credits, lectures_per_week, details ? JSON.stringify(details) : null, lic_id, id]
+        `UPDATE modules
+         SET code = COALESCE($1, code),
+             name = COALESCE($2, name),
+             batch_size = $3,
+             day_type = $4,
+             credits = $5,
+             lectures_per_week = $6,
+             details = $7,
+             lic_id = $8,
+             academic_year = $9,
+             semester = $10
+         WHERE id = $11
+         RETURNING *`,
+        [
+          code,
+          name,
+          batch_size,
+          day_type,
+          credits,
+          lectures_per_week,
+          Object.keys(mergedDetails).length ? JSON.stringify(mergedDetails) : null,
+          lic_id,
+          nextAcademicYear,
+          nextSemester,
+          id,
+        ]
       );
       if (!rowCount) return res.status(404).json({ error: 'Item not found' });
       return res.json({ success: true, item: rows[0] });
@@ -994,15 +1454,25 @@ export const updateItem = async (req, res) => {
 
     if (type === 'batches') {
       const { name = null, department_id = null, capacity = null } = payload;
+      const normalizedCapacity = Number(capacity || MAX_SUBGROUP_CAPACITY);
 
       const batchValidationError = await validateBatchSubgroupRules({ batchId: id, ignoreId: id });
       if (batchValidationError) {
         return res.status(400).json({ error: batchValidationError });
       }
 
+      const batchCapacityValidationError = await validateBatchCapacityRules({
+        batchId: id,
+        capacity: normalizedCapacity,
+        ignoreId: id,
+      });
+      if (batchCapacityValidationError) {
+        return res.status(400).json({ error: batchCapacityValidationError });
+      }
+
       const { rows, rowCount } = await pool.query(
         `UPDATE batches SET name=$1, department_id=$2, capacity=$3 WHERE id=$4 RETURNING *`,
-        [name, department_id, capacity, id]
+        [name, department_id, normalizedCapacity, id]
       );
       if (!rowCount) return res.status(404).json({ error: 'Item not found' });
       return res.json({ success: true, item: rows[0] });
@@ -1038,6 +1508,16 @@ export const createModuleAssignment = async (req, res) => {
       return res.status(400).json({ error: 'moduleId, lecturerId and academicYear are required' });
     }
 
+    const moduleResult = await pool.query('SELECT id FROM modules WHERE id = $1', [moduleId]);
+    if (moduleResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Module not found' });
+    }
+
+    const lecturerResult = await pool.query('SELECT id FROM instructors WHERE id = $1', [lecturerId]);
+    if (lecturerResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Lecturer not found' });
+    }
+
     let effectiveLicId = licId;
     if (isLic(req.user)) {
       const licScope = await resolveLicScope(req.user);
@@ -1046,6 +1526,11 @@ export const createModuleAssignment = async (req, res) => {
     }
 
     if (!effectiveLicId) return res.status(400).json({ error: 'licId is required' });
+
+    const licResult = await pool.query('SELECT id FROM lics WHERE id = $1', [effectiveLicId]);
+    if (licResult.rows.length === 0) {
+      return res.status(404).json({ error: 'LIC not found' });
+    }
 
     const id = `asg_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
     const { rows } = await pool.query(
@@ -1484,7 +1969,7 @@ export const resetData = async (req, res) => {
 
 export const runScheduler = async (req, res) => {
   try {
-    const { algorithms = ['hybrid'], options = {} } = req.body;
+    const { algorithms = ['hybrid'], options = {}, timetableName = null, saveToDatabase } = req.body;
 
     const [hallsRes, modulesRes, licsRes, instructorsRes, batchesRes] = await Promise.all([
       pool.query('SELECT * FROM halls'),
@@ -1494,7 +1979,7 @@ export const runScheduler = async (req, res) => {
       pool.query('SELECT * FROM batches'),
     ]);
 
-    const halls = hallsRes.rows;
+    const halls = sortHallsByStructure(hallsRes.rows);
     const hallAllocationMap = await loadCoordinatorHallAllocationMap();
     const modules = applyCoordinatorHallAllocations(modulesRes.rows, hallAllocationMap);
     const lics = licsRes.rows;
@@ -1505,11 +1990,76 @@ export const runScheduler = async (req, res) => {
       return res.status(400).json({ error: 'No halls available. Please add halls before running the scheduler engine.' });
     }
 
-    const mergedOptions = await withFacultySoftConstraints(req.user, options);
+    const mergedOptions = await withFacultySoftConstraints(req.user, {
+      logicalScheduling: true,
+      fixedSessionBlueprint: true,
+      lectureSessionsPerWeek: 1,
+      labSessionsPerWeek: 1,
+      lectureDurationHours: 3,
+      labDurationHours: 2,
+      tutorialSessionsPerWeek: 0,
+      tutorialDurationHours: 0,
+      ...options,
+    });
     const constraints = { halls, modules, lics, instructors, batches, options: mergedOptions };
-    const results = runSelectedAlgorithms(constraints, algorithms, mergedOptions);
+    const results = await runSelectedAlgorithms(constraints, algorithms, mergedOptions);
 
-    return res.json({ success: true, results });
+    let savedTimetable = null;
+    const shouldPersist = isFacultyCoordinator(req.user)
+      ? (saveToDatabase !== false)
+      : Boolean(saveToDatabase);
+
+    if (shouldPersist) {
+      const { algorithm, schedule } = pickPrimaryScheduleFromResults(results, algorithms);
+      const nowIso = new Date().toISOString();
+      const timetableScope = buildTimetableScope({
+        year: mergedOptions.academicYear || mergedOptions.year || 'ALL',
+        semester: mergedOptions.semester || 'ALL',
+        specialization: mergedOptions.specialization || null,
+        group: mergedOptions.group || null,
+        subgroup: mergedOptions.subgroup || null,
+      });
+      const groupedSchedules = buildGroupedSchedulePayload(schedule, timetableScope);
+
+      savedTimetable = await saveGeneratedTimetable({
+        name: timetableName || `Timetable_All_${nowIso.slice(0, 10)}`,
+        semester: String(mergedOptions.semester || 'ALL'),
+        year: String(mergedOptions.academicYear || mergedOptions.year || 'ALL'),
+        generatedBy: req.user?.id || null,
+        data: {
+          generatedAt: nowIso,
+          scope: timetableScope,
+          generationScope: 'all',
+          timetableScope,
+          algorithms: Array.isArray(algorithms) ? algorithms : [algorithms],
+          primaryAlgorithm: algorithm,
+          modulesCount: modules.length,
+          hallsCount: halls.length,
+          schedule,
+          groupedSchedules,
+          allResults: results,
+        },
+      });
+    }
+
+    return res.json({
+      success: true,
+      results,
+      ...(savedTimetable
+        ? {
+            timetableSaved: true,
+            timetableId: savedTimetable.id,
+            timetable: {
+              id: savedTimetable.id,
+              name: savedTimetable.name,
+              semester: savedTimetable.semester,
+              year: savedTimetable.year,
+              status: savedTimetable.status,
+              created_at: savedTimetable.created_at,
+            },
+          }
+        : { timetableSaved: false }),
+    });
   } catch (err) {
     console.error('Error running scheduler:', err);
     return res.status(500).json({ error: err.message });
@@ -1518,7 +2068,7 @@ export const runScheduler = async (req, res) => {
 
 export const runSchedulerBySegments = async (req, res) => {
   try {
-    const { algorithms = ['hybrid'], options = {} } = req.body;
+    const { algorithms = ['hybrid'], options = {}, timetableName = null, saveToDatabase } = req.body;
     const requestedYear = Number(options.year || options.academicYear || 0);
     const requestedSemester = Number(options.semester || 0);
     const requestedSpecialization = String(options.specialization || '').trim().toUpperCase();
@@ -1530,7 +2080,7 @@ export const runSchedulerBySegments = async (req, res) => {
       pool.query('SELECT * FROM batches'),
     ]);
 
-    const halls = hallsRes.rows;
+    const halls = sortHallsByStructure(hallsRes.rows);
     const hallAllocationMap = await loadCoordinatorHallAllocationMap();
     const lics = licsRes.rows;
     const instructors = instructorsRes.rows;
@@ -1544,7 +2094,17 @@ export const runSchedulerBySegments = async (req, res) => {
       return res.status(400).json({ error: 'No batches available. Please add batches before running segmented scheduling.' });
     }
 
-    const mergedOptions = await withFacultySoftConstraints(req.user, options);
+    const mergedOptions = await withFacultySoftConstraints(req.user, {
+      logicalScheduling: true,
+      fixedSessionBlueprint: true,
+      lectureSessionsPerWeek: 1,
+      labSessionsPerWeek: 1,
+      lectureDurationHours: 3,
+      labDurationHours: 2,
+      tutorialSessionsPerWeek: 0,
+      tutorialDurationHours: 0,
+      ...options,
+    });
     const segments = buildSemesterSpecializationSegments({ batches, modules: [], lics, instructors });
     const filteredSegments = segments.filter((segment) => {
       if (requestedYear && segment.year !== requestedYear) return false;
@@ -1611,7 +2171,7 @@ export const runSchedulerBySegments = async (req, res) => {
         },
       };
 
-      const results = runSelectedAlgorithms(constraints, algorithms, constraints.options);
+      const results = await runSelectedAlgorithms(constraints, algorithms, constraints.options);
       segmentedResults.push({
         segment: {
           key: segment.key,
@@ -1635,6 +2195,48 @@ export const runSchedulerBySegments = async (req, res) => {
       });
     }
 
+    let savedTimetable = null;
+    const shouldPersist = isFacultyCoordinator(req.user)
+      ? (saveToDatabase !== false)
+      : Boolean(saveToDatabase);
+
+    if (shouldPersist) {
+      const nowIso = new Date().toISOString();
+      const mergedSchedule = segmentedResults.flatMap((entry) => {
+        const { schedule } = pickPrimaryScheduleFromResults(entry.results, algorithms);
+        return schedule;
+      });
+      const timetableScope = buildTimetableScope({
+        year: requestedYear || 'MULTI',
+        semester: requestedSemester || 'MULTI',
+        specialization: requestedSpecialization || null,
+      });
+      const groupedSchedules = buildGroupedSchedulePayload(mergedSchedule, timetableScope);
+
+      savedTimetable = await saveGeneratedTimetable({
+        name: timetableName || `Timetable_Segments_${nowIso.slice(0, 10)}`,
+        semester: requestedSemester ? String(requestedSemester) : 'MULTI',
+        year: requestedYear ? String(requestedYear) : 'MULTI',
+        generatedBy: req.user?.id || null,
+        data: {
+          generatedAt: nowIso,
+          scope: timetableScope,
+          generationScope: 'segmented',
+          filters: {
+            year: requestedYear || null,
+            semester: requestedSemester || null,
+            specialization: requestedSpecialization || null,
+          },
+          timetableScope,
+          algorithms: Array.isArray(algorithms) ? algorithms : [algorithms],
+          totalSegments: segmentedResults.length,
+          mergedSchedule,
+          groupedSchedules,
+          segmentedResults,
+        },
+      });
+    }
+
     return res.json({
       success: true,
       totalSegments: segmentedResults.length,
@@ -1645,6 +2247,20 @@ export const runSchedulerBySegments = async (req, res) => {
         specialization: requestedSpecialization || null,
       },
       segmentedResults,
+      ...(savedTimetable
+        ? {
+            timetableSaved: true,
+            timetableId: savedTimetable.id,
+            timetable: {
+              id: savedTimetable.id,
+              name: savedTimetable.name,
+              semester: savedTimetable.semester,
+              year: savedTimetable.year,
+              status: savedTimetable.status,
+              created_at: savedTimetable.created_at,
+            },
+          }
+        : { timetableSaved: false }),
     });
   } catch (err) {
     console.error('Error running segmented scheduler:', err);
@@ -1669,7 +2285,12 @@ export const runSchedulerForYearSemester = async (req, res) => {
     const [hallsRes, modulesRes, licsRes, instructorsRes, batchesRes] = await Promise.all([
       pool.query('SELECT * FROM halls WHERE status IN ($1, $2)', ['available', 'occupied']),
       pool.query(
-        'SELECT * FROM modules WHERE academic_year = $1 AND semester = $2',
+        `SELECT m.*
+         FROM modules m
+         JOIN users u ON u.id = m.created_by
+         WHERE m.academic_year = $1
+           AND m.semester = $2
+           AND regexp_replace(lower(COALESCE(u.role, '')), '[^a-z0-9]', '', 'g') = 'academiccoordinator'`,
         [academicYear, semester]
       ),
       pool.query('SELECT * FROM lics'),
@@ -1677,11 +2298,122 @@ export const runSchedulerForYearSemester = async (req, res) => {
       pool.query('SELECT * FROM batches'),
     ]);
 
-    const halls = hallsRes.rows;
+    const halls = sortHallsByStructure(hallsRes.rows);
     const modules = modulesRes.rows;
     const lics = licsRes.rows;
     const instructors = instructorsRes.rows;
     const batches = batchesRes.rows;
+
+    const requestedSpecialization = normalizeSpecializationCode(options.specialization || '');
+    const requestedGroup = String(options.group || '').trim();
+    const requestedSubgroup = String(options.subgroup || '').trim();
+    const requestedBatchMode = ['WD', 'WE'].includes(String(options.batchMode || options.mode || '').trim().toUpperCase())
+      ? String(options.batchMode || options.mode || '').trim().toUpperCase()
+      : '';
+    const normalizedYear = String(academicYear).trim();
+    const normalizedSemester = String(semester).trim();
+    const normalizedScope = {
+      year: normalizedYear,
+      semester: normalizedSemester,
+      mode: requestedBatchMode || null,
+      specialization: requestedSpecialization || null,
+      group: requestedGroup || null,
+      subgroup: requestedSubgroup || null,
+    };
+    const scopeKey = [
+      normalizedYear,
+      normalizedSemester,
+      requestedBatchMode || 'ALL',
+      requestedSpecialization || 'ALL',
+      requestedGroup || 'ALL',
+      requestedSubgroup || 'ALL',
+    ].join('.');
+    const scopeSuffix = [requestedSpecialization, requestedGroup, requestedSubgroup].filter(Boolean).join('_');
+    const defaultTimetableName = scopeSuffix
+      ? `Timetable_${academicYear}_S${semester}_${scopeSuffix}`
+      : `Timetable_${academicYear}_S${semester}`;
+    const rawModuleLimitPerSpecialization = Number(options.moduleLimitPerSpecialization || 0);
+    const moduleLimitPerSpecialization = Number.isFinite(rawModuleLimitPerSpecialization) && rawModuleLimitPerSpecialization > 0
+      ? Math.floor(rawModuleLimitPerSpecialization)
+      : 5;
+
+    const yearNumber = Number(academicYear);
+    const semesterNumber = Number(semester);
+
+    const filteredBatches = batches.filter((batch) => {
+      const scope = parseBatchSchedulingScope(batch);
+
+      if (Number.isInteger(yearNumber) && yearNumber > 0 && (!scope.year || scope.year !== yearNumber)) {
+        return false;
+      }
+
+      if (Number.isInteger(semesterNumber) && semesterNumber > 0 && (!scope.semester || scope.semester !== semesterNumber)) {
+        return false;
+      }
+
+      if (requestedSpecialization && (!scope.specialization || scope.specialization !== requestedSpecialization)) {
+        return false;
+      }
+
+      if (requestedBatchMode && (!scope.mode || scope.mode !== requestedBatchMode)) {
+        return false;
+      }
+
+      if (requestedGroup && (!scope.group || scope.group !== requestedGroup)) {
+        return false;
+      }
+
+      if (requestedSubgroup && (!scope.subgroup || scope.subgroup !== requestedSubgroup)) {
+        return false;
+      }
+
+      return true;
+    });
+
+    const specializationFilteredModules = requestedSpecialization
+      ? modules.filter((module) => normalizeSpecializationCode(inferModuleSpecialization(module)) === requestedSpecialization)
+      : modules;
+
+    const orderedModules = [...specializationFilteredModules].sort((left, right) => {
+      const leftTime = new Date(left?.created_at || 0).getTime();
+      const rightTime = new Date(right?.created_at || 0).getTime();
+      return rightTime - leftTime;
+    });
+
+    const specializationBuckets = new Map();
+    orderedModules.forEach((module) => {
+      const specialization = normalizeSpecializationCode(inferModuleSpecialization(module)) || 'General';
+      if (!specializationBuckets.has(specialization)) {
+        specializationBuckets.set(specialization, []);
+      }
+      specializationBuckets.get(specialization).push(module);
+    });
+
+    const filteredModules = [];
+    specializationBuckets.forEach((bucketModules) => {
+      if (moduleLimitPerSpecialization) {
+        filteredModules.push(...bucketModules.slice(0, Math.max(1, moduleLimitPerSpecialization)));
+      } else {
+        filteredModules.push(...bucketModules);
+      }
+    });
+
+    const dayTypeFilteredModules = filteredModules.filter((module) => {
+      if (!requestedBatchMode) return true;
+
+      const details = parseJsonSafe(module?.details, {});
+      const moduleDayType = String(module?.day_type || details?.day_type || 'weekday').trim().toLowerCase();
+
+      // CONSTRAINT: Lectures and labs can ONLY be on weekdays (Mon-Fri)
+      // Only explicitly 'weekend' type modules are scheduled in WE batch mode
+      if (requestedBatchMode === 'WE') {
+        return moduleDayType === 'weekend'; // Only weekend modules for weekend batch
+      }
+
+      // For weekday batch, include weekday modules
+      // Note: 'any'/'both' modules are now restricted to weekdays by scheduler logic
+      return ['weekday', 'any', 'both', ''].includes(moduleDayType);
+    });
 
     // Validation
     if (!halls.length) {
@@ -1690,18 +2422,39 @@ export const runSchedulerForYearSemester = async (req, res) => {
       });
     }
 
-    if (!modules.length) {
+    if (!dayTypeFilteredModules.length) {
       return res.status(400).json({
-        error: `No modules found for academic year ${academicYear}, semester ${semester}. Please add modules first.`,
+        error: requestedSpecialization
+          ? `No modules found for academic year ${academicYear}, semester ${semester}, specialization ${requestedSpecialization}${requestedBatchMode ? `, mode ${requestedBatchMode}` : ''}. Please add modules first.`
+          : `No modules found for academic year ${academicYear}, semester ${semester}${requestedBatchMode ? `, mode ${requestedBatchMode}` : ''}. Please add modules first.`,
+      });
+    }
+
+    if (!filteredBatches.length) {
+      return res.status(400).json({
+        error: requestedSubgroup
+          ? `No batches found for academic year ${academicYear}, semester ${semester}, specialization ${requestedSpecialization || 'ALL'}, group ${requestedGroup || 'ALL'}, subgroup ${requestedSubgroup}.`
+          : `No batches found for academic year ${academicYear}, semester ${semester}, specialization ${requestedSpecialization || 'ALL'}, group ${requestedGroup || 'ALL'}.`,
       });
     }
 
     // Load and apply hall allocations
     const hallAllocationMap = await loadCoordinatorHallAllocationMap();
-    const modulesWithAllocations = applyCoordinatorHallAllocations(modules, hallAllocationMap);
+    const modulesWithAllocations = applyCoordinatorHallAllocations(dayTypeFilteredModules, hallAllocationMap);
 
     // Load faculty soft constraints if user is faculty coordinator
-    const mergedOptions = await withFacultySoftConstraints(req.user, options);
+    const mergedOptions = await withFacultySoftConstraints(req.user, {
+      logicalScheduling: true,
+      fixedSessionBlueprint: true,
+      lectureSessionsPerWeek: 1,
+      labSessionsPerWeek: 1,
+      lectureDurationHours: 3,
+      labDurationHours: 2,
+      tutorialSessionsPerWeek: 0,
+      tutorialDurationHours: 0,
+      moduleLimitPerSpecialization,
+      ...options,
+    });
 
     // Prepare constraints for scheduler
     const constraints = {
@@ -1709,32 +2462,51 @@ export const runSchedulerForYearSemester = async (req, res) => {
       modules: modulesWithAllocations,
       lics,
       instructors,
-      batches,
+      batches: filteredBatches,
       options: mergedOptions,
     };
 
     // Run selected algorithms
-    const results = runSelectedAlgorithms(constraints, algorithms, mergedOptions);
+    const results = await runSelectedAlgorithms(constraints, algorithms, mergedOptions);
 
     // Prepare timetable metadata
     const generatedTimetable = {
-      name: timetableName || `Timetable_${academicYear}_S${semester}`,
+      name: timetableName || defaultTimetableName,
       semester: String(semester),
       year: String(academicYear),
       status: 'pending',
       generated_by: req.user?.id || null,
       data: {
-        academicYear: String(academicYear),
-        semester: String(semester),
+        academicYear: normalizedYear,
+        semester: normalizedSemester,
+        specialization: normalizedScope.specialization,
+        group: normalizedScope.group,
+        subgroup: normalizedScope.subgroup,
+        scope: normalizedScope,
+        scopeKey,
         generatedAt: new Date().toISOString(),
         algorithms: Array.isArray(algorithms) ? algorithms : [algorithms],
         hallAllocations: Object.fromEntries(hallAllocationMap),
-        modulesCount: modules.length,
+        modulesCount: dayTypeFilteredModules.length,
         hallsCount: halls.length,
+        batchesCount: filteredBatches.length,
         schedule: results.hybrid?.schedule || results.pso?.schedule || results.genetic?.schedule || results.ant?.schedule || results.tabu?.schedule || [],
         allResults: results,
       },
     };
+
+    generatedTimetable.data.timetableScope = buildTimetableScope({
+      year: academicYear,
+      semester,
+      specialization: normalizedScope.specialization,
+      group: normalizedScope.group,
+      subgroup: normalizedScope.subgroup,
+    });
+    generatedTimetable.data.generationScope = 'year-semester';
+    generatedTimetable.data.groupedSchedules = buildGroupedSchedulePayload(
+      generatedTimetable.data.schedule,
+      generatedTimetable.data.timetableScope
+    );
 
     // Save timetable to database
     const { rows } = await pool.query(
@@ -1765,10 +2537,15 @@ export const runSchedulerForYearSemester = async (req, res) => {
         created_at: savedTimetable.created_at,
       },
       summary: {
-        modulesScheduled: modules.length,
+        modulesScheduled: dayTypeFilteredModules.length,
         hallsUsed: halls.length,
+        batchesUsed: filteredBatches.length,
         academicYear,
         semester,
+        mode: requestedBatchMode || null,
+        specialization: requestedSpecialization || null,
+        group: requestedGroup || null,
+        subgroup: requestedSubgroup || null,
         algorithmUsed: algorithms[0] || 'hybrid',
       },
       results,

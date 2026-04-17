@@ -42,6 +42,9 @@ app.use(cookieParser());
 
 // Database connection flag
 let dbConnected = false;
+let server = null;
+let isShuttingDown = false;
+let currentPort = Number(process.env.PORT || 5000);
 
 // Test database connection
 const testDatabaseConnection = async () => {
@@ -70,17 +73,8 @@ const initializeDatabase = async () => {
     }
 };
 
-// Start server
-const startServer = async () => {
-    // Test database connection
-    await testDatabaseConnection();
-    
-    // Initialize tables if connected
-    if (dbConnected) {
-        await initializeDatabase();
-    }
-    
-    // Routes
+// Routes
+const registerRoutes = () => {
     app.use('/api/auth', authRoutes);
     app.use('/api/scheduler', schedulerRoutes);
     app.use('/api/academic-coordinator', academicCoordinatorRoutes);
@@ -137,13 +131,79 @@ const startServer = async () => {
             ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
         });
     });
-    
-    const port = process.env.PORT || 5000;
-    app.listen(port, () => {
-        console.log(`🚀 Server is running on port ${port}`);
+};
+
+const bindServer = () => {
+    const targetPort = currentPort;
+
+    server = app.listen(targetPort);
+
+    server.on('listening', () => {
+        console.log(`🚀 Server is running on port ${targetPort}`);
         console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
-        console.log(`🔗 Health check: http://localhost:${port}/api/health`);
+        console.log(`🔗 Health check: http://localhost:${targetPort}/api/health`);
     });
+
+    server.on('error', (err) => {
+        if (err?.code === 'EADDRINUSE' && !isShuttingDown) {
+            const nextPort = targetPort + 1;
+            console.warn(`⚠️ Port ${targetPort} is already in use. Retrying on ${nextPort}...`);
+            currentPort = nextPort;
+            setTimeout(() => bindServer(), 300);
+            return;
+        }
+
+        console.error('❌ HTTP server error:', err);
+    });
+
+    server.on('close', () => {
+        console.warn('⚠️ HTTP server closed.');
+        if (!isShuttingDown) {
+            console.warn('↩️ Attempting to restart server in 1 second...');
+            setTimeout(() => {
+                try {
+                    bindServer();
+                } catch (err) {
+                    console.error('❌ Failed to restart HTTP server:', err);
+                }
+            }, 1000);
+        }
+    });
+};
+
+// Start server
+const startServer = async () => {
+    // Test database connection
+    await testDatabaseConnection();
+
+    // Initialize tables if connected
+    if (dbConnected) {
+        await initializeDatabase();
+    }
+
+    registerRoutes();
+    bindServer();
+};
+
+const gracefulShutdown = async (signal) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    console.log(`🛑 Received ${signal}. Shutting down gracefully...`);
+
+    const closeServerPromise = new Promise((resolve) => {
+        if (!server) return resolve();
+        server.close(() => {
+            console.log('✅ HTTP server closed.');
+            resolve();
+        });
+    });
+
+    const closePoolPromise = pool.end()
+        .then(() => console.log('✅ Database pool closed.'))
+        .catch((err) => console.error('❌ Error closing database pool:', err.message));
+
+    await Promise.all([closeServerPromise, closePoolPromise]);
+    process.exit(0);
 };
 
 // Handle unhandled rejections
@@ -153,6 +213,17 @@ process.on('unhandledRejection', (err) => {
 
 process.on('uncaughtException', (err) => {
     console.error('Uncaught Exception:', err);
+});
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
+process.on('beforeExit', (code) => {
+    console.warn(`⚠️ Process beforeExit event with code ${code}.`);
+});
+
+process.on('exit', (code) => {
+    console.warn(`ℹ️ Process exit event with code ${code}.`);
 });
 
 // Start server

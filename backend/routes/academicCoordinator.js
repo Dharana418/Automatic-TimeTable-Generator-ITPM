@@ -13,10 +13,13 @@ const normalizeSpecializationCode = (value = '') => {
     SOFTWAREENGINEERING: 'SE',
     SOFTWARE_ENG: 'SE',
     INFORMATIONTECHNOLOGY: 'IT',
+    INTERACTIVEMEDIA: 'IME',
     COMPUTERSCIENCE: 'CS',
     INFORMATIONSYSTEMSENGINEERING: 'ISE',
     COMPUTER_SYSTEMS_NETWORK_ENGINEERING: 'CSNE',
     INFORMATICS: 'IM',
+    CYBERSECURITY: 'CYBER SECURITY',
+    CYBER: 'CYBER SECURITY',
   };
 
   const compact = normalized.replace(/[^A-Z0-9]/g, '');
@@ -32,6 +35,129 @@ const parseJsonSafe = (value, fallback = {}) => {
     return fallback;
   }
 };
+
+const TIMETABLE_YEAR_REGEX = /^([Yy]?(?:[1-9]|1[0-2])|\d{4}-\d{4})$/;
+const SEMESTER_REGEX = /^[12]$/;
+const GROUP_REGEX = /^\d{1,2}$/;
+const SPECIALIZATION_REGEX = /^[A-Za-z][A-Za-z0-9\s_-]{0,39}$/;
+const REVIEW_NOTE_REGEX = /^.{5,500}$/s;
+const CALENDAR_EVENT_TYPES = new Set(['semester_start', 'exam_period', 'holiday', 'deadline', 'other']);
+
+const buildValidationError = (errors) => ({
+  success: false,
+  error: errors[0],
+  details: errors,
+});
+
+const validateTimetableQuery = (req, res, next) => {
+  const errors = [];
+  const requestedYear = String(req.query.year || req.query.academicYear || '').trim();
+  const requestedSemester = String(req.query.semester || '').trim();
+  const requestedSpecialization = normalizeScopeValue(req.query.specialization || '');
+  const requestedGroup = String(req.query.group || '').trim();
+  const requestedSubgroup = String(req.query.subgroup || '').trim();
+
+  if (requestedYear && !TIMETABLE_YEAR_REGEX.test(requestedYear)) {
+    errors.push('year must be a valid year level or academic year range');
+  }
+  if (requestedSemester && !SEMESTER_REGEX.test(requestedSemester)) {
+    errors.push('semester must be 1 or 2');
+  }
+  if (requestedSpecialization && !SPECIALIZATION_REGEX.test(requestedSpecialization)) {
+    errors.push('specialization contains invalid characters');
+  }
+  if (requestedGroup && !GROUP_REGEX.test(requestedGroup)) {
+    errors.push('group must be numeric');
+  }
+  if (requestedSubgroup && !GROUP_REGEX.test(requestedSubgroup)) {
+    errors.push('subgroup must be numeric');
+  }
+
+  if (errors.length > 0) {
+    return res.status(400).json(buildValidationError(errors));
+  }
+
+  return next();
+};
+
+const validatePositiveIntegerParam = (paramName) => (req, res, next) => {
+  const value = Number(req.params?.[paramName]);
+  if (!Number.isInteger(value) || value <= 0) {
+    return res.status(400).json({
+      success: false,
+      error: `${paramName} must be a positive integer`,
+    });
+  }
+  return next();
+};
+
+const validateReviewComment = (fieldName) => (req, res, next) => {
+  const value = req.body?.[fieldName];
+  if (value === undefined || value === null || value === '') {
+    return next();
+  }
+
+  const text = String(value).trim();
+  if (!REVIEW_NOTE_REGEX.test(text)) {
+    return res.status(400).json({
+      success: false,
+      error: `${fieldName} must be between 5 and 500 characters`,
+    });
+  }
+
+  return next();
+};
+
+const validateCalendarPayload = (req, res, next) => {
+  const errors = [];
+  const {
+    event_name,
+    event_type,
+    start_date,
+    end_date,
+    academic_year,
+    semester,
+  } = req.body || {};
+
+  if (!event_name || typeof event_name !== 'string' || event_name.trim().length < 3 || event_name.trim().length > 120) {
+    errors.push('event_name must be between 3 and 120 characters');
+  }
+
+  const normalizedType = String(event_type || '').trim().toLowerCase();
+  if (!CALENDAR_EVENT_TYPES.has(normalizedType)) {
+    errors.push('event_type is not allowed');
+  }
+
+  const start = new Date(start_date);
+  if (!start_date || Number.isNaN(start.getTime())) {
+    errors.push('start_date must be a valid ISO date');
+  }
+
+  if (end_date) {
+    const end = new Date(end_date);
+    if (Number.isNaN(end.getTime())) {
+      errors.push('end_date must be a valid ISO date when provided');
+    } else if (!Number.isNaN(start.getTime()) && end.getTime() < start.getTime()) {
+      errors.push('end_date cannot be earlier than start_date');
+    }
+  }
+
+  if (!academic_year || !TIMETABLE_YEAR_REGEX.test(String(academic_year).trim())) {
+    errors.push('academic_year must be a valid year level or academic year range');
+  }
+
+  if (!semester || !SEMESTER_REGEX.test(String(semester).trim())) {
+    errors.push('semester must be 1 or 2');
+  }
+
+  if (errors.length > 0) {
+    return res.status(400).json(buildValidationError(errors));
+  }
+
+  return next();
+};
+
+const normalizeScopeValue = (value = '') => String(value || '').trim().toUpperCase();
 
 const inferModuleSpecialization = (module = {}) => {
   const details = parseJsonSafe(module.details, {});
@@ -49,9 +175,9 @@ const inferModuleSpecialization = (module = {}) => {
   const code = String(module.code || '').toUpperCase();
   if (code.startsWith('IT')) return 'IT';
   if (code.startsWith('SE')) return 'SE';
+  if (code.startsWith('IE') || code.startsWith('IM')) return 'IME';
   if (code.startsWith('CS')) return 'CS';
   if (code.startsWith('IS')) return 'ISE';
-  if (code.startsWith('IM')) return 'IM';
   if (code.startsWith('CN')) return 'CSNE';
   return 'GENERAL';
 };
@@ -82,16 +208,40 @@ router.use(
   )
 );
 
-router.get('/timetables', async (req, res) => {
+router.get('/timetables', validateTimetableQuery, async (req, res) => {
   try {
+    const requestedYear = String(req.query.year || req.query.academicYear || '').trim();
+    const requestedSemester = String(req.query.semester || '').trim();
+    const requestedSpecialization = normalizeScopeValue(req.query.specialization || '');
+    const requestedGroup = String(req.query.group || '').trim();
+    const requestedSubgroup = String(req.query.subgroup || '').trim();
+
     const { rows } = await pool.query('SELECT * FROM timetables ORDER BY created_at DESC');
-    return res.json({ success: true, data: rows });
+
+    const filtered = rows.filter((row) => {
+      const data = parseJsonSafe(row.data, {});
+      const scope = parseJsonSafe(data.scope, {});
+      const dataYear = String(scope.year || data.year || data.academicYear || row.year || '').trim();
+      const dataSemester = String(scope.semester || data.semester || row.semester || '').trim();
+      const dataSpecialization = normalizeScopeValue(scope.specialization || data.specialization || '');
+      const dataGroup = String(scope.group || data.group || '').trim();
+      const dataSubgroup = String(scope.subgroup || data.subgroup || '').trim();
+
+      if (requestedYear && dataYear !== requestedYear) return false;
+      if (requestedSemester && dataSemester !== requestedSemester) return false;
+      if (requestedSpecialization && dataSpecialization !== requestedSpecialization) return false;
+      if (requestedGroup && dataGroup !== requestedGroup) return false;
+      if (requestedSubgroup && dataSubgroup !== requestedSubgroup) return false;
+      return true;
+    });
+
+    return res.json({ success: true, data: filtered });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
 });
 
-router.put('/timetables/:id/approve', async (req, res) => {
+router.put('/timetables/:id/approve', validatePositiveIntegerParam('id'), async (req, res) => {
   try {
     const { id } = req.params;
     const { rows, rowCount } = await pool.query(
@@ -112,7 +262,7 @@ router.put('/timetables/:id/approve', async (req, res) => {
   }
 });
 
-router.put('/timetables/:id/reject', async (req, res) => {
+router.put('/timetables/:id/reject', validatePositiveIntegerParam('id'), validateReviewComment('comments'), async (req, res) => {
   try {
     const { id } = req.params;
     const comments = req.body?.comments || null;
@@ -166,7 +316,7 @@ router.get('/conflicts', async (req, res) => {
   }
 });
 
-router.put('/conflicts/:id/resolve', async (req, res) => {
+router.put('/conflicts/:id/resolve', validatePositiveIntegerParam('id'), validateReviewComment('resolution_notes'), async (req, res) => {
   try {
     const { id } = req.params;
     const resolutionNotes = req.body?.resolution_notes || null;
@@ -201,7 +351,7 @@ router.get('/calendar', async (req, res) => {
   }
 });
 
-router.post('/calendar', async (req, res) => {
+router.post('/calendar', validateCalendarPayload, async (req, res) => {
   try {
     const {
       event_name,
@@ -237,365 +387,152 @@ router.post('/calendar', async (req, res) => {
   }
 });
 
-// ============= MODULE MANAGEMENT BY ACADEMIC YEAR =============
-
-// Get all academic years with module count
-router.get('/modules/years', async (req, res) => {
+router.put('/calendar/:id', validatePositiveIntegerParam('id'), validateCalendarPayload, async (req, res) => {
   try {
-    const { rows } = await pool.query(`
-      SELECT DISTINCT academic_year, COUNT(*) AS module_count
-      FROM modules
-      WHERE academic_year IS NOT NULL
-      GROUP BY academic_year
-      ORDER BY academic_year DESC
-    `);
+    const { id } = req.params;
+    const {
+      event_name,
+      event_type,
+      start_date,
+      end_date,
+      academic_year,
+      semester,
+    } = req.body || {};
 
-    return res.json({
-      success: true,
-      data: rows,
-      total_years: rows.length,
-    });
+    if (!event_name || !event_type || !start_date || !academic_year || !semester) {
+      return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
+
+    const { rows, rowCount } = await pool.query(
+      `UPDATE academic_calendar
+       SET event_name = $1,
+           event_type = $2,
+           start_date = $3,
+           end_date = $4,
+           academic_year = $5,
+           semester = $6
+       WHERE id = $7
+       RETURNING *`,
+      [
+        event_name,
+        event_type,
+        start_date,
+        end_date || start_date,
+        academic_year,
+        semester,
+        id
+      ]
+    );
+
+    if (!rowCount) {
+      return res.status(404).json({ success: false, error: 'Calendar event not found' });
+    }
+
+    return res.json({ success: true, data: rows[0] });
   } catch (err) {
-    console.error('Error fetching academic years:', err.message);
-    return res.status(500).json({ success: false, error: 'Failed to fetch academic years' });
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// Get modules for a specific academic year
+router.delete('/calendar/:id', validatePositiveIntegerParam('id'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rowCount } = await pool.query(
+      'DELETE FROM academic_calendar WHERE id = $1',
+      [id]
+    );
+
+    if (!rowCount) {
+      return res.status(404).json({ success: false, error: 'Calendar event not found' });
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get('/modules/years', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT academic_year, COUNT(*) as module_count 
+       FROM modules 
+       WHERE academic_year IS NOT NULL 
+       GROUP BY academic_year 
+       ORDER BY academic_year DESC`
+    );
+    return res.json({ success: true, data: rows });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.get('/modules/year/:academicYear', async (req, res) => {
   try {
     const { academicYear } = req.params;
     const { semester, specialization } = req.query;
-    const requestedSpecialization = normalizeSpecializationCode(specialization || '');
+    if (!TIMETABLE_YEAR_REGEX.test(String(academicYear).trim())) {
+      return res.status(400).json({ success: false, error: 'academicYear must be a valid year level or academic year range' });
+    }
 
+    if (semester && !SEMESTER_REGEX.test(String(semester).trim())) {
+      return res.status(400).json({ success: false, error: 'semester must be 1 or 2' });
+    }
+
+    if (specialization && !SPECIALIZATION_REGEX.test(String(specialization).trim())) {
+      return res.status(400).json({ success: false, error: 'specialization contains invalid characters' });
+    }
+
+    const moduleLimitPerSpecialization = 5;
+    
     let query = `
-      SELECT 
-        id,
-        code,
-        name,
-        batch_size,
-        day_type,
-        credits,
-        lectures_per_week,
-        academic_year,
-        semester,
-        lic_id,
-        details,
-        created_at,
-        created_by
-      FROM modules
-      WHERE academic_year = $1
+      SELECT m.*
+      FROM modules m
+      JOIN users u ON u.id = m.created_by
+      WHERE m.academic_year = $1
+        AND regexp_replace(lower(COALESCE(u.role, '')), '[^a-z0-9]', '', 'g') = 'academiccoordinator'
     `;
     const params = [academicYear];
-
+    
     if (semester) {
-      query += ` AND semester = $${params.length + 1}`;
       params.push(semester);
+      query += ` AND m.semester = $${params.length}`;
     }
-
-    query += ` ORDER BY code ASC`;
-
+    
+    query += ` ORDER BY m.created_at DESC`;
+    
     const { rows } = await pool.query(query, params);
-    const filteredRows = requestedSpecialization
-      ? rows.filter((module) => inferModuleSpecialization(module) === requestedSpecialization)
-      : rows;
+    
+    let filtered = rows;
+    if (specialization && specialization.toUpperCase() !== 'ALL') {
+      const requestedSpecialization = normalizeSpecializationCode(specialization);
+      filtered = rows.filter((module) => {
+        const moduleSpecialization = normalizeSpecializationCode(inferModuleSpecialization(module));
+        if (requestedSpecialization === 'ENGINEERING') {
+          return ['CS', 'ISE', 'CSNE', 'IME', 'IM'].includes(moduleSpecialization);
+        }
+        if (requestedSpecialization === 'IM') {
+          return moduleSpecialization === 'IM' || moduleSpecialization === 'IME';
+        }
+        return moduleSpecialization === requestedSpecialization;
+      });
+    }
 
+    const limited = filtered.slice(0, moduleLimitPerSpecialization);
+    
     return res.json({
       success: true,
-      academic_year: academicYear,
-      semester: semester || 'all',
-      specialization: requestedSpecialization || 'all',
-      data: filteredRows,
-      total_modules: filteredRows.length,
+      data: limited,
+      total: limited.length,
+      limit: moduleLimitPerSpecialization,
+      filters: {
+        year: academicYear,
+        semester: semester || null,
+        specialization: specialization || null,
+      },
     });
   } catch (err) {
-    console.error('Error fetching modules for year:', err.message);
-    return res.status(500).json({ success: false, error: 'Failed to fetch modules for year' });
-  }
-});
-
-// Add new module for a specific academic year (Academic Coordinator only)
-router.post('/modules/year/:academicYear', authorize('admin', 'academiccoordinator', 'Admin', 'Academic Coordinator'), async (req, res) => {
-  try {
-    const { academicYear } = req.params;
-    const {
-      code,
-      name,
-      batch_size,
-      day_type,
-      credits,
-      lectures_per_week,
-      semester,
-      details,
-      lic_id,
-    } = req.body || {};
-
-    // Validation
-    if (!code || !name) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Module code and name are required' 
-      });
-    }
-
-    if (!academicYear) {
-      return res.status(400).json({
-        success: false,
-        error: 'Academic year is required',
-      });
-    }
-
-    // Check if module code already exists for this year
-    const existing = await pool.query(
-      'SELECT id, code FROM modules WHERE code = $1 AND academic_year = $2',
-      [code, academicYear]
-    );
-
-    if (existing.rows.length > 0) {
-      return res.status(409).json({
-        success: false,
-        error: `Module with code '${code}' already exists for academic year ${academicYear}`,
-        existing: existing.rows[0],
-      });
-    }
-
-    const moduleId = `module_${academicYear}_${code}_${Date.now()}`;
-
-    const { rows } = await pool.query(
-      `INSERT INTO modules (
-        id, code, name, batch_size, day_type, credits, lectures_per_week, 
-        academic_year, semester, details, lic_id, created_by
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-      RETURNING id, code, name, batch_size, day_type, credits, lectures_per_week, 
-                academic_year, semester, details, lic_id, created_at, created_by`,
-      [
-        moduleId,
-        code,
-        name,
-        batch_size || null,
-        day_type || null,
-        credits || null,
-        lectures_per_week || null,
-        academicYear,
-        semester || null,
-        details ? JSON.stringify(details) : null,
-        lic_id || null,
-        req.user?.id || null,
-      ]
-    );
-
-    return res.status(201).json({
-      success: true,
-      message: `Module '${code}' added for academic year ${academicYear}`,
-      data: rows[0],
-    });
-  } catch (err) {
-    console.error('Error adding module for year:', err.message);
-    return res.status(500).json({ success: false, error: 'Failed to add module' });
-  }
-});
-
-// Update module for a specific academic year
-router.put('/modules/year/:academicYear/:moduleId', authorize('admin', 'academiccoordinator', 'Admin', 'Academic Coordinator'), async (req, res) => {
-  try {
-    const { academicYear, moduleId } = req.params;
-    const {
-      code,
-      name,
-      batch_size,
-      day_type,
-      credits,
-      lectures_per_week,
-      semester,
-      details,
-    } = req.body || {};
-
-    // Get existing module
-    const existing = await pool.query(
-      'SELECT * FROM modules WHERE id = $1 AND academic_year = $2',
-      [moduleId, academicYear]
-    );
-
-    if (existing.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Module not found for this academic year',
-      });
-    }
-
-    // If code is being changed, check for conflicts
-    if (code && code !== existing.rows[0].code) {
-      const conflicting = await pool.query(
-        'SELECT id FROM modules WHERE code = $1 AND academic_year = $2 AND id != $3',
-        [code, academicYear, moduleId]
-      );
-      if (conflicting.rows.length > 0) {
-        return res.status(409).json({
-          success: false,
-          error: `Module code '${code}' already exists for this academic year`,
-        });
-      }
-    }
-
-    const { rows } = await pool.query(
-      `UPDATE modules SET
-        code = COALESCE($2, code),
-        name = COALESCE($3, name),
-        batch_size = COALESCE($4, batch_size),
-        day_type = COALESCE($5, day_type),
-        credits = COALESCE($6, credits),
-        lectures_per_week = COALESCE($7, lectures_per_week),
-        semester = COALESCE($8, semester),
-        details = COALESCE($9, details)
-      WHERE id = $1 AND academic_year = $10
-      RETURNING id, code, name, batch_size, day_type, credits, lectures_per_week,
-                academic_year, semester, details, lic_id, created_at`,
-      [
-        moduleId,
-        code || null,
-        name || null,
-        batch_size || null,
-        day_type || null,
-        credits || null,
-        lectures_per_week || null,
-        semester || null,
-        details ? JSON.stringify(details) : null,
-        academicYear,
-      ]
-    );
-
-    return res.json({
-      success: true,
-      message: 'Module updated successfully',
-      data: rows[0],
-    });
-  } catch (err) {
-    console.error('Error updating module:', err.message);
-    return res.status(500).json({ success: false, error: 'Failed to update module' });
-  }
-});
-
-// Delete module for a specific academic year
-router.delete('/modules/year/:academicYear/:moduleId', authorize('admin', 'academiccoordinator', 'Admin', 'Academic Coordinator'), async (req, res) => {
-  try {
-    const { academicYear, moduleId } = req.params;
-
-    const { rows, rowCount } = await pool.query(
-      'DELETE FROM modules WHERE id = $1 AND academic_year = $2 RETURNING id, code, name',
-      [moduleId, academicYear]
-    );
-
-    if (rowCount === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Module not found for this academic year',
-      });
-    }
-
-    return res.json({
-      success: true,
-      message: `Module '${rows[0].code}' deleted from academic year ${academicYear}`,
-      data: rows[0],
-    });
-  } catch (err) {
-    console.error('Error deleting module:', err.message);
-    return res.status(500).json({ success: false, error: 'Failed to delete module' });
-  }
-});
-
-// Get modules by year and semester summary
-router.get('/modules/summary/year-semester', async (req, res) => {
-  try {
-    const { rows } = await pool.query(`
-      SELECT 
-        academic_year,
-        semester,
-        COUNT(*) AS module_count,
-        STRING_AGG(DISTINCT code, ', ' ORDER BY code) AS module_codes,
-        ARRAY_AGG(DISTINCT credits) AS credit_distribution
-      FROM modules
-      WHERE academic_year IS NOT NULL
-      GROUP BY academic_year, semester
-      ORDER BY academic_year DESC, semester ASC
-    `);
-
-    return res.json({
-      success: true,
-      data: rows,
-      total_records: rows.length,
-    });
-  } catch (err) {
-    console.error('Error fetching module summary:', err.message);
-    return res.status(500).json({ success: false, error: 'Failed to fetch module summary' });
-  }
-});
-
-// Initialize academic years for all modules (Admin/Academic Coordinator only)
-router.post('/modules/initialize-years', authorize('admin', 'academiccoordinator', 'Admin', 'Academic Coordinator'), async (req, res) => {
-  try {
-    const { academicYear, semester, modules } = req.body;
-
-    if (!academicYear) {
-      return res.status(400).json({
-        success: false,
-        error: 'Academic year is required',
-      });
-    }
-
-    if (!modules || !Array.isArray(modules) || modules.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Modules array is required and must not be empty',
-      });
-    }
-
-    // Update each module with academic year and semester
-    const updatePromises = modules.map((moduleId) =>
-      pool.query(
-        `UPDATE modules 
-         SET academic_year = $1, semester = $2, created_by = $3
-         WHERE id = $4 AND academic_year IS NULL
-         RETURNING id, code, name, academic_year, semester`,
-        [academicYear, semester || '1', req.user?.id || null, moduleId]
-      )
-    );
-
-    const results = await Promise.all(updatePromises);
-    const updated = results.filter((r) => r.rowCount > 0).map((r) => r.rows[0]);
-
-    return res.json({
-      success: true,
-      message: `Successfully initialized ${updated.length} modules with academic year and semester`,
-      data: updated,
-      academic_year: academicYear,
-      semester: semester || '1',
-      total_initialized: updated.length,
-    });
-  } catch (err) {
-    console.error('Error initializing academic years:', err.message);
-    return res.status(500).json({ success: false, error: 'Failed to initialize academic years' });
-  }
-});
-
-// Get all modules without academic year assignment
-router.get('/modules/unassigned-years', async (req, res) => {
-  try {
-    const { rows } = await pool.query(`
-      SELECT id, code, name, batch_size, credits, lectures_per_week
-      FROM modules
-      WHERE academic_year IS NULL
-      ORDER BY code ASC
-    `);
-
-    return res.json({
-      success: true,
-      data: rows,
-      total_unassigned: rows.length,
-    });
-  } catch (err) {
-    console.error('Error fetching unassigned modules:', err.message);
-    return res.status(500).json({ success: false, error: 'Failed to fetch unassigned modules' });
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

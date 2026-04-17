@@ -44,7 +44,13 @@ const parseBatchId = (id) => {
   };
 };
 
-const getCapacity = (batchId) => {
+const getCapacity = (batch) => {
+  const directCapacity = Number(batch?.capacity);
+  if (Number.isFinite(directCapacity) && directCapacity > 0) {
+    return directCapacity;
+  }
+
+  const batchId = batch?.name || batch?.id;
   const parsed = parseBatchId(batchId);
   if (!parsed) return 0;
   return parsed.isSubgroup ? 60 : 120;
@@ -72,7 +78,7 @@ const aggregateBatches = (batches, groupBy = 'yearSemester') => {
     if (!aggregated[key]) {
       aggregated[key] = 0;
     }
-    aggregated[key] += getCapacity(batchId);
+    aggregated[key] += getCapacity(batch);
   });
   
   return Object.entries(aggregated).map(([label, value]) => ({
@@ -112,6 +118,26 @@ const BatchStatisticsPieCharts = () => {
     yearSpecialization: aggregateBatches(batches, 'yearSpecialization'),
   }), [batches]);
 
+  const intakeSummary = useMemo(() => {
+    const yearTotals = chartData.year.reduce((acc, item) => {
+      acc[item.name] = item.value;
+      return acc;
+    }, {});
+
+    const streamBatches = batches.filter((batch) => {
+      const parsed = parseBatchId(batch.name || batch.id);
+      return parsed && ['3', '4'].includes(parsed.year);
+    });
+
+    const streamTotals = aggregateBatches(streamBatches, 'specialization');
+
+    return {
+      yearTotals,
+      streamTotals,
+      streamTotal: streamTotals.reduce((sum, item) => sum + item.value, 0),
+    };
+  }, [batches, chartData.year]);
+
   const getCurrentData = () => chartData[activeChart] || [];
   
   const getData = () => {
@@ -142,7 +168,6 @@ const BatchStatisticsPieCharts = () => {
       style={{
         padding: '12px 18px',
         borderRadius: '12px',
-        border: 'none',
         background: isActive ? 'rgba(56,189,248,0.25)' : 'rgba(148,163,184,0.08)',
         color: isActive ? '#38bdf8' : 'rgba(148,163,184,0.7)',
         cursor: 'pointer',
@@ -235,6 +260,36 @@ const BatchStatisticsPieCharts = () => {
             <span style={{ fontSize: '11px', fontWeight: '600', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Categories</span>
           </div>
           <div style={{ fontSize: '32px', fontWeight: '900', color: '#34d399' }}>{getCurrentData().length}</div>
+        </div>
+      </div>
+
+      {/* Requested intake snapshot */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gap: '14px',
+      }}>
+        <div style={{ background: 'rgba(15,23,42,0.9)', border: '1px solid rgba(56,189,248,0.22)', borderRadius: '16px', padding: '18px' }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>Year 1 Intake</div>
+          <div style={{ fontSize: '30px', fontWeight: '900', color: '#38bdf8', marginTop: '6px' }}>{intakeSummary.yearTotals['1'] || 0}</div>
+        </div>
+        <div style={{ background: 'rgba(15,23,42,0.9)', border: '1px solid rgba(167,139,250,0.22)', borderRadius: '16px', padding: '18px' }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>Year 2 Intake</div>
+          <div style={{ fontSize: '30px', fontWeight: '900', color: '#a78bfa', marginTop: '6px' }}>{intakeSummary.yearTotals['2'] || 0}</div>
+        </div>
+        <div style={{ background: 'rgba(15,23,42,0.9)', border: '1px solid rgba(245,158,11,0.22)', borderRadius: '16px', padding: '18px', gridColumn: 'span 2' }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>Year 3-4 Specialization Stream</div>
+          <div style={{ marginTop: '6px', display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
+            {intakeSummary.streamTotals.map((item, index) => (
+              <span key={`${item.name}-${index}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 10px', borderRadius: '999px', background: 'rgba(255,255,255,0.06)', color: '#e2e8f0', fontSize: '12px', fontWeight: 700 }}>
+                <span style={{ color: COLORS[index % COLORS.length] }}>{item.name}</span>
+                <span>{item.value}</span>
+              </span>
+            ))}
+            <span style={{ marginLeft: 'auto', color: '#f8fafc', fontSize: '12px', fontWeight: 700 }}>
+              Total: {intakeSummary.streamTotal}
+            </span>
+          </div>
         </div>
       </div>
 

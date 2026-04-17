@@ -1,9 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../api/scheduler.js';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 
 /* ── Department helpers ─────────────────────────────────────────── */
 const normalizeDep = (v = '') => String(v || '').trim().toUpperCase();
+
+const parseDetails = (details) => {
+  if (!details) return {};
+  if (typeof details === 'object') return details;
+  try {
+    return JSON.parse(details);
+  } catch {
+    return {};
+  }
+};
 
 const inferDep = (code = '') => {
   const match = String(code || '').trim().match(/^([A-Za-z]+)/);
@@ -18,14 +29,19 @@ const getDep = (m = {}) => {
   return d ? normalizeDep(d) : inferDep(m.code);
 };
 
-const toView = (m = {}) => ({
+const toView = (m = {}) => {
+  const details = parseDetails(m.details);
+  return {
   id: String(m.id || `${m.code}-${m.name}`),
   code: String(m.code || m.id || '').trim(),
   name: String(m.name || m.title || m.code || 'Untitled Module').trim(),
   department: getDep(m),
-  credits: m.credits,
-  lectures_per_week: m.lectures_per_week,
-});
+  credits: m.credits || details.credits || '',
+  lectures_per_week: m.lectures_per_week || details.lectures_per_week || '',
+  academic_year: String(m.academic_year || details.academic_year || ''),
+  semester: String(m.semester || details.semester || ''),
+};
+};
 
 /* ── Department palette ─────────────────────────────────────────── */
 const DEP_STYLE = {
@@ -127,6 +143,7 @@ const ModuleCard = ({ m }) => {
 /* ── Main Component ─────────────────────────────────────────────── */
 const FacultyModulesPage = ({ user }) => {
   const displayName = user?.name || user?.username || 'Faculty Coordinator';
+  const navigate = useNavigate();
   const [modules, setModules] = useState([]);
   const [selectedDep, setSelectedDep] = useState('ALL');
   const [search, setSearch] = useState('');
@@ -137,7 +154,8 @@ const FacultyModulesPage = ({ user }) => {
     let mounted = true;
     const load = async () => {
       try {
-        setIsLoading(true); setErr('');
+        setIsLoading(true);
+        setErr('');
         const res = await api.listItems('modules');
         if (!mounted) return;
         const items = Array.isArray(res?.items) ? res.items : [];
@@ -180,6 +198,19 @@ const FacultyModulesPage = ({ user }) => {
       title="Department Module Control"
       subtitle="Filter, inspect, and monitor modules by department and instructional load"
       badge="Module Management"
+      sidebarSections={[
+        { id: 'moduleFilters', label: 'Filters' },
+        { id: 'moduleTable', label: 'Module Table' },
+      ]}
+      headerActions={
+        <button
+          type="button"
+          onClick={() => navigate('/faculty/modules/added')}
+          className="rounded-xl border border-indigo-300/70 bg-indigo-50 px-3 py-2 text-xs font-bold uppercase tracking-[0.08em] text-indigo-700 transition hover:bg-indigo-100"
+        >
+          Added Modules
+        </button>
+      }
     >
       <style>{`
         .fc-card-hover { transition: all 0.25s cubic-bezier(0.4,0,0.2,1); }
@@ -192,7 +223,7 @@ const FacultyModulesPage = ({ user }) => {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
 
         {/* ── Search & filter card ── */}
-        <section className="fc-section-card" style={{ padding: '28px', position: 'relative', overflow: 'hidden' }}>
+        <section id="moduleFilters" className="fc-section-card" style={{ padding: '28px', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: -60, right: -60, width: 220, height: 220, borderRadius: '50%', background: 'radial-gradient(circle, rgba(56,189,248,0.1) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
           <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#38bdf8' }}>Module Ledger</p>
@@ -200,6 +231,29 @@ const FacultyModulesPage = ({ user }) => {
           <p style={{ margin: '6px 0 0', fontSize: 13, color: 'rgba(148,163,184,0.75)' }}>
             <strong style={{ color: '#f1f5f9' }}>{displayName}</strong> — review and filter module inventory by department and code.
           </p>
+
+            <div style={{ marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+              <Link
+                to="/faculty/modules/added"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '10px 14px',
+                  borderRadius: 10,
+                  textDecoration: 'none',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  color: '#bae6fd',
+                  border: '1px solid rgba(125,211,252,0.45)',
+                  background: 'linear-gradient(90deg, rgba(56,189,248,0.2), rgba(14,116,144,0.22))',
+                }}
+              >
+                Open Added Modules Page
+              </Link>
+            </div>
 
           {/* Search + select row */}
           <div style={{ marginTop: 22, display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 14, alignItems: 'end' }}>
@@ -214,8 +268,8 @@ const FacultyModulesPage = ({ user }) => {
                 <input
                   style={{
                     width: '100%', padding: '10px 14px 10px 36px', borderRadius: 12,
-                    background: 'rgba(15,23,42,0.7)', border: '1px solid rgba(148,163,184,0.15)',
-                    color: '#f1f5f9', fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                    background: 'linear-gradient(135deg, #f1f5f9 0%, #ffffff 55%, #e5e7eb 100%)', border: '1px solid rgba(148,163,184,0.45)',
+                    color: '#0f172a', fontSize: 13, outline: 'none', boxSizing: 'border-box',
                     transition: 'border-color 0.2s, box-shadow 0.2s',
                   }}
                   placeholder="Search by code or name..."
@@ -233,14 +287,14 @@ const FacultyModulesPage = ({ user }) => {
               <select
                 style={{
                   padding: '10px 14px', borderRadius: 12,
-                  background: 'rgba(15,23,42,0.7)', border: '1px solid rgba(148,163,184,0.15)',
-                  color: '#f1f5f9', fontSize: 13, outline: 'none', cursor: 'pointer',
+                  background: 'linear-gradient(135deg, #f1f5f9 0%, #ffffff 55%, #e5e7eb 100%)', border: '1px solid rgba(148,163,184,0.45)',
+                  color: '#0f172a', fontSize: 13, outline: 'none', cursor: 'pointer',
                 }}
                 value={selectedDep}
                 onChange={(e) => setSelectedDep(e.target.value)}
               >
                 {departments.map((d) => (
-                  <option key={d} value={d} style={{ background: '#0f172a' }}>
+                  <option key={d} value={d} style={{ background: '#ffffff', color: '#0f172a' }}>
                     {d === 'ALL' ? 'All Departments' : `${d} (${depStats[d] || 0})`}
                   </option>
                 ))}
@@ -325,7 +379,7 @@ const FacultyModulesPage = ({ user }) => {
           </div>
         )}
 
-        {/* ── Module grid ── */}
+        {/* ── Modules table ── */}
         {!isLoading && filtered.length > 0 && (
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 4 }}>
@@ -333,8 +387,38 @@ const FacultyModulesPage = ({ user }) => {
                 {filtered.length} module{filtered.length !== 1 ? 's' : ''} {selectedDep !== 'ALL' ? `— ${selectedDep}` : 'across all departments'}
               </p>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 16 }}>
-              {filtered.map((m) => <ModuleCard key={m.id} m={m} />)}
+
+            <div id="moduleTable" className="fc-section-card" style={{ padding: 0, overflow: 'hidden' }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 920 }}>
+                  <thead>
+                    <tr style={{ background: 'rgba(15,23,42,0.9)' }}>
+                      {['Code', 'Name', 'Specialization', 'Year/Sem', 'Credits', 'Lectures/Week'].map((head) => (
+                        <th key={head} style={{ textAlign: 'left', padding: '12px 14px', fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.9)', borderBottom: '1px solid rgba(148,163,184,0.2)' }}>{head}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((m) => {
+                      const s = getStyle(m.department);
+                      return (
+                        <tr key={m.id} style={{ borderBottom: '1px solid rgba(148,163,184,0.14)' }}>
+                          <td style={{ padding: '12px 14px', color: '#f1f5f9', fontWeight: 700 }}>{m.code}</td>
+                          <td style={{ padding: '12px 14px', color: 'rgba(226,232,240,0.95)' }}>{m.name}</td>
+                          <td style={{ padding: '12px 14px' }}>
+                            <span style={{ padding: '4px 10px', borderRadius: 16, fontSize: 11, fontWeight: 700, background: s.bg, border: `1px solid ${s.border}`, color: s.color }}>
+                              {m.department}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 14px', color: '#cbd5e1' }}>Y{m.academic_year || '-'} / S{m.semester || '-'}</td>
+                          <td style={{ padding: '12px 14px', color: '#cbd5e1' }}>{m.credits || '-'}</td>
+                          <td style={{ padding: '12px 14px', color: '#cbd5e1' }}>{m.lectures_per_week || '-'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </>
         )}

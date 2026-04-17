@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { motion as Motion } from 'framer-motion';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   BookOpen,
   Building2,
@@ -10,21 +12,257 @@ import {
   AlertTriangle,
   CheckCircle2,
   XCircle,
-  Trash2,
   ClipboardList,
+  Menu,
+  X,
+  BarChart3,
+  PieChart,
+  LineChart,
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Cell,
+} from 'recharts';
 
 import schedulerApi from '../api/scheduler.js';
 
-import moduleCatalog from '../data/moduleCatalog.js';
-
 import HallAllocation from '../components/HallAllocation.jsx';
+import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 
-import { askForText, confirmDelete, showError, showSuccess, showWarning } from '../utils/alerts.js';
+import { askForText, confirmDelete, showError, showSuccess, showValidationErrors, showWarning } from '../utils/alerts.js';
+
+import backgroundImage from '../assets/room-interior-design.jpg';
 
 
 
 const FORBIDDEN_SPECIAL_CHARS = /[~!@#$%^&*()_+]/;
+const MODULE_CODE_PATTERN = /^[A-Za-z]{2}\d{4}$/;
+const MODULE_NAME_PATTERN = /^[A-Za-z ]+$/;
+const TWO_DIGIT_NUMBER_PATTERN = /^\d{2}$/;
+
+const MODULE_SPECIALIZATION_OPTIONS = ['SE', 'IT', 'IME', 'General'];
+
+const sanitizeModuleCodeInput = (value = '') => {
+  const cleaned = String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const letters = cleaned.match(/^[A-Z]{0,2}/)?.[0] || '';
+  const digits = cleaned.slice(letters.length).replace(/\D/g, '').slice(0, 4);
+  return `${letters}${digits}`.slice(0, 6);
+};
+
+const sanitizeModuleNameInput = (value = '') => String(value || '')
+  .replace(/[^A-Za-z\s]/g, '')
+  .replace(/\s{2,}/g, ' ')
+  .replace(/^\s+/, '');
+
+const sanitizeLectureCountInput = (value = '') => String(value || '').replace(/\D/g, '').slice(0, 2);
+
+const blockedToastMessages = {
+  code: {
+    title: 'Module code blocked',
+    text: 'Use exactly 2 English letters followed by 4 digits. Keys like ! # % $ ^ & * ( ) _ are blocked.',
+  },
+  name: {
+    title: 'Module name blocked',
+    text: 'Use English letters and spaces only. Numbers, +, -, and special characters are not allowed.',
+  },
+  lectures: {
+    title: 'Lectures per week blocked',
+    text: 'Use only 2 digits. Special characters, +, and - are not allowed.',
+  },
+};
+
+const isNavigationKey = (key) => [
+  'Backspace',
+  'Delete',
+  'Tab',
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'ArrowDown',
+  'Home',
+  'End',
+  'Escape',
+  'Enter',
+].includes(key);
+
+const hasModifierKey = (event) => event.ctrlKey || event.metaKey || event.altKey;
+
+const isAllowedModuleCodeKey = (key) => /[a-zA-Z0-9]/.test(key);
+
+const getBeforeInputText = (event) => {
+  if (typeof event.data === 'string') return event.data;
+  return String(event.nativeEvent?.data || '');
+};
+
+const getNextInputValue = (element, insertedValue) => {
+  const currentValue = String(element?.value || '');
+  const start = typeof element?.selectionStart === 'number' ? element.selectionStart : currentValue.length;
+  const end = typeof element?.selectionEnd === 'number' ? element.selectionEnd : currentValue.length;
+  return `${currentValue.slice(0, start)}${insertedValue}${currentValue.slice(end)}`;
+};
+
+const showBlockedModuleInputToast = (field) => {
+  const meta = blockedToastMessages[field];
+  if (!meta) return;
+  showWarning(meta.title, meta.text);
+};
+
+const getModuleCodeCounts = (value = '') => {
+  const normalized = String(value || '').toUpperCase();
+  return {
+    letters: (normalized.match(/[A-Z]/g) || []).length,
+    digits: (normalized.match(/\d/g) || []).length,
+  };
+};
+
+const handleModuleCodeKeyDown = (event, currentValue) => {
+  if (hasModifierKey(event) || isNavigationKey(event.key) || event.key.length !== 1) return;
+
+  const key = event.key;
+  const { letters, digits } = getModuleCodeCounts(currentValue);
+
+  if (!isAllowedModuleCodeKey(key)) {
+    event.preventDefault();
+    showBlockedModuleInputToast('code');
+    return;
+  }
+
+  if (/[a-zA-Z]/.test(key)) {
+    if (letters >= 2 || digits > 0) {
+      event.preventDefault();
+      showBlockedModuleInputToast('code');
+    }
+    return;
+  }
+
+  if (/\d/.test(key)) {
+    if (letters < 2 || digits >= 4) {
+      event.preventDefault();
+      showBlockedModuleInputToast('code');
+    }
+  }
+};
+
+const handleModuleNameKeyDown = (event) => {
+  if (hasModifierKey(event) || isNavigationKey(event.key) || event.key.length !== 1) return;
+
+  if (!/[a-zA-Z\s]/.test(event.key)) {
+    event.preventDefault();
+    showBlockedModuleInputToast('name');
+  }
+};
+
+const handleLecturesKeyDown = (event, currentValue) => {
+  if (hasModifierKey(event) || isNavigationKey(event.key) || event.key.length !== 1) return;
+
+  if (!/\d/.test(event.key) || String(currentValue || '').length >= 2) {
+    event.preventDefault();
+    showBlockedModuleInputToast('lectures');
+  }
+};
+
+const handleModuleCodePaste = (event) => {
+  const pasted = event.clipboardData.getData('text');
+  if (sanitizeModuleCodeInput(pasted) !== String(pasted || '').toUpperCase()) {
+    event.preventDefault();
+    showBlockedModuleInputToast('code');
+  }
+};
+
+const handleModuleNamePaste = (event) => {
+  const pasted = event.clipboardData.getData('text');
+  if (sanitizeModuleNameInput(pasted) !== String(pasted || '')) {
+    event.preventDefault();
+    showBlockedModuleInputToast('name');
+  }
+};
+
+const handleLecturesPaste = (event) => {
+  const pasted = event.clipboardData.getData('text');
+  if (sanitizeLectureCountInput(pasted) !== String(pasted || '')) {
+    event.preventDefault();
+    showBlockedModuleInputToast('lectures');
+  }
+};
+
+const handleModuleCodeBeforeInput = (event) => {
+  const inserted = getBeforeInputText(event);
+  if (!inserted) return;
+
+  if (!/^[a-zA-Z0-9]+$/.test(inserted)) {
+    event.preventDefault();
+    showBlockedModuleInputToast('code');
+    return;
+  }
+
+  const nextValue = getNextInputValue(event.currentTarget, inserted);
+  if (sanitizeModuleCodeInput(nextValue) !== String(nextValue).toUpperCase()) {
+    event.preventDefault();
+    showBlockedModuleInputToast('code');
+  }
+};
+
+const handleModuleNameBeforeInput = (event) => {
+  const inserted = getBeforeInputText(event);
+  if (!inserted) return;
+
+  const nextValue = getNextInputValue(event.currentTarget, inserted);
+  if (sanitizeModuleNameInput(nextValue) !== nextValue) {
+    event.preventDefault();
+    showBlockedModuleInputToast('name');
+  }
+};
+
+const handleLecturesBeforeInput = (event) => {
+  const inserted = getBeforeInputText(event);
+  if (!inserted) return;
+
+  const nextValue = getNextInputValue(event.currentTarget, inserted);
+  if (sanitizeLectureCountInput(nextValue) !== nextValue) {
+    event.preventDefault();
+    showBlockedModuleInputToast('lectures');
+  }
+};
+
+const handleModuleCodeInput = (event, currentValue, setModuleForm) => {
+  const rawValue = String(event.currentTarget.value || '');
+  const sanitizedValue = sanitizeModuleCodeInput(rawValue);
+  if (sanitizedValue !== rawValue.toUpperCase()) {
+    showBlockedModuleInputToast('code');
+    event.currentTarget.value = sanitizedValue;
+  }
+  if (sanitizedValue !== currentValue) {
+    setModuleForm((previous) => ({ ...previous, code: sanitizedValue }));
+  }
+};
+
+const handleModuleNameInput = (event, currentValue, setModuleForm) => {
+  const rawValue = String(event.currentTarget.value || '');
+  const sanitizedValue = sanitizeModuleNameInput(rawValue);
+  if (sanitizedValue !== rawValue) {
+    showBlockedModuleInputToast('name');
+  }
+  if (sanitizedValue !== currentValue) {
+    setModuleForm((previous) => ({ ...previous, name: sanitizedValue }));
+  }
+};
+
+const handleLecturesInput = (event, currentValue, setModuleForm) => {
+  const rawValue = String(event.currentTarget.value || '');
+  const sanitizedValue = sanitizeLectureCountInput(rawValue);
+  if (sanitizedValue !== rawValue) {
+    showBlockedModuleInputToast('lectures');
+  }
+  if (sanitizedValue !== currentValue) {
+    setModuleForm((previous) => ({ ...previous, lectures_per_week: sanitizedValue }));
+  }
+};
 
 const inferAcademicYearFromModuleCode = (code = '') => {
   const firstDigit = String(code).match(/\d/)?.[0];
@@ -33,11 +271,144 @@ const inferAcademicYearFromModuleCode = (code = '') => {
   return String(year);
 };
 
+const inferSemesterFromModuleCode = (code = '') => {
+  const digits = String(code || '').replace(/\D/g, '');
+  const semesterFlag = digits[1];
+  if (semesterFlag === '0') return '1';
+  if (semesterFlag === '1') return '2';
+  if (/\d/.test(String(semesterFlag || ''))) return '2';
+  return null;
+};
+
+const inferSpecializationFromModuleCode = (code = '') => {
+  const normalizedCode = String(code || '').trim().toUpperCase();
+  if (!normalizedCode) return 'General';
+  if (normalizedCode.startsWith('SE')) return 'SE';
+  if (normalizedCode.startsWith('IT')) return 'IT';
+  if (normalizedCode.startsWith('IE') || normalizedCode.startsWith('IM')) return 'IME';
+  return 'General';
+};
+
+// Animated Counter Component
+const AnimatedCounter = ({ from = 0, to, duration = 1.2 }) => {
+  const [displayValue, setDisplayValue] = useState(from);
+
+  useEffect(() => {
+    const startTime = Date.now();
+    const interval = setInterval(() => {
+      const elapsed = (Date.now() - startTime) / 1000;
+      const progress = Math.min(elapsed / duration, 1);
+      const current = Math.floor(from + (to - from) * progress);
+      setDisplayValue(current);
+
+      if (progress >= 1) clearInterval(interval);
+    }, 16); // ~60fps
+
+    return () => clearInterval(interval);
+  }, [to, from, duration]);
+
+  return <Motion.span className="inline-block">{displayValue}</Motion.span>;
+};
+
+const Sparkline = ({ values = [], stroke = '#10b981' }) => {
+  const points = values.length > 1
+    ? values
+        .map((value, index) => `${(index / (values.length - 1)) * 100},${100 - value}`)
+        .join(' ')
+    : '0,100 100,100';
+
+  return (
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: '100%', height: 44, display: 'block' }}>
+      <polyline
+        fill="none"
+        stroke={stroke}
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={points}
+      />
+    </svg>
+  );
+};
+
+const InsightTile = ({ label, value, hint, tone = 'emerald', values = [], icon }) => {
+  const toneMap = {
+    emerald: { border: 'rgba(16,185,129,0.18)', glow: 'rgba(16,185,129,0.12)', text: '#34d399', stroke: '#10b981' },
+    blue: { border: 'rgba(59,130,246,0.18)', glow: 'rgba(59,130,246,0.12)', text: '#93c5fd', stroke: '#3b82f6' },
+    amber: { border: 'rgba(245,158,11,0.18)', glow: 'rgba(245,158,11,0.12)', text: '#fbbf24', stroke: '#f59e0b' },
+    red: { border: 'rgba(248,113,113,0.18)', glow: 'rgba(248,113,113,0.12)', text: '#fca5a5', stroke: '#ef4444' },
+  };
+  const t = toneMap[tone] || toneMap.emerald;
+
+  return (
+    <Motion.div
+      className="ac-insight-tile"
+      layout
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.28, ease: 'easeOut' }}
+      style={{ borderColor: t.border, boxShadow: `0 16px 36px ${t.glow}` }}
+    >
+      <div className="ac-insight-head">
+        <div className="ac-insight-copy">
+          <p className="ac-insight-label">{label}</p>
+          <div className="ac-insight-value">
+            {icon}
+            <AnimatedCounter to={value} duration={1.2} />
+          </div>
+          {hint && <p className="ac-insight-hint">{hint}</p>}
+        </div>
+        <div className="ac-insight-chart">
+          <Sparkline values={values} stroke={t.stroke} />
+        </div>
+      </div>
+    </Motion.div>
+  );
+};
+
+// Skeleton Components
+const SkeletonStats = () => (
+  <div className="stat-row">
+    {[0, 1, 2, 3].map((i) => (
+      <div key={i} className="stat">
+        <div className="skeleton-stat"></div>
+        <div className="skeleton h-4 mt-3 w-2/3 rounded"></div>
+      </div>
+    ))}
+  </div>
+);
+
+const SkeletonTable = ({ rows = 3 }) => (
+  <div className="ac-table-wrapper">
+    {[...Array(rows)].map((_, i) => (
+      <div key={i} className="skeleton-row">
+        <div className="skeleton-cell" style={{ width: '20%' }}></div>
+        <div className="skeleton-cell" style={{ width: '20%' }}></div>
+        <div className="skeleton-cell" style={{ width: '20%' }}></div>
+        <div className="skeleton-cell" style={{ width: '20%' }}></div>
+        <div className="skeleton-cell" style={{ width: '20%' }}></div>
+      </div>
+    ))}
+  </div>
+);
+
+const SkeletonCard = () => (
+  <div className="action-card">
+    <div>
+      <div className="skeleton h-6 w-1/2 mb-2"></div>
+      <div className="skeleton h-4 w-3/4"></div>
+    </div>
+    <div className="skeleton h-10 w-24"></div>
+  </div>
+);
+
 
 
 const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState('overview');
+  const [_activeTab, setActiveTab] = useState('overview');
 
   
 
@@ -57,7 +428,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
   const [conflicts, setConflicts] = useState([]);
 
-  const [academicCalendar, setAcademicCalendar] = useState([]);
+  const [_academicCalendar, setAcademicCalendar] = useState([]);
 
   const [mainView, setMainView] = useState('lectures');
 
@@ -69,10 +440,16 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
   const [licForm, setLicForm] = useState({ name: '', department: '' });
 
-  const [moduleForm, setModuleForm] = useState({ code: '', name: '', batch_size: '', credits: '', lectures_per_week: '' });
-
-  const [selectedCatalogModule, setSelectedCatalogModule] = useState('');
-
+  const [moduleForm, setModuleForm] = useState({
+    code: '',
+    name: '',
+    specialization: 'SE',
+    academic_year: '1',
+    semester: '1',
+    batch_size: '',
+    credits: '',
+    lectures_per_week: '',
+  });
   const [campusForm, setCampusForm] = useState({
 
     name: '',
@@ -101,6 +478,15 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
   });
 
+  const [editingAssignmentId, setEditingAssignmentId] = useState('');
+  const [editingAssignmentForm, setEditingAssignmentForm] = useState({
+    lecturerId: '',
+    licId: '',
+    academicYear: '1',
+    semester: '1',
+  });
+  const [editingAssignmentLabel, setEditingAssignmentLabel] = useState('');
+
   const [calendarEventForm, setCalendarEventForm] = useState({
 
     event_name: '',
@@ -125,9 +511,135 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
   const [loading, setLoading] = useState(false);
 
-  const [view3d, setView3d] = useState({ rotateX: 10, rotateZ: -18, zoom: 1 });
+  const [moduleSidebarOpen, setModuleSidebarOpen] = useState(false);
+  const [assignmentFilters, setAssignmentFilters] = useState({
+    academicYear: 'all',
+    semester: 'all',
+    specialization: 'all',
+  });
 
   const [showCalendarForm, setShowCalendarForm] = useState(false);
+  const [activeFormId, setActiveFormId] = useState(null);
+  const commandSearchValue = `${timetables.length} timetables ${assignments.length} assignments ${conflicts.length} conflicts`.toLowerCase();
+
+  const academicNavigationGroups = useMemo(() => ([
+    {
+      title: 'Academic Fields',
+      items: [
+        { id: 'acOverview', label: 'Overview', to: '/dashboard#acOverview', type: 'section', color: '#0f5d99', icon: <ClipboardList size={16} /> },
+        { id: 'main-view-panel-lectures', label: 'Modules Assignment', to: '/dashboard#main-view-panel-lectures', type: 'section', color: '#1d4ed8', icon: <BookOpen size={16} /> },
+        { id: 'addedModules', label: 'Added Modules', to: '/faculty/modules/added', color: '#4f46e5', icon: <BookOpen size={16} /> },
+        { id: 'main-view-panel-hallAllocation', label: 'Hall Allocation', to: '/dashboard#main-view-panel-hallAllocation', type: 'section', color: '#0f766e', icon: <Building2 size={16} /> },
+      ],
+    },
+    {
+      title: 'Review Fields',
+      items: [
+        { id: 'timetablePanel', label: 'Timetables', to: '/dashboard#timetablePanel', type: 'section', color: '#166534', icon: <CheckCircle2 size={16} /> },
+        { id: 'acConflictsPanel', label: 'Conflicts', to: '/dashboard#acConflictsPanel', type: 'section', color: '#b91c1c', icon: <AlertTriangle size={16} /> },
+        { id: 'acResourcesPanel', label: 'Resources', to: '/dashboard#acResourcesPanel', type: 'section', color: '#0f766e', icon: <Building2 size={16} /> },
+        { id: 'acCalendarPanel', label: 'Academic Calendar', to: '/dashboard#acCalendarPanel', type: 'section', color: '#b45309', icon: <CalendarDays size={16} /> },
+      ],
+    },
+  ]), []);
+
+  const fadeInUpVariant = {
+    hidden: { opacity: 0, y: 16 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: { duration: 0.35, ease: 'easeOut' },
+    },
+  };
+
+  const staggerContainerVariant = {
+    hidden: {},
+    visible: {
+      transition: { staggerChildren: 0.08, delayChildren: 0.04 },
+    },
+  };
+
+  const buttonMotionProps = {
+    whileHover: { scale: 1.05, boxShadow: '0 6px 16px rgba(0, 0, 0, 0.12)' },
+    whileTap: { scale: 0.96 },
+    transition: { duration: 0.2 },
+  };
+
+  const tableRowVariant = {
+    hidden: { opacity: 0, x: -20 },
+    visible: (index) => ({
+      opacity: 1,
+      x: 0,
+      transition: { delay: index * 0.06, duration: 0.3, ease: 'easeOut' },
+    }),
+  };
+
+  const formPanelVariant = {
+    hidden: { opacity: 0, x: 30 },
+    visible: { opacity: 1, x: 0, transition: { duration: 0.4, ease: 'easeOut' } },
+  };
+
+  const iconHoverVariant = {
+    rest: { rotate: 0, scale: 1 },
+    hover: { rotate: 10, scale: 1.15, transition: { duration: 0.3, ease: 'easeOut' } },
+  };
+
+  const floatingAvatarVariant = {
+    animate: { y: [0, -8, 0], transition: { duration: 3, repeat: Infinity, ease: 'easeInOut' } },
+  };
+
+  const mainViews = ['lectures', 'hallAllocation'];
+  const isCalendarRangeInvalid =
+    Boolean(calendarEventForm.start_date)
+    && Boolean(calendarEventForm.end_date)
+    && calendarEventForm.end_date < calendarEventForm.start_date;
+
+  const dashboardBackgroundStyle = {
+    backgroundImage: `linear-gradient(rgba(9, 17, 32, 0.62), rgba(9, 17, 32, 0.72)), url(${backgroundImage})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundAttachment: 'fixed',
+    backgroundRepeat: 'no-repeat',
+  };
+
+  const activateForm = (formId) => setActiveFormId(formId);
+  const deactivateForm = (event, formId) => {
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+      setActiveFormId((current) => (current === formId ? null : current));
+    }
+  };
+
+  const focusMainViewButton = (view) => {
+    const tabButton = document.querySelector(`[data-main-view="${view}"]`);
+    tabButton?.focus();
+  };
+
+  const scrollToAssignmentSection = (sectionId, tab = 'overview') => {
+    setActiveTab(tab);
+    setModuleSidebarOpen(false);
+    window.setTimeout(() => {
+      const section = document.getElementById(sectionId);
+      section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 90);
+  };
+
+  const handleMainViewKeyDown = (event) => {
+    const currentIndex = mainViews.indexOf(mainView);
+    if (currentIndex < 0) return;
+
+    let targetIndex = null;
+    if (event.key === 'ArrowRight') targetIndex = (currentIndex + 1) % mainViews.length;
+    if (event.key === 'ArrowLeft') targetIndex = (currentIndex - 1 + mainViews.length) % mainViews.length;
+    if (event.key === 'Home') targetIndex = 0;
+    if (event.key === 'End') targetIndex = mainViews.length - 1;
+
+    if (targetIndex === null) return;
+
+    event.preventDefault();
+    const nextView = mainViews[targetIndex];
+    setMainView(nextView);
+    requestAnimationFrame(() => focusMainViewButton(nextView));
+  };
 
 
 
@@ -237,7 +749,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
       const response = await fetch(`${apiBase}/api/academic-coordinator/timetables`, {
 
-        credentials: 'include'
+        credentials: 'include',
 
       });
 
@@ -263,9 +775,9 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
     try {
 
-      const response = await fetch(`${apiBase}/api/academic-coordinator/conflicts?resolved=false`, {
+      const response = await fetch(`${apiBase}/api/academic-coordinator/conflicts`, {
 
-        credentials: 'include'
+        credentials: 'include',
 
       });
 
@@ -288,6 +800,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
 
   const loadAcademicCalendar = async () => {
+
 
     try {
 
@@ -317,7 +830,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
   // CRUD Operations
 
-  const addLecturer = async (e) => {
+  const _addLecturer = async (e) => {
 
     e.preventDefault();
 
@@ -373,7 +886,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
 
 
-  const addLic = async (e) => {
+  const _addLic = async (e) => {
 
     e.preventDefault();
 
@@ -425,32 +938,43 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
     e.preventDefault();
 
-    
+    const moduleCode = String(moduleForm.code || '').trim();
+    const moduleName = String(moduleForm.name || '').trim();
+    const lecturesPerWeek = String(moduleForm.lectures_per_week || '').trim();
+    const credits = String(moduleForm.credits || '').trim();
+    const validationErrors = [];
 
-    if (!moduleForm.code || !moduleForm.name) {
+    if (!moduleCode) validationErrors.push('Module code is required.');
+    else if (!MODULE_CODE_PATTERN.test(moduleCode)) validationErrors.push('Module code must contain 2 English letters followed by 4 digits, like IT1234.');
 
-      showWarning('Validation required', 'Module code and name are required.');
+    if (!moduleName) validationErrors.push('Module name is required.');
+    else if (!MODULE_NAME_PATTERN.test(moduleName)) validationErrors.push('Module name can contain only English letters and spaces.');
 
-      showMessage('Module code and name are required', 'error');
+    if (!moduleForm.specialization) validationErrors.push('Specialization is required.');
+    if (!moduleForm.academic_year) validationErrors.push('Academic year is required.');
+    if (!moduleForm.semester) validationErrors.push('Semester is required.');
+    if (!credits) validationErrors.push('Credits is required.');
 
+    if (!lecturesPerWeek) validationErrors.push('Lectures per week is required.');
+    else if (!TWO_DIGIT_NUMBER_PATTERN.test(lecturesPerWeek)) validationErrors.push('Lectures per week must contain exactly 2 digits, like 08 or 12.');
+
+    if (validationErrors.length) {
+      showValidationErrors(validationErrors, 'Module validation required');
       return;
-
     }
 
-    if (FORBIDDEN_SPECIAL_CHARS.test(moduleForm.code.trim()) || FORBIDDEN_SPECIAL_CHARS.test(moduleForm.name.trim())) {
-
-      showWarning('Validation required', 'Module code/name cannot contain ~!@#$%^&*()_+');
-
-      return;
-
-    }
-
     
 
-    const inferredAcademicYear = inferAcademicYearFromModuleCode(moduleForm.code);
+    const inferredAcademicYear = inferAcademicYearFromModuleCode(moduleCode);
     const modulePayload = {
       ...moduleForm,
-      academic_year: inferredAcademicYear,
+      code: moduleCode.toUpperCase(),
+      name: moduleName,
+      lectures_per_week: lecturesPerWeek,
+      credits,
+      specialization: moduleForm.specialization,
+      academic_year: moduleForm.academic_year || inferredAcademicYear || '1',
+      semester: moduleForm.semester || '1',
     };
 
     console.log('Submitting module:', modulePayload);
@@ -465,11 +989,18 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
       
 
-      setModuleForm({ code: '', name: '', batch_size: '', credits: '', lectures_per_week: '' });
+      setModuleForm({
+        code: '',
+        name: '',
+        specialization: 'SE',
+        academic_year: '1',
+        semester: '1',
+        batch_size: '',
+        credits: '',
+        lectures_per_week: '',
+      });
 
-      showMessage('Module added successfully');
-
-      showSuccess('Module added');
+      showSuccess('Module added successfully', 'The module has been saved and is ready for assignment.');
 
       await loadModules();
 
@@ -479,21 +1010,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
       showError('Add module failed', err.message || 'Failed to add module');
 
-      showMessage(err.message || 'Failed to add module', 'error');
-
     }
-
-  };
-
-
-
-  const applyCatalogModule = () => {
-
-    if (!selectedCatalogModule) return;
-
-    const [code, name] = selectedCatalogModule.split('::');
-
-    setModuleForm({ ...moduleForm, code, name });
 
   };
 
@@ -643,9 +1160,59 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
   };
 
+  const startEditAssignment = (assignment) => {
+    setEditingAssignmentId(String(assignment.id || ''));
+    setEditingAssignmentForm({
+      lecturerId: String(assignment.lecturer_id || ''),
+      licId: String(assignment.lic_id || ''),
+      academicYear: String(assignment.academic_year || '1'),
+      semester: String(assignment.semester || '1'),
+    });
+    setEditingAssignmentLabel(String(assignment.module_code || assignment.module_name || assignment.id || ''));
+  };
+
+  const cancelEditAssignment = () => {
+    setEditingAssignmentId('');
+    setEditingAssignmentForm({
+      lecturerId: '',
+      licId: '',
+      academicYear: '1',
+      semester: '1',
+    });
+    setEditingAssignmentLabel('');
+  };
+
+  const updateAssignmentRecord = async (e) => {
+    e.preventDefault();
+
+    if (!editingAssignmentId) return;
+
+    if (!editingAssignmentForm.lecturerId || !editingAssignmentForm.licId) {
+      showWarning('Validation required', 'Lecturer and LIC are required to update an assignment.');
+      return;
+    }
+
+    try {
+      await schedulerApi.updateAssignment(editingAssignmentId, {
+        lecturerId: editingAssignmentForm.lecturerId,
+        licId: editingAssignmentForm.licId,
+        academicYear: editingAssignmentForm.academicYear,
+        semester: editingAssignmentForm.semester,
+      });
+
+      showMessage('Assignment updated successfully');
+      showSuccess('Assignment updated');
+      cancelEditAssignment();
+      await loadAssignments();
+    } catch (err) {
+      showError('Update assignment failed', err.message || 'Failed to update assignment');
+      showMessage(err.message || 'Failed to update assignment', 'error');
+    }
+  };
 
 
-  const approveTimetable = async (id) => {
+
+  const _approveTimetable = async (id) => {
 
     try {
 
@@ -689,7 +1256,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
 
 
-  const rejectTimetable = async (id) => {
+  const _rejectTimetable = async (id) => {
 
     const reason = await askForText({
 
@@ -749,7 +1316,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
 
 
-  const resolveConflict = async (id) => {
+  const _resolveConflict = async (id) => {
 
     const resolution = await askForText({
 
@@ -809,9 +1376,19 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
 
 
-  const addCalendarEvent = async (e) => {
+  const _addCalendarEvent = async (e) => {
 
     e.preventDefault();
+
+    if (isCalendarRangeInvalid) {
+
+      showWarning('Validation required', 'End date cannot be earlier than start date.');
+
+      showMessage('End date cannot be earlier than start date', 'error');
+
+      return;
+
+    }
 
     try {
 
@@ -872,72 +1449,15 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
   };
 
 
-
-  const getFeatureValue = (features, key) => {
-
-    if (!features) return '';
-
-    if (typeof features === 'string') {
-
-      try {
-
-        const parsed = JSON.parse(features);
-
-        return parsed?.[key] || '';
-
-      } catch {
-
-        return '';
-
-      }
-
-    }
-
-    return features?.[key] || '';
-
-  };
-
-
-
-  const getCampusType = (structure) => {
-
-    const roomType = getFeatureValue(structure.features, 'roomType')?.toLowerCase() || '';
-
-    const name = (structure.name || '').toLowerCase();
-
-    if (roomType.includes('lab') || name.includes('lab')) return 'Lab';
-
-    if (roomType.includes('hall') || name.includes('hall')) return 'Hall';
-
-    return roomType ? roomType.charAt(0).toUpperCase() + roomType.slice(1) : 'Other';
-
-  };
-
-
-
-  const hallCount = campusStructures.filter((item) => getCampusType(item) === 'Hall').length;
-
-  const labCount = campusStructures.filter((item) => getCampusType(item) === 'Lab').length;
-
-  const uniqueFloorCount = new Set(
-
-    campusStructures
-
-      .map((item) => getFeatureValue(item.features, 'floor'))
-
-      .filter((value) => value !== null && value !== undefined && value !== '')
-
-  ).size;
-
-
-
   const pendingApprovals = timetables.filter(t => t.approval_status === 'pending' || !t.approval_status).length;
 
   const activeConflicts = conflicts.filter(c => !c.resolved).length;
 
   const highSeverityConflicts = conflicts.filter(c => c.severity === 'high' && !c.resolved).length;
 
-  const calendarTypeIcons = {
+  const timetableStatusLabel = pendingApprovals > 0 ? 'Needs Review' : 'Aligned';
+
+  const _calendarTypeIcons = {
     semester_start: CheckCircle2,
     semester_end: XCircle,
     exam_period: AlertTriangle,
@@ -945,6 +1465,82 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
     special_event: ClipboardList,
   };
 
+  const moduleById = useMemo(() => {
+    return modules.reduce((map, module) => {
+      map.set(module.id, module);
+      return map;
+    }, new Map());
+  }, [modules]);
+
+  const specializationOptions = useMemo(() => {
+    const known = new Set(['IME', 'IT', 'SE', 'General']);
+    modules.forEach((module) => {
+      known.add(inferSpecializationFromModuleCode(module.code));
+    });
+    return Array.from(known);
+  }, [modules]);
+
+  const moduleBarChartData = useMemo(() => {
+    const summary = new Map();
+
+    modules.forEach((module) => {
+      const specialization = inferSpecializationFromModuleCode(module.code);
+      const year = String(module.academic_year || inferAcademicYearFromModuleCode(module.code) || 'NA');
+      const semester = String(module.semester || inferSemesterFromModuleCode(module.code) || 'NA');
+      const key = `${specialization}-Y${year}`;
+
+      if (!summary.has(key)) {
+        summary.set(key, {
+          key,
+          specialization,
+          year,
+          semesterOne: 0,
+          semesterTwo: 0,
+          total: 0,
+          label: `${specialization} - Y${year}`,
+        });
+      }
+
+      const entry = summary.get(key);
+      if (semester === '1') entry.semesterOne += 1;
+      else if (semester === '2') entry.semesterTwo += 1;
+      entry.total += 1;
+    });
+
+    return Array.from(summary.values()).sort((a, b) => {
+      if (a.specialization === b.specialization) return Number(a.year) - Number(b.year);
+      return a.specialization.localeCompare(b.specialization);
+    });
+  }, [modules]);
+
+  const filteredModulesForAssignment = useMemo(() => {
+    return modules.filter((module) => {
+      const moduleYear = String(module.academic_year || inferAcademicYearFromModuleCode(module.code) || '');
+      const moduleSemester = String(module.semester || inferSemesterFromModuleCode(module.code) || '');
+      const moduleSpecialization = inferSpecializationFromModuleCode(module.code);
+
+      const yearMatch = assignmentFilters.academicYear === 'all' || moduleYear === assignmentFilters.academicYear;
+      const semesterMatch = assignmentFilters.semester === 'all' || !moduleSemester || moduleSemester === assignmentFilters.semester;
+      const specializationMatch = assignmentFilters.specialization === 'all' || moduleSpecialization === assignmentFilters.specialization;
+
+      return yearMatch && semesterMatch && specializationMatch;
+    });
+  }, [assignmentFilters, modules]);
+
+  const filteredAssignments = useMemo(() => {
+    return assignments.filter((assignment) => {
+      const relatedModule = moduleById.get(assignment.module_id);
+      const yearValue = String(assignment.academic_year || relatedModule?.academic_year || inferAcademicYearFromModuleCode(assignment.module_code) || '');
+      const semesterValue = String(assignment.semester || relatedModule?.semester || '');
+      const specializationValue = inferSpecializationFromModuleCode(relatedModule?.code || assignment.module_code);
+
+      const yearMatch = assignmentFilters.academicYear === 'all' || yearValue === assignmentFilters.academicYear;
+      const semesterMatch = assignmentFilters.semester === 'all' || semesterValue === assignmentFilters.semester;
+      const specializationMatch = assignmentFilters.specialization === 'all' || specializationValue === assignmentFilters.specialization;
+
+      return yearMatch && semesterMatch && specializationMatch;
+    });
+  }, [assignmentFilters, assignments, moduleById]);
   useEffect(() => {
     const loadInitialData = async () => {
       setLoading(true);
@@ -972,29 +1568,357 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (showCalendarForm) {
+      setActiveFormId('calendarForm');
+      return;
+    }
+    setActiveFormId((current) => (current === 'calendarForm' ? null : current));
+  }, [showCalendarForm]);
+
+  useEffect(() => {
+    if (location.pathname !== '/dashboard' || !location.hash) {
+      return;
+    }
+
+    const hash = location.hash.replace('#', '');
+    const hashStateMap = {
+      acOverview: { mainView: 'lectures', activeTab: 'overview' },
+      'main-view-panel-lectures': { mainView: 'lectures', activeTab: 'overview' },
+      'main-view-panel-hallAllocation': { mainView: 'hallAllocation', activeTab: 'overview' },
+      timetablePanel: { mainView: 'lectures', activeTab: 'timetables' },
+      acConflictsPanel: { mainView: 'lectures', activeTab: 'conflicts' },
+      acResourcesPanel: { mainView: 'lectures', activeTab: 'resources' },
+      acCalendarPanel: { mainView: 'lectures', activeTab: 'calendar' },
+    };
+
+    const nextState = hashStateMap[hash];
+    if (nextState) {
+      setMainView(nextState.mainView);
+      if (nextState.mainView === 'lectures') {
+        setActiveTab(nextState.activeTab);
+      }
+    }
+
+    const timer = setTimeout(() => {
+      document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 130);
+
+    return () => clearTimeout(timer);
+  }, [location.pathname, location.hash]);
+
 
 
   if (loading) {
 
     return (
 
-      <div className="flex items-center justify-center min-h-screen">
+      <Motion.div
+        className="dashboard-container ac-dashboard"
+        style={dashboardBackgroundStyle}
+        initial="hidden"
+        animate="visible"
+        variants={staggerContainerVariant}
+      >
 
-        <div className="text-lg text-gray-600">Loading dashboard...</div>
+        <Motion.div className="dashboard-hero" variants={fadeInUpVariant}>
 
-      </div>
+          <div className="hero-left">
+
+            <div className="skeleton h-10 w-1/3 mb-4 rounded"></div>
+
+            <div className="skeleton h-6 w-2/3 mb-6 rounded"></div>
+
+            <SkeletonStats />
+
+          </div>
+
+          <div className="hero-right">
+
+            <div className="skeleton h-16 w-16 rounded-full"></div>
+
+            <div className="skeleton h-10 w-40 mt-4 rounded-lg"></div>
+
+          </div>
+
+        </Motion.div>
+
+        <Motion.div className="ac-main-menu-wrap" variants={fadeInUpVariant}>
+
+          <div className="skeleton h-12 w-full rounded-xl"></div>
+
+        </Motion.div>
+
+        <Motion.div variants={fadeInUpVariant}>
+
+          <div className="left-col">
+
+            <div className="panel">
+
+              <div className="skeleton h-6 w-1/4 mb-4"></div>
+
+              <SkeletonTable rows={3} />
+
+            </div>
+
+          </div>
+
+        </Motion.div>
+
+      </Motion.div>
 
     );
 
   }
 
-
-
   return (
+    <FacultyCoordinatorShell
+      user={user}
+      title="Academic Coordinator Workspace"
+      subtitle="Govern timetables, conflicts, resources, and calendar operations"
+      badge="AC Dashboard"
+      brandCode="AC"
+      brandTitle="Academic Coordinator"
+      brandSubtitle="Governance Console"
+      backgroundImage={backgroundImage}
+      navigationGroups={academicNavigationGroups}
+      footerNote="Quick Tip: Use the command bar for instant search and fast actions. Review conflicts before approving timetables."
+    >
+    <style>{`
+      .ac-cyber-theme {
+        color: #e2e8f0;
+      }
+      .ac-command-bar {
+        position: sticky;
+        top: 12px;
+        z-index: 18;
+        margin-bottom: 18px;
+        border: 1px solid rgba(255,255,255,0.05);
+        background: linear-gradient(135deg, rgba(2,6,23,0.92), rgba(30,41,59,0.78));
+        backdrop-filter: blur(12px);
+        border-radius: 20px;
+        box-shadow: 0 18px 44px rgba(2,6,23,0.44);
+        padding: 14px;
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .ac-command-search {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        border: 1px solid rgba(255,255,255,0.05);
+        background: rgba(15,23,42,0.72);
+        color: #f8fafc;
+      }
+      .ac-command-search input {
+        width: 100%;
+        background: transparent;
+        border: 0;
+        color: inherit;
+        outline: none;
+        font-size: 13px;
+      }
+      .ac-command-search input::placeholder {
+        color: rgba(203,213,225,0.58);
+      }
+      .ac-modules-view .ac-input::placeholder {
+        color: rgba(0, 0, 0, 0.95);
+        opacity: 1;
+      }
+      .ac-modules-view select.ac-input {
+        color: rgba(0, 0, 0, 0.95);
+      }
+      .ac-modules-view select.ac-input option {
+        color: rgba(0, 0, 0, 0.95);
+        background: #ffffff;
+      }
+      .ac-command-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .ac-command-pill {
+        padding: 11px 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.06);
+        background: rgba(15,23,42,0.58);
+        color: #e2e8f0;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .ac-command-pill.primary {
+        background: linear-gradient(135deg, rgba(16,185,129,0.22), rgba(5,150,105,0.18));
+        border-color: rgba(16,185,129,0.28);
+        color: #bbf7d0;
+      }
+      .ac-command-pill.accent {
+        background: linear-gradient(135deg, rgba(37,99,235,0.24), rgba(30,64,175,0.18));
+        border-color: rgba(59,130,246,0.28);
+        color: #bfdbfe;
+      }
+      .ac-insight-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .ac-insight-tile {
+        border-radius: 18px;
+        border: 1px solid rgba(255,255,255,0.05);
+        background: linear-gradient(135deg, rgba(15,23,42,0.88), rgba(30,41,59,0.74));
+        backdrop-filter: blur(12px);
+        padding: 16px 16px 12px;
+        position: relative;
+        overflow: hidden;
+      }
+      .ac-insight-tile::after {
+        content: '';
+        position: absolute;
+        inset: auto -10% -30% auto;
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(16,185,129,0.08), transparent 72%);
+        pointer-events: none;
+      }
+      .ac-insight-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+      }
+      .ac-insight-label {
+        margin: 0 0 6px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: rgba(148,163,184,0.78);
+      }
+      .ac-insight-value {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 32px;
+        font-weight: 900;
+        color: #f8fafc;
+        line-height: 1;
+      }
+      .ac-insight-hint {
+        margin: 8px 0 0;
+        color: rgba(203,213,225,0.75);
+        font-size: 12px;
+      }
+      .ac-insight-chart {
+        width: 78px;
+        opacity: 0.9;
+      }
+      .ac-section-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+      .ac-section-title h2,
+      .ac-section-title h3 {
+        margin: 0;
+      }
+      .ac-float-field {
+        position: relative;
+      }
+      .ac-float-field input,
+      .ac-float-field select,
+      .ac-float-field textarea {
+        width: 100%;
+        padding: 18px 16px 10px 44px;
+        border-radius: 14px;
+        border: 1px solid rgba(255,255,255,0.06);
+        background: rgba(2,6,23,0.7);
+        color: #f8fafc;
+        outline: none;
+      }
+      .ac-float-field label {
+        position: absolute;
+        left: 44px;
+        top: 14px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: rgba(148,163,184,0.72);
+        pointer-events: none;
+      }
+      .ac-field-icon {
+        position: absolute;
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: rgba(125,211,252,0.75);
+      }
+      .ac-table-shell,
+      .ac-panel-shell {
+        border: 1px solid rgba(255,255,255,0.05);
+        background: linear-gradient(135deg, rgba(2,6,23,0.86), rgba(30,41,59,0.72));
+        backdrop-filter: blur(12px);
+        border-radius: 20px;
+        box-shadow: 0 16px 42px rgba(2,6,23,0.42);
+      }
+      .ac-table-row {
+        transition: transform 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
+      }
+      .ac-table-row:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 24px rgba(59,130,246,0.14);
+      }
+      .ac-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 56px;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        border: 1px solid rgba(255,255,255,0.06);
+      }
+      .ac-pill.se { background: rgba(59,130,246,0.16); color: #bfdbfe; border-color: rgba(59,130,246,0.22); }
+      .ac-pill.it { background: rgba(168,85,247,0.16); color: #e9d5ff; border-color: rgba(168,85,247,0.22); }
+      .ac-pill.ise { background: rgba(236,72,153,0.16); color: #fbcfe8; border-color: rgba(236,72,153,0.22); }
+      .ac-pill.general { background: rgba(148,163,184,0.12); color: #cbd5e1; border-color: rgba(148,163,184,0.2); }
+      @media (max-width: 1180px) {
+        .ac-insight-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .ac-command-bar { flex-direction: column; align-items: stretch; }
+      }
+      @media (max-width: 720px) {
+        .ac-insight-grid { grid-template-columns: 1fr; }
+      }
+    `}</style>
+    <div className="ac-dashboard ac-cyber-theme" style={dashboardBackgroundStyle}>
 
-    <div className="dashboard-container ac-dashboard">
+      <Motion.div className="ac-command-bar" variants={fadeInUpVariant} layout>
+        <div className="ac-command-search">
+          <BarChart3 size={16} />
+          <input
+            type="text"
+            value={commandSearchValue}
+            readOnly
+            aria-label="Dashboard command search"
+          />
+        </div>
+        <div className="ac-command-actions">
+          <button type="button" className="ac-command-pill primary" onClick={() => scrollToAssignmentSection('moduleForm', 'overview')}>Add Module</button>
+        </div>
+      </Motion.div>
 
-      <div className="dashboard-hero">
+      <Motion.div id="acOverview" className="dashboard-hero" variants={fadeInUpVariant}>
 
         <div className="hero-left">
 
@@ -1002,59 +1926,100 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
           <p className="hero-sub">Welcome, {user?.name || 'Academic Coordinator'}! Manage timetables, resolve conflicts, and coordinate academic activities.</p>
 
-          <div className="stat-row">
+          <div className="ac-insight-grid">
+            <InsightTile
+              label="Total Timetables"
+              value={timetables.length}
+              hint="Live schedule inventory"
+              tone="blue"
+              values={[42, 58, 54, 61, 73, 68, 82]}
+              icon={<LineChart size={16} />}
+            />
+            <InsightTile
+              label="Timetable Status"
+              value={pendingApprovals}
+              hint={timetableStatusLabel}
+              tone={pendingApprovals > 0 ? 'amber' : 'emerald'}
+              values={[14, 22, 16, 31, 18, 27, 19]}
+              icon={<ClipboardList size={16} />}
+            />
+            <InsightTile
+              label="Active Conflicts"
+              value={activeConflicts}
+              hint={highSeverityConflicts > 0 ? `Alert: ${highSeverityConflicts} high severity` : 'Conflict load stable'}
+              tone={activeConflicts > 0 ? 'red' : 'emerald'}
+              values={[12, 8, 11, 9, 6, 7, 5]}
+              icon={<AlertTriangle size={16} />}
+            />
+            <InsightTile
+              label="Resources"
+              value={campusStructures.length}
+              hint="Rooms, halls, and labs"
+              tone="emerald"
+              values={[18, 22, 19, 27, 31, 29, 33]}
+              icon={<Building2 size={16} />}
+            />
+          </div>
 
-            <div className="stat">
-
-              <div className="stat-value">{timetables.length}</div>
-
-              <div className="stat-label">Total Timetables</div>
-
+          <div className="ac-panel-shell" style={{ marginTop: 16, padding: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+              <p style={{ margin: 0, fontSize: 10, fontWeight: 800, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.82)' }}>
+                Module Distribution
+              </p>
+              <span style={{ fontSize: 12, color: '#cbd5e1', fontWeight: 700 }}>Live from Added Modules</span>
             </div>
-
-            <div className="stat">
-
-              <div className="stat-value" style={{ color: pendingApprovals > 0 ? '#f59e0b' : '#10b981' }}>{pendingApprovals}</div>
-
-              <div className="stat-label">Pending Approval</div>
-
+            <div style={{ width: '100%', height: 260 }}>
+              <ResponsiveContainer>
+                <BarChart data={moduleBarChartData} margin={{ top: 10, right: 20, left: 0, bottom: 36 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.18)" />
+                  <XAxis
+                    dataKey="label"
+                    angle={-18}
+                    textAnchor="end"
+                    interval={0}
+                    height={58}
+                    tick={{ fill: '#cbd5e1', fontSize: 11 }}
+                  />
+                  <YAxis allowDecimals={false} tick={{ fill: '#cbd5e1', fontSize: 11 }} />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(59,130,246,0.08)' }}
+                    contentStyle={{
+                      background: 'rgba(2,6,23,0.95)',
+                      border: '1px solid rgba(148,163,184,0.25)',
+                      borderRadius: 10,
+                      color: '#e2e8f0',
+                    }}
+                  />
+                  <Bar dataKey="semesterOne" name="Semester 1" radius={[6, 6, 0, 0]}>
+                    {moduleBarChartData.map((entry) => (
+                      <Cell key={`${entry.key}-sem1`} fill="#3b82f6" />
+                    ))}
+                  </Bar>
+                  <Bar dataKey="semesterTwo" name="Semester 2" radius={[6, 6, 0, 0]}>
+                    {moduleBarChartData.map((entry) => (
+                      <Cell key={`${entry.key}-sem2`} fill="#a855f7" />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             </div>
-
-            <div className="stat">
-
-              <div className="stat-value" style={{ color: activeConflicts > 0 ? '#ef4444' : '#10b981' }}>{activeConflicts}</div>
-
-              <div className="stat-label">Active Conflicts</div>
-
-              {highSeverityConflicts > 0 && <div className="stat-hint">Alert: {highSeverityConflicts} high severity</div>}
-
-            </div>
-
-            <div className="stat">
-
-              <div className="stat-value">{campusStructures.length}</div>
-
-              <div className="stat-label">Resources</div>
-
-            </div>
-
           </div>
 
         </div>
 
         <div className="hero-right">
 
-          <div className="avatar">{user?.name?.charAt(0) || 'A'}</div>
+          <Motion.div className="avatar" animate="animate" variants={floatingAvatarVariant}>{user?.name?.charAt(0) || 'A'}</Motion.div>
 
           <div className="quick-actions">
 
-            <button className="primary" onClick={() => setActiveTab('timetables')}>Review Timetables</button>
+            <Motion.button className="primary" onClick={() => setActiveTab('timetables')} {...buttonMotionProps}>Review Timetables</Motion.button>
 
           </div>
 
         </div>
 
-      </div>
+      </Motion.div>
 
 
 
@@ -1070,13 +2035,29 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
       {/* Top Menu */}
 
-      <div className="ac-main-menu-wrap">
+      <Motion.div className="ac-main-menu-wrap" variants={fadeInUpVariant} layout>
 
         <div className="ac-main-menu" role="tablist" aria-label="Main dashboard views">
 
           <button
 
+            id="main-view-tab-lectures"
+
+            type="button"
+
+            role="tab"
+
+            aria-selected={mainView === 'lectures'}
+
+            aria-controls="main-view-panel-lectures"
+
+            tabIndex={mainView === 'lectures' ? 0 : -1}
+
+            data-main-view="lectures"
+
             onClick={() => setMainView('lectures')}
+
+            onKeyDown={handleMainViewKeyDown}
 
             className={`ac-main-menu-btn ${mainView === 'lectures' ? 'is-active' : ''}`}
 
@@ -1084,7 +2065,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
             <span className="ac-menu-btn-content">
               <BookOpen size={16} />
-              Lectures
+              Modules Assignment
             </span>
 
           </button>
@@ -1093,7 +2074,23 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
           <button
 
+            id="main-view-tab-hallAllocation"
+
+            type="button"
+
+            role="tab"
+
+            aria-selected={mainView === 'hallAllocation'}
+
+            aria-controls="main-view-panel-hallAllocation"
+
+            tabIndex={mainView === 'hallAllocation' ? 0 : -1}
+
+            data-main-view="hallAllocation"
+
             onClick={() => setMainView('hallAllocation')}
+
+            onKeyDown={handleMainViewKeyDown}
 
             className={`ac-main-menu-btn ${mainView === 'hallAllocation' ? 'is-active' : ''}`}
 
@@ -1108,539 +2105,156 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
         </div>
 
-      </div>
+      </Motion.div>
 
 {mainView === 'lectures' && (
 
-      <div className="dashboard-main">
-
-        <div className="left-col">
-
-          {/* Overview Tab Content */}
-
-          {activeTab === 'overview' && (
-
-            <>
-
-              <div className="action-card">
-
-                <div>
-
-                  <h3 className="ac-ui-title"><span className="ac-ui-icon"><UserPlus size={16} /></span>Add Lecturer</h3>
-
-                  <p>Add professors and lecturers with department details</p>
-
-                </div>
-
-                <button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('lecturerForm').scrollIntoView({ behavior: 'smooth' })}>Add Now</button>
-
-              </div>
-
-              
-
-              <div className="action-card">
-
-                <div>
-
-                  <h3 className="ac-ui-title"><span className="ac-ui-icon"><Users size={16} /></span>Add LIC</h3>
-
-                  <p>Create module leadership records for allocation</p>
-
-                </div>
-
-                <button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('licForm').scrollIntoView({ behavior: 'smooth' })}>Add Now</button>
-
-              </div>
-
-              
-
-              <div className="action-card">
-
-                <div>
-
-                  <h3 className="ac-ui-title"><span className="ac-ui-icon"><BookPlus size={16} /></span>Add Module</h3>
-
-                  <p>Add new modules from catalog or custom</p>
-
-                </div>
-
-                <button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('moduleForm').scrollIntoView({ behavior: 'smooth' })}>Add Now</button>
-
-              </div>
-
-              
-
-              <div className="action-card">
-
-                <div>
-
-                  <h3 className="ac-ui-title"><span className="ac-ui-icon"><Link2 size={16} /></span>Assign Module</h3>
-
-                  <p>Map modules to lecturers and LICs</p>
-
-                </div>
-
-                <button className="action-btn ac-lecture-action-btn" onClick={() => document.getElementById('assignmentForm').scrollIntoView({ behavior: 'smooth' })}>Assign Now</button>
-
-              </div>
-
-            </>
-
-          )}
-
-
-
-          {/* Timetables Tab Content */}
-
-          {activeTab === 'timetables' && (
-
-            <div className="panel">
-
-              <h3 className="ac-ui-title"><span className="ac-ui-icon"><ClipboardList size={16} /></span>Timetables for Review</h3>
-
-              <div className="ac-table-wrapper">
-
-                <table className="ac-table">
-
-                  <thead>
-
-                    <tr>
-
-                      <th>Name</th>
-
-                      <th>Semester</th>
-
-                      <th>Year</th>
-
-                      <th>Status</th>
-
-                      <th>Actions</th>
-
-                    </tr>
-
-                  </thead>
-
-                  <tbody>
-
-                    {timetables.length === 0 && (
-
-                      <tr>
-
-                        <td colSpan="5" className="ac-empty-row">No timetables available</td>
-
-                      </tr>
-
-                    )}
-
-                    {timetables.map((timetable) => (
-
-                      <tr key={timetable.id}>
-
-                        <td>{timetable.name}</td>
-
-                        <td>{timetable.semester}</td>
-
-                        <td>{timetable.year}</td>
-
-                        <td>
-
-                          <span className={`ac-status ${timetable.approval_status || 'pending'}`}>
-
-                            {timetable.approval_status || 'pending'}
-
-                          </span>
-
-                        </td>
-
-                        <td>
-
-                          {(timetable.approval_status !== 'approved') && (
-
-                            <>
-
-                              <button className="ac-approve-btn" onClick={() => approveTimetable(timetable.id)}><CheckCircle2 size={14} />Approve</button>
-
-                              <button className="ac-reject-btn" onClick={() => rejectTimetable(timetable.id)}><XCircle size={14} />Reject</button>
-
-                            </>
-
-                          )}
-
-                        </td>
-
-                      </tr>
-
-                    ))}
-
-                  </tbody>
-
-                </table>
-
-              </div>
-
-            </div>
-
-          )}
-
-
-
-          {/* Conflicts Tab Content */}
-
-          {activeTab === 'conflicts' && (
-
-            <div className="panel">
-
-              <h3 className="ac-ui-title"><span className="ac-ui-icon"><AlertTriangle size={16} /></span>Scheduling Conflicts</h3>
-
-              {highSeverityConflicts > 0 && (
-
-                <div className="bg-red-50 text-red-700 p-3 rounded-lg mb-4 border border-red-200">
-
-                  Alert: {highSeverityConflicts} high severity conflicts require immediate attention!
-
-                </div>
-
-              )}
-
-              <div className="ac-table-wrapper">
-
-                <table className="ac-table">
-
-                  <thead>
-
-                    <tr>
-
-                      <th>Type</th>
-
-                      <th>Description</th>
-
-                      <th>Severity</th>
-
-                      <th>Timetable</th>
-
-                      <th>Action</th>
-
-                    </tr>
-
-                  </thead>
-
-                  <tbody>
-
-                    {conflicts.length === 0 && (
-
-                      <tr>
-
-                        <td colSpan="5" className="ac-empty-row">No conflicts found</td>
-
-                      </tr>
-
-                    )}
-
-                    {conflicts.map((conflict) => (
-
-                      <tr key={conflict.id}>
-
-                        <td>{conflict.conflict_type}</td>
-
-                        <td>{conflict.description}</td>
-
-                        <td><span className={`ac-severity ${conflict.severity}`}>{conflict.severity}</span></td>
-
-                        <td>{conflict.timetable_name}</td>
-
-                        <td>
-
-                          {!conflict.resolved && (
-
-                            <button className="ac-resolve-btn" onClick={() => resolveConflict(conflict.id)}>Resolve</button>
-
-                          )}
-
-                        </td>
-
-                      </tr>
-
-                    ))}
-
-                  </tbody>
-
-                </table>
-
-              </div>
-
-            </div>
-
-          )}
-
-
-
-          {/* Resources Tab Content */}
-
-          {activeTab === 'resources' && (
-
-            <div className="panel">
-
-              <h3 className="ac-ui-title"><span className="ac-ui-icon"><Building2 size={16} /></span>Campus Resources</h3>
-
-              <p>Halls: {hallCount} | Labs: {labCount} | Floors: {uniqueFloorCount}</p>
-
-              <div className="ac-table-wrapper">
-
-                <table className="ac-table">
-
-                  <thead>
-
-                    <tr>
-
-                      <th>Name</th>
-
-                      <th>Type</th>
-
-                      <th>Building</th>
-
-                      <th>Floor</th>
-
-                      <th>Capacity</th>
-
-                    </tr>
-
-                  </thead>
-
-                  <tbody>
-
-                    {campusStructures.map((structure) => (
-
-                      <tr key={structure.id}>
-
-                        <td>{structure.name}</td>
-
-                        <td><span className="ac-type-pill">{getCampusType(structure)}</span></td>
-
-                        <td>{getFeatureValue(structure.features, 'building') || '-'}</td>
-
-                        <td>{getFeatureValue(structure.features, 'floor') || '-'}</td>
-
-                        <td>{structure.capacity || '-'}</td>
-
-                      </tr>
-
-                    ))}
-
-                  </tbody>
-
-                </table>
-
-              </div>
-
-            </div>
-
-          )}
-
-
-
-          {/* Calendar Tab Content */}
-
-          {activeTab === 'calendar' && (
-
-            <div className="panel">
-
-              <div className="flex justify-between items-center mb-4">
-
-                <h3 className="ac-ui-title"><span className="ac-ui-icon"><CalendarDays size={16} /></span>Academic Calendar</h3>
-
-                <button className="primary" onClick={() => setShowCalendarForm(!showCalendarForm)}>
-
-                  {showCalendarForm ? 'Cancel' : '+ Add Event'}
-
-                </button>
-
-              </div>
-
-              
-
-              {showCalendarForm && (
-
-                <form onSubmit={addCalendarEvent} className="mb-5 p-4 bg-gray-50 rounded-lg">
-
-                  <input className="ac-input mb-2" placeholder="Event Name" value={calendarEventForm.event_name}
-
-                    onChange={(e) => setCalendarEventForm({ ...calendarEventForm, event_name: e.target.value })} required />
-
-                  <select className="ac-input mb-2" value={calendarEventForm.event_type}
-
-                    onChange={(e) => setCalendarEventForm({ ...calendarEventForm, event_type: e.target.value })}>
-
-                    <option value="semester_start">Semester Start</option>
-
-                    <option value="semester_end">Semester End</option>
-
-                    <option value="exam_period">Exam Period</option>
-
-                    <option value="holiday">Holiday</option>
-
-                    <option value="special_event">Special Event</option>
-
-                  </select>
-
-                  <input className="ac-input mb-2" type="date" placeholder="Start Date" value={calendarEventForm.start_date}
-
-                    onChange={(e) => setCalendarEventForm({ ...calendarEventForm, start_date: e.target.value })} required />
-
-                  <input className="ac-input mb-2" type="date" placeholder="End Date" value={calendarEventForm.end_date}
-
-                    onChange={(e) => setCalendarEventForm({ ...calendarEventForm, end_date: e.target.value })} required />
-
-                  <button className="dashboard-btn w-full" type="submit">Add Event</button>
-
-                </form>
-
-              )}
-
-
-
-              <div className="ac-calendar-grid">
-
-                {academicCalendar.map((event) => {
-                  const CalendarTypeIcon = calendarTypeIcons[event.event_type] || CalendarDays;
-                  const eventTypeLabel = String(event.event_type || 'event').replace(/_/g, ' ');
-
-                  return (
-                    <div key={event.id} className="ac-calendar-card">
-                      <div className={`ac-calendar-type ${event.event_type}`}>
-                        <CalendarTypeIcon size={12} />
-                        <span>{eventTypeLabel}</span>
-                      </div>
-
-                      <h3>{event.event_name}</h3>
-
-                      <p>{new Date(event.start_date).toLocaleDateString()} - {new Date(event.end_date).toLocaleDateString()}</p>
-
-                      <p>Year: {event.academic_year} | Semester: {event.semester || 'N/A'}</p>
-                    </div>
-                  );
-                })}
-
-              </div>
-
-            </div>
-
-          )}
-
+  <Motion.div
+    key="lectures-view"
+    className="ac-modules-view"
+    id="main-view-panel-lectures"
+    role="tabpanel"
+    aria-labelledby="main-view-tab-lectures"
+    initial={{ opacity: 0, y: 12 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.28, ease: 'easeOut' }}
+  >
+
+    <div style={{ marginBottom: 14, borderRadius: 16, border: '1px solid rgba(255,255,255,0.05)', background: 'linear-gradient(135deg, rgba(2,6,23,0.84), rgba(30,41,59,0.72))', padding: '16px 18px' }}>
+      <p style={{ margin: 0, fontSize: 10, fontWeight: 800, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.8)' }}>Module Setup</p>
+      <h3 style={{ margin: '6px 0 0', fontSize: 22, color: '#f8fafc' }}>Add Modules by Year, Specialization, and Semester</h3>
+    </div>
+
+    <div className="ac-modules-shell" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
+      {moduleSidebarOpen && <button type="button" className="ac-modules-sidebar-overlay" aria-label="Close module sidebar" onClick={() => setModuleSidebarOpen(false)} />}
+
+      <aside className={`panel ac-modules-sidebar ${moduleSidebarOpen ? 'is-open' : ''}`} style={{ display: 'none' }}>
+        <div className="ac-modules-sidebar-header">
+          <h3 className="ac-ui-title"><BookOpen size={16} />Assignment Sidebar</h3>
+          <button type="button" className="ac-modules-close" onClick={() => setModuleSidebarOpen(false)} aria-label="Close sidebar">
+            <X size={16} />
+          </button>
         </div>
 
+        <p className="ac-modules-sidebar-copy">Filter modules and assignments by year, specialization, and semester.</p>
 
+        <label className="ac-modules-label">
+          Academic Year
+          <select
+            className="ac-input"
+            value={assignmentFilters.academicYear}
+            onChange={(e) => setAssignmentFilters((prev) => ({ ...prev, academicYear: e.target.value }))}
+          >
+            <option value="all">All Years</option>
+            <option value="1">Year 1</option>
+            <option value="2">Year 2</option>
+            <option value="3">Year 3</option>
+            <option value="4">Year 4</option>
+          </select>
+        </label>
 
-        <div className="right-col">
+        <label className="ac-modules-label">
+          Semester
+          <select
+            className="ac-input"
+            value={assignmentFilters.semester}
+            onChange={(e) => setAssignmentFilters((prev) => ({ ...prev, semester: e.target.value }))}
+          >
+            <option value="all">All Semesters</option>
+            <option value="1">Semester 1</option>
+            <option value="2">Semester 2</option>
+          </select>
+        </label>
 
-          {/* Quick Actions */}
+        <label className="ac-modules-label">
+          Specialization
+          <select
+            className="ac-input"
+            value={assignmentFilters.specialization}
+            onChange={(e) => setAssignmentFilters((prev) => ({ ...prev, specialization: e.target.value }))}
+          >
+            <option value="all">All Specializations</option>
+            {specializationOptions.map((specialization) => (
+              <option key={specialization} value={specialization}>{specialization}</option>
+            ))}
+          </select>
+        </label>
 
-          <div className="panel">
+        <div className="ac-modules-sidebar-stats">
+          <span>Modules: {filteredModulesForAssignment.length}</span>
+          <span>Assignments: {filteredAssignments.length}</span>
+        </div>
 
-            <h3 className="ac-ui-title"><span className="ac-ui-icon"><ClipboardList size={16} /></span>Quick Actions</h3>
+        <div className="ac-modules-shortcuts">
+          <button type="button" className="chip ac-ui-chip" onClick={() => scrollToAssignmentSection('moduleForm', 'overview')}>Add Module</button>
+          <button type="button" className="chip ac-ui-chip" onClick={() => navigate('/faculty/modules/added')}>Added Modules Page</button>
+          <button type="button" className="chip ac-ui-chip" onClick={() => scrollToAssignmentSection('assignmentForm', 'overview')}>Assign Module</button>
+          <button type="button" className="chip ac-ui-chip" onClick={() => scrollToAssignmentSection('assignmentList', 'overview')}>Current Assignments</button>
+        </div>
+      </aside>
 
-            <div className="shortcuts">
+      <div className="ac-modules-main">
+        <button type="button" className="ac-modules-toggle" onClick={() => setModuleSidebarOpen((current) => !current)} style={{ display: 'none' }}>
+          <Menu size={16} />
+          Sidebar
+        </button>
 
-              <div className="chip ac-ui-chip" onClick={() => setActiveTab('timetables')}><ClipboardList size={14} />Review Timetables</div>
-
-              <div className="chip ac-ui-chip" onClick={() => setActiveTab('conflicts')}><AlertTriangle size={14} />View Conflicts</div>
-
-              <div className="chip ac-ui-chip" onClick={() => setActiveTab('resources')}><Building2 size={14} />Manage Resources</div>
-
-              <div className="chip ac-ui-chip" onClick={() => setActiveTab('calendar')}><CalendarDays size={14} />Calendar</div>
-
-            </div>
-
-          </div>
-
-
-
-          {/* Add Lecturer Form */}
-
-          <div className="panel" id="lecturerForm">
-
-            <h3 className="ac-ui-title"><span className="ac-ui-icon"><UserPlus size={16} /></span>Add Lecturer</h3>
-
-            <form onSubmit={addLecturer} className="ac-form">
-
-              <input className="ac-input" placeholder="Lecturer name" value={lecturerForm.name}
-
-                onChange={(e) => setLecturerForm({ ...lecturerForm, name: e.target.value })} required />
-
-              <input className="ac-input" placeholder="Department" value={lecturerForm.department}
-
-                onChange={(e) => setLecturerForm({ ...lecturerForm, department: e.target.value })} />
-
-              <input className="ac-input" placeholder="Email" value={lecturerForm.email}
-
-                onChange={(e) => setLecturerForm({ ...lecturerForm, email: e.target.value })} />
-
-              <button className="dashboard-btn ac-ui-action" type="submit"><UserPlus size={15} />Add Lecturer</button>
-
-            </form>
-
-          </div>
-
-
-
-          {/* Add LIC Form */}
-
-          <div className="panel" id="licForm">
-
-            <h3 className="ac-ui-title"><span className="ac-ui-icon"><Users size={16} /></span>Add LIC</h3>
-
-            <form onSubmit={addLic} className="ac-form">
-
-              <input className="ac-input" placeholder="LIC name" value={licForm.name}
-
-                onChange={(e) => setLicForm({ ...licForm, name: e.target.value })} required />
-
-              <input className="ac-input" placeholder="Department" value={licForm.department}
-
-                onChange={(e) => setLicForm({ ...licForm, department: e.target.value })} />
-
-              <button className="dashboard-btn ac-ui-action" type="submit"><Users size={15} />Add LIC</button>
-
-            </form>
-
-          </div>
+        <div className="dashboard-main" style={{ gridTemplateColumns: 'minmax(0, 1fr)', maxWidth: '100%' }}>
+        <div className="left-col" style={{ width: '100%', maxWidth: 1120, margin: '0 auto' }}>
 
 
 
           {/* Add Module Form */}
 
-          <div className="panel" id="moduleForm">
+          <Motion.div className={`panel ac-focus-form ${activeFormId === 'moduleForm' ? 'is-active' : ''}`} id="moduleForm" initial="hidden" animate="visible" variants={formPanelVariant}>
 
-            <h3 className="ac-ui-title"><span className="ac-ui-icon"><BookPlus size={16} /></span>Add Module</h3>
+            <h3 className="ac-ui-title" style={{ color: '#000000', fontWeight: 800, fontFamily: 'cursive' }}><Motion.span className="ac-ui-icon" initial="rest" whileHover="hover" variants={iconHoverVariant}><BookPlus size={16} /></Motion.span>Add Module</h3>
 
-            <form onSubmit={addModule} className="ac-form">
+            <form onSubmit={addModule} className="ac-form ac-module-form" onFocusCapture={() => activateForm('moduleForm')} onBlurCapture={(event) => deactivateForm(event, 'moduleForm')}>
 
-              <select className="ac-input" value={selectedCatalogModule}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
+                <select
+                  className="ac-input"
+                  value={moduleForm.academic_year}
+                  onChange={(e) => setModuleForm({ ...moduleForm, academic_year: e.target.value })}
+                  required
+                >
+                  <option value="1">Year 1</option>
+                  <option value="2">Year 2</option>
+                  <option value="3">Year 3</option>
+                  <option value="4">Year 4</option>
+                </select>
 
-                onChange={(e) => setSelectedCatalogModule(e.target.value)}>
+                <select
+                  className="ac-input"
+                  value={moduleForm.specialization}
+                  onChange={(e) => setModuleForm({ ...moduleForm, specialization: e.target.value })}
+                  required
+                >
+                  {MODULE_SPECIALIZATION_OPTIONS.map((specializationOption) => (
+                    <option key={specializationOption} value={specializationOption}>{specializationOption}</option>
+                  ))}
+                </select>
 
-                <option value="">Select from catalog</option>
-
-                {moduleCatalog.map((module) => (
-
-                  <option key={`${module.code}-${module.name}`} value={`${module.code}::${module.name}`}>
-
-                    {module.code} - {module.name}
-
-                  </option>
-
-                ))}
-
-              </select>
-
-              <button type="button" className="dashboard-btn ac-inline-btn" onClick={applyCatalogModule}>
-
-                Use Selected
-
-              </button>
+                <select
+                  className="ac-input"
+                  value={moduleForm.semester}
+                  onChange={(e) => setModuleForm({ ...moduleForm, semester: e.target.value })}
+                  required
+                >
+                  <option value="1">Semester 1</option>
+                  <option value="2">Semester 2</option>
+                </select>
+              </div>
 
               <input className="ac-input" placeholder="Module code (required)" value={moduleForm.code}
+                maxLength={6}
 
-                onChange={(e) => setModuleForm({ ...moduleForm, code: e.target.value })} required />
+                onBeforeInput={(e) => handleModuleCodeBeforeInput(e, moduleForm.code)}
+                onKeyDown={(e) => handleModuleCodeKeyDown(e, moduleForm.code)}
+                onPaste={handleModuleCodePaste}
+                onInput={(e) => handleModuleCodeInput(e, moduleForm.code, setModuleForm)}
+                onChange={(e) => setModuleForm({ ...moduleForm, code: sanitizeModuleCodeInput(e.target.value) })} required />
 
               {moduleForm.code && (
                 <p className="text-xs text-gray-600 -mt-1">
@@ -1649,32 +2263,60 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
               )}
 
               <input className="ac-input" placeholder="Module name (required)" value={moduleForm.name}
+                maxLength={120}
 
-                onChange={(e) => setModuleForm({ ...moduleForm, name: e.target.value })} required />
+                onBeforeInput={(e) => handleModuleNameBeforeInput(e, moduleForm.name)}
+                onKeyDown={handleModuleNameKeyDown}
+                onPaste={handleModuleNamePaste}
+                onInput={(e) => handleModuleNameInput(e, moduleForm.name, setModuleForm)}
+                onChange={(e) => setModuleForm({ ...moduleForm, name: sanitizeModuleNameInput(e.target.value) })} required />
 
-              <input className="ac-input" placeholder="Credits (optional)" value={moduleForm.credits}
+              <input className="ac-input" placeholder="Credits (required)" value={moduleForm.credits}
 
-                onChange={(e) => setModuleForm({ ...moduleForm, credits: e.target.value })} />
+                onChange={(e) => setModuleForm({ ...moduleForm, credits: e.target.value })} required />
 
-              <input className="ac-input" placeholder="Lectures per week (optional)" value={moduleForm.lectures_per_week}
+              <input className="ac-input" placeholder="Lectures per week (required)" value={moduleForm.lectures_per_week}
+                inputMode="numeric"
+                maxLength={2}
 
-                onChange={(e) => setModuleForm({ ...moduleForm, lectures_per_week: e.target.value })} />
+                onBeforeInput={(e) => handleLecturesBeforeInput(e, moduleForm.lectures_per_week)}
+                onKeyDown={(e) => handleLecturesKeyDown(e, moduleForm.lectures_per_week)}
+                onPaste={handleLecturesPaste}
+                onInput={(e) => handleLecturesInput(e, moduleForm.lectures_per_week, setModuleForm)}
+                onChange={(e) => setModuleForm({ ...moduleForm, lectures_per_week: sanitizeLectureCountInput(e.target.value) })} required />
 
-              <button className="dashboard-btn ac-ui-action" type="submit"><BookPlus size={15} />Add Module</button>
+              <Motion.button className="dashboard-btn ac-ui-action ac-login-cta-btn" type="submit" {...buttonMotionProps}>
+                <span className="ac-login-cta-glow" aria-hidden />
+                <span className="ac-login-cta-shimmer" aria-hidden />
+                <span className="ac-login-cta-content">
+                  <BookPlus size={15} />
+                  Add Module
+                  <span className="ac-login-cta-arrow">→</span>
+                </span>
+              </Motion.button>
 
             </form>
 
+          </Motion.div>
+
+
+          <div className="panel" id="addedModulesRedirect" style={{ display: 'none' }}>
+            <h3 className="ac-ui-title"><Motion.span className="ac-ui-icon" initial="rest" whileHover="hover" variants={iconHoverVariant}><BookOpen size={16} /></Motion.span>Added Modules</h3>
+            <p className="ac-body-copy">The Added Modules list has been moved to its own page for a cleaner assignment dashboard.</p>
+            <Motion.button className="dashboard-btn ac-inline-btn" type="button" onClick={() => navigate('/faculty/modules/added')} {...buttonMotionProps}>
+              Open Added Modules Page
+            </Motion.button>
           </div>
 
 
 
           {/* Add Assignment Form */}
 
-          <div className="panel" id="assignmentForm">
+          <Motion.div className={`panel ac-focus-form ${activeFormId === 'assignmentForm' ? 'is-active' : ''}`} id="assignmentForm" initial="hidden" animate="visible" variants={formPanelVariant} style={{ display: 'none' }}>
 
-            <h3 className="ac-ui-title"><span className="ac-ui-icon"><Link2 size={16} /></span>Assign Module</h3>
+            <h3 className="ac-ui-title"><Motion.span className="ac-ui-icon" initial="rest" whileHover="hover" variants={iconHoverVariant}><Link2 size={16} /></Motion.span>Assign Module</h3>
 
-            <form onSubmit={addAssignment} className="ac-form">
+            <form onSubmit={addAssignment} className="ac-form" onFocusCapture={() => activateForm('assignmentForm')} onBlurCapture={(event) => deactivateForm(event, 'assignmentForm')}>
 
               <select className="ac-input" value={assignmentForm.moduleId}
 
@@ -1682,7 +2324,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                 <option value="">Select module</option>
 
-                {modules.map((module) => (
+                {filteredModulesForAssignment.map((module) => (
 
                   <option key={module.id} value={module.id}>{module.code} - {module.name}</option>
 
@@ -1732,19 +2374,92 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
               </select>
 
-              <button className="dashboard-btn ac-ui-action" type="submit"><Link2 size={15} />Create Assignment</button>
+              <select className="ac-input" value={assignmentForm.semester}
+
+                onChange={(e) => setAssignmentForm({ ...assignmentForm, semester: e.target.value })}>
+
+                <option value="1">Semester 1</option>
+
+                <option value="2">Semester 2</option>
+
+              </select>
+
+              <Motion.button className="dashboard-btn ac-ui-action" type="submit" {...buttonMotionProps}><Link2 size={15} />Create Assignment</Motion.button>
 
             </form>
 
-          </div>
+          </Motion.div>
 
 
 
           {/* Current Assignments */}
 
-          <div className="panel">
+          <div className="panel" id="assignmentList" style={{ display: 'none' }}>
 
-            <h3 className="ac-ui-title"><span className="ac-ui-icon"><ClipboardList size={16} /></span>Current Assignments</h3>
+            <h3 className="ac-ui-title"><Motion.span className="ac-ui-icon" initial="rest" whileHover="hover" variants={iconHoverVariant}><ClipboardList size={16} /></Motion.span>Current Assignments</h3>
+
+            {editingAssignmentId && (
+              <Motion.form
+                onSubmit={updateAssignmentRecord}
+                className="ac-form mb-4 p-3 rounded-xl border border-emerald-400/40 bg-emerald-900/15"
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+              >
+                <p className="text-xs text-emerald-200 m-0">Editing Assignment: {editingAssignmentLabel}</p>
+
+                <select
+                  className="ac-input"
+                  value={editingAssignmentForm.lecturerId}
+                  onChange={(e) => setEditingAssignmentForm((prev) => ({ ...prev, lecturerId: e.target.value }))}
+                  required
+                >
+                  <option value="">Select lecturer</option>
+                  {lecturers.map((lecturer) => (
+                    <option key={lecturer.id} value={lecturer.id}>{lecturer.name}</option>
+                  ))}
+                </select>
+
+                <select
+                  className="ac-input"
+                  value={editingAssignmentForm.licId}
+                  onChange={(e) => setEditingAssignmentForm((prev) => ({ ...prev, licId: e.target.value }))}
+                  required
+                >
+                  <option value="">Select LIC</option>
+                  {lics.map((lic) => (
+                    <option key={lic.id} value={lic.id}>{lic.name}</option>
+                  ))}
+                </select>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    className="ac-input"
+                    value={editingAssignmentForm.academicYear}
+                    onChange={(e) => setEditingAssignmentForm((prev) => ({ ...prev, academicYear: e.target.value }))}
+                  >
+                    <option value="1">Year 1</option>
+                    <option value="2">Year 2</option>
+                    <option value="3">Year 3</option>
+                    <option value="4">Year 4</option>
+                  </select>
+
+                  <select
+                    className="ac-input"
+                    value={editingAssignmentForm.semester}
+                    onChange={(e) => setEditingAssignmentForm((prev) => ({ ...prev, semester: e.target.value }))}
+                  >
+                    <option value="1">Semester 1</option>
+                    <option value="2">Semester 2</option>
+                  </select>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Motion.button className="ac-approve-btn" type="submit" {...buttonMotionProps}>Update Assignment</Motion.button>
+                  <Motion.button className="ac-reject-btn" type="button" onClick={cancelEditAssignment} {...buttonMotionProps}>Cancel</Motion.button>
+                </div>
+              </Motion.form>
+            )}
 
             <div className="ac-table-wrapper">
 
@@ -1755,6 +2470,8 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
                   <tr>
 
                     <th>Module</th>
+
+                    <th>Specialization</th>
 
                     <th>Lecturer</th>
 
@@ -1768,19 +2485,32 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
                 <tbody>
 
-                  {assignments.slice(0, 5).map((assignment) => (
+                  {filteredAssignments.length === 0 && (
+                    <tr>
+                      <td colSpan="5" className="ac-empty-row">No assignments found</td>
+                    </tr>
+                  )}
 
-                    <tr key={assignment.id}>
+                  {filteredAssignments.map((assignment, index) => (
+
+                    <Motion.tr key={assignment.id} initial="hidden" animate="visible" variants={tableRowVariant} custom={index}>
 
                       <td>{assignment.module_code}</td>
+
+                      <td>{inferSpecializationFromModuleCode(assignment.module_code)}</td>
 
                       <td>{assignment.lecturer_name}</td>
 
                       <td>Y{assignment.academic_year}/S{assignment.semester}</td>
 
-                      <td><button className="ac-remove-btn" onClick={() => removeAssignment(assignment.id)}><Trash2 size={14} />Remove</button></td>
+                      <td>
+                        <div className="flex flex-wrap gap-2">
+                          <Motion.button className="ac-approve-btn" onClick={() => startEditAssignment(assignment)} {...buttonMotionProps}>Update</Motion.button>
+                          <Motion.button className="ac-remove-btn" onClick={() => removeAssignment(assignment.id)} {...buttonMotionProps}><Trash2 size={14} />Delete</Motion.button>
+                        </div>
+                      </td>
 
-                    </tr>
+                    </Motion.tr>
 
                   ))}
 
@@ -1794,107 +2524,38 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
         </div>
 
-      </div>
-
-)}
-
-{mainView === 'hallAllocation' && (
-
-  <HallAllocation apiBase={apiBase} />
-
-)}
-
-      {/* 3D Visualization Section */}
-
-      <div className="ac-3d-card">
-
-        <h2>3D Campus Visualization</h2>
-
-        <div className="ac-3d-controls">
-
-          <label>Rotate X <input type="range" min="-20" max="35" step="1" value={view3d.rotateX}
-
-            onChange={(e) => setView3d({ ...view3d, rotateX: Number(e.target.value) })} /></label>
-
-          <label>Rotate Z <input type="range" min="-45" max="45" step="1" value={view3d.rotateZ}
-
-            onChange={(e) => setView3d({ ...view3d, rotateZ: Number(e.target.value) })} /></label>
-
-          <label>Zoom <input type="range" min="0.6" max="1.8" step="0.05" value={view3d.zoom}
-
-            onChange={(e) => setView3d({ ...view3d, zoom: Number(e.target.value) })} /></label>
-
-          <button className="dashboard-btn" onClick={() => setView3d({ rotateX: 10, rotateZ: -18, zoom: 1 })}>Reset View</button>
-
-        </div>
-
-        <div className="ac-3d-scene-wrap">
-
-          <div className="ac-3d-scene" style={{ '--rx': `${view3d.rotateX}deg`, '--rz': `${view3d.rotateZ}deg`, '--zoom': view3d.zoom }}>
-
-            <div className="ac-3d-camera">
-
-              {campusStructures.length === 0 && (
-
-                <div className="ac-3d-empty">No campus structures yet. Add one to generate the 3D layout.</div>
-
-              )}
-
-              {campusStructures.map((structure, index) => {
-
-                const capacity = Number(structure.capacity) || 0;
-
-                const height = Math.max(40, Math.min(160, capacity ? 28 + Math.round(capacity / 3) : 56));
-
-                const x = (index % 6) * 74;
-
-                const z = Math.floor(index / 6) * 66;
-
-                return (
-
-                  <div
-
-                    key={structure.id || index}
-
-                    className="ac-3d-block"
-
-                    style={{
-
-                      '--x': `${x}px`,
-
-                      '--z': `${z}px`,
-
-                      '--h': `${height}px`,
-
-                      '--hue': `${(index * 37) % 360}`,
-
-                    }}
-
-                  >
-
-                    <div className="ac-3d-label">
-
-                      <strong>{structure.name}</strong>
-
-                      <span>Cap: {capacity || '-'}</span>
-
-                    </div>
-
-                  </div>
-
-                );
-
-              })}
-
-            </div>
-
-          </div>
-
         </div>
 
       </div>
 
     </div>
+
+  </Motion.div>
+
+)}
+
+{mainView === 'hallAllocation' && (
+
+  <Motion.div
+    key="hall-allocation-view"
+    id="main-view-panel-hallAllocation"
+    role="tabpanel"
+    aria-labelledby="main-view-tab-hallAllocation"
+    initial={{ opacity: 0, y: 12 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.28, ease: 'easeOut' }}
+  >
+    <div className="ac-feature-banner ac-feature-banner-halls">
+      <div className="ac-feature-banner-head ac-feature-banner-head--center">
+        <h3 className="ac-hall-title"><PieChart size={18} /> Hall Allocation Control Center</h3>
+      </div>
+    </div>
+    <HallAllocation apiBase={apiBase} />
+  </Motion.div>
+
+)}
+    </div>
+    </FacultyCoordinatorShell>
 
   );
 
@@ -1902,5 +2563,7 @@ const AcademicCoordinatorDashboard = ({ user, apiBase }) => {
 
 
 
+
 export default AcademicCoordinatorDashboard;
+
 

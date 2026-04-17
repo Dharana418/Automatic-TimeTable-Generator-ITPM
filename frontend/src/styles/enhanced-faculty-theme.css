@@ -1,0 +1,389 @@
+/* ══════════════════════════════════════════════════════════════════════
+   ENHANCED FACULTY COORDINATOR - PROFESSIONAL ACADEMIC THEME
+   ══════════════════════════════════════════════════════════════════════ */
+
+@import "tailwindcss";
+
+/* Color Variables */
+:root {
+  --fc-primary-dark: #0f172a;
+  --fc-primary: #1e40af;
+  --fc-primary-light: #3b82f6;
+  --fc-accent: #0369a1;
+  --fc-accent-light: #06b6d4;
+  --fc-success: #10b981;
+  --fc-warning: #f59e0b;
+  --fc-danger: #ef4444;
+  --fc-neutral-50: #f8fafc;
+  --fc-neutral-100: #f1f5f9;
+  --fc-neutral-200: #e2e8f0;
+  --fc-neutral-300: #cbd5e1;
+  --fc-neutral-500: #64748b;
+  --fc-neutral-700: #334155;
+  --fc-neutral-800: #1e293b;
+  --fc-neutral-900: #0f172a;
+  
+  --fc-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --fc-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --fc-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --fc-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  --fc-shadow-hero: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+  
+  --fc-radius-sm: 0.375rem;
+  --fc-radius-md: 0.5rem;
+  --fc-radius-lg: 0.75rem;
+  --fc-radius-xl: 1rem;
+  --fc-radius-2xl: 1.5rem;
+}
+
+/* ────────────────────────────────────────────────────────────────────── */
+/* FOUNDATION STYLES                                                      */
+/* ────────────────────────────────────────────────────────────────────── */
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--fc-neutral-50);
+    color: var(--fc-neutral-800);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    line-height: 1.6;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────────── */
+/* COMPONENTS                                                              */
+/* ────────────────────────────────────────────────────────────────────── */
+
+@layer components {
+  /* ──── Enhanced Dashboard ──── */
+  .fc-dashboard-container {
+    @apply min-h-screen bg-gradient-to-b from-slate-50 via-blue-50 to-slate-50;
+  }
+
+  .fc-dashboard-header {
+    @apply mb-10 px-6 py-8 lg:px-10;
+  }
+
+  .fc-dashboard-header h1 {
+    @apply m-0 text-3xl font-bold tracking-tight text-slate-900 lg:text-4xl;
+  }
+
+  .fc-dashboard-header p {
+    @apply mt-2 text-base font-normal text-slate-600;
+  }
+
+  /* ──── Enhanced Stat Card ──── */
+  .fc-stat-card {
+    @apply relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-md transition-all duration-300 hover:shadow-lg hover:border-blue-300;
+  }
+
+  .fc-stat-card::before {
+    content: '';
+    @apply absolute -right-8 -top-8 h-32 w-32 rounded-full bg-gradient-to-br from-blue-100/50 to-transparent;
+  }
+
+  .fc-stat-card-header {
+    @apply relative z-10 mb-4 flex items-start justify-between;
+  }
+
+  .fc-stat-icon {
+    @apply flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-100 to-blue-50 text-blue-600;
+  }
+
+  .fc-stat-content {
+    @apply relative z-10 flex-1;
+  }
+
+  .fc-stat-label {
+    @apply text-xs font-semibold uppercase tracking-wider text-slate-500;
+  }
+
+  .fc-stat-value {
+    @apply mt-1 text-3xl font-bold text-slate-900;
+  }
+
+  .fc-stat-change {
+    @apply mt-3 flex items-center gap-1 text-sm font-medium;
+  }
+
+  .fc-stat-change.positive {
+    @apply text-green-600;
+  }
+
+  .fc-stat-change.negative {
+    @apply text-red-600;
+  }
+
+  /* ──── Stats Grid ──── */
+  .fc-stats-grid {
+    @apply grid grid-cols-1 gap-4 px-6 lg:grid-cols-2 lg:gap-6 lg:px-10 xl:grid-cols-4;
+  }
+
+  /* ──── Section Container ──── */
+  .fc-section {
+    @apply mx-6 mb-10 lg:mx-10 xl:mx-auto xl:max-w-7xl;
+  }
+
+  .fc-section-header {
+    @apply mb-6 flex items-center justify-between border-b-2 border-slate-200 pb-4;
+  }
+
+  .fc-section-title {
+    @apply text-2xl font-bold text-slate-900;
+  }
+
+  .fc-section-action {
+    @apply rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors duration-200 hover:bg-blue-700;
+  }
+
+  /* ──── Enhanced Card ──── */
+  .fc-card {
+    @apply overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md transition-all duration-300;
+  }
+
+  .fc-card:hover {
+    @apply shadow-lg border-blue-200;
+  }
+
+  .fc-card-header {
+    @apply border-b border-slate-100 bg-gradient-to-r from-slate-50 to-blue-50 px-6 py-5;
+  }
+
+  .fc-card-header h3 {
+    @apply m-0 text-lg font-bold text-slate-900;
+  }
+
+  .fc-card-content {
+    @apply p-6;
+  }
+
+  .fc-card-footer {
+    @apply border-t border-slate-100 bg-slate-50 px-6 py-4;
+  }
+
+  /* ──── Data Visualization Container ──── */
+  .fc-viz-container {
+    @apply rounded-2xl border border-slate-200 bg-white p-6 shadow-md;
+  }
+
+  .fc-viz-title {
+    @apply mb-6 text-lg font-bold text-slate-900;
+  }
+
+  .fc-viz-content {
+    @apply flex justify-center;
+  }
+
+  /* ──── Enhanced Table ──── */
+  .fc-table-wrapper {
+    @apply overflow-x-auto;
+  }
+
+  .fc-table {
+    @apply w-full border-collapse;
+  }
+
+  .fc-table thead {
+    @apply bg-gradient-to-r from-slate-100 to-blue-50;
+  }
+
+  .fc-table th {
+    @apply border-b-2 border-slate-200 px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-700;
+  }
+
+  .fc-table tbody tr {
+    @apply border-b border-slate-100 transition-colors duration-200 hover:bg-blue-50/50;
+  }
+
+  .fc-table td {
+    @apply px-4 py-3 text-sm text-slate-700;
+  }
+
+  .fc-table tr:last-child td {
+    @apply border-b-0;
+  }
+
+  /* ──── Badge & Tags ──── */
+  .fc-badge {
+    @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold;
+  }
+
+  .fc-badge.primary {
+    @apply bg-blue-100 text-blue-700;
+  }
+
+  .fc-badge.success {
+    @apply bg-green-100 text-green-700;
+  }
+
+  .fc-badge.warning {
+    @apply bg-amber-100 text-amber-700;
+  }
+
+  .fc-badge.danger {
+    @apply bg-red-100 text-red-700;
+  }
+
+  /* ──── Button Styles ──── */
+  .fc-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all duration-200;
+  }
+
+  .fc-btn.primary {
+    @apply bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md;
+  }
+
+  .fc-btn.secondary {
+    @apply bg-slate-200 text-slate-900 hover:bg-slate-300;
+  }
+
+  .fc-btn.outline {
+    @apply border-2 border-blue-600 text-blue-600 hover:bg-blue-50;
+  }
+
+  .fc-btn:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+
+  /* ──── Filter Panel ──── */
+  .fc-filter-panel {
+    @apply rounded-2xl border border-slate-200 bg-white p-6 shadow-md;
+  }
+
+  .fc-filter-group {
+    @apply mb-6;
+  }
+
+  .fc-filter-group:last-child {
+    @apply mb-0;
+  }
+
+  .fc-filter-label {
+    @apply mb-2 block text-sm font-bold text-slate-700;
+  }
+
+  .fc-filter-input,
+  .fc-filter-select {
+    @apply w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors duration-200 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100;
+  }
+
+  /* ──── Grid Layouts ──── */
+  .fc-grid-2 {
+    @apply grid grid-cols-1 gap-6 lg:grid-cols-2;
+  }
+
+  .fc-grid-3 {
+    @apply grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3;
+  }
+
+  /* ──── Loading State ──── */
+  .fc-skeleton {
+    @apply animate-pulse rounded-lg bg-slate-200;
+  }
+
+  .fc-skeleton-card {
+    @apply rounded-2xl border border-slate-200 bg-white p-6;
+  }
+
+  .fc-skeleton-card .fc-skeleton {
+    @apply mb-3 h-4 w-3/4;
+  }
+
+  .fc-skeleton-card .fc-skeleton:last-child {
+    @apply mb-0;
+  }
+
+  /* ──── Text Utilities ──── */
+  .fc-text-muted {
+    @apply text-slate-500;
+  }
+
+  .fc-text-subtle {
+    @apply text-slate-400;
+  }
+
+  .fc-text-emphasis {
+    @apply font-bold text-slate-900;
+  }
+
+  /* ──── Divider ──── */
+  .fc-divider {
+    @apply my-6 border-t border-slate-200;
+  }
+
+  /* ──── Empty State ──── */
+  .fc-empty-state {
+    @apply flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center;
+  }
+
+  .fc-empty-state-icon {
+    @apply mb-4 text-4xl text-slate-400;
+  }
+
+  .fc-empty-state-title {
+    @apply mb-2 text-lg font-bold text-slate-700;
+  }
+
+  .fc-empty-state-description {
+    @apply text-sm text-slate-500;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────────── */
+/* UTILITIES                                                               */
+/* ────────────────────────────────────────────────────────────────────── */
+
+@layer utilities {
+  .fc-transition-smooth {
+    @apply transition-all duration-300 ease-out;
+  }
+
+  .fc-focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2;
+  }
+
+  .fc-gradient-blue {
+    @apply bg-gradient-to-r from-blue-600 to-blue-700;
+  }
+
+  .fc-gradient-slate {
+    @apply bg-gradient-to-r from-slate-100 to-slate-50;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────────── */
+/* ANIMATIONS                                                              */
+/* ────────────────────────────────────────────────────────────────────── */
+
+@keyframes slideInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.fc-animate-slide-in {
+  animation: slideInDown 0.3s ease-out;
+}
+
+.fc-animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
