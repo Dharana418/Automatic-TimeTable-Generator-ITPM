@@ -5,6 +5,8 @@ import { showError, showSuccess, showWarning } from '../utils/alerts.js';
 const types = ['halls','modules','instructors','lics'];
 const algorithmOptions = ['pso', 'anticolony', 'genetic', 'tabu', 'hybrid'];
 const dayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const weekdayDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+const weekendDays = ['Sat', 'Sun'];
 const dayLabel = {
   Mon: 'Monday',
   Tue: 'Tuesday',
@@ -51,6 +53,39 @@ function normalizeDay(value = '') {
   const key = String(value).trim().toLowerCase().slice(0, 3);
   const map = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
   return map[key] || null;
+}
+
+function extractBatchModes(batchKeys = []) {
+  const keys = Array.isArray(batchKeys) ? batchKeys : [];
+  let hasWeekday = false;
+  let hasWeekend = false;
+
+  keys.forEach((key) => {
+    const text = String(key || '').toUpperCase();
+    if (/\.WD(\.|$)/.test(text)) hasWeekday = true;
+    if (/\.WE(\.|$)/.test(text)) hasWeekend = true;
+  });
+
+  return { hasWeekday, hasWeekend };
+}
+
+function sanitizeEntriesByBatchMode(entries = []) {
+  return (Array.isArray(entries) ? entries : []).filter((entry) => {
+    const day = normalizeDay(entry?.day);
+    if (!day) return true;
+
+    const { hasWeekday, hasWeekend } = extractBatchModes(entry?.batchKeys);
+
+    if (hasWeekday && !hasWeekend && weekendDays.includes(day)) {
+      return false;
+    }
+
+    if (hasWeekend && !hasWeekday && weekdayDays.includes(day)) {
+      return false;
+    }
+
+    return true;
+  });
 }
 
 function slotToMinutes(slot = '') {
@@ -358,7 +393,7 @@ export default function Scheduler() {
           totalConflicts += Array.isArray(selected?.data?.conflicts) ? selected.data.conflicts.length : 0;
         });
 
-        setGeneratedEntries(mergedEntries);
+        setGeneratedEntries(sanitizeEntriesByBatchMode(mergedEntries));
         setExecutionSnapshot({
           coverage: totalRequired > 0 ? totalScheduled / totalRequired : null,
           scheduled: totalScheduled,
@@ -380,7 +415,7 @@ export default function Scheduler() {
         const totalRequired = Number(selected?.data?.stats?.totalRequired || 0);
         const coverage = selected?.data?.stats?.coverage;
 
-        setGeneratedEntries(entries);
+        setGeneratedEntries(sanitizeEntriesByBatchMode(entries));
         setExecutionSnapshot({
           coverage: typeof coverage === 'number' ? coverage : null,
           scheduled,
@@ -426,7 +461,7 @@ export default function Scheduler() {
         totalConflicts += Array.isArray(selected?.data?.conflicts) ? selected.data.conflicts.length : 0;
       });
 
-      setGeneratedEntries(mergedEntries);
+      setGeneratedEntries(sanitizeEntriesByBatchMode(mergedEntries));
       setExecutionSnapshot({
         coverage: totalRequired > 0 ? totalScheduled / totalRequired : null,
         scheduled: totalScheduled,

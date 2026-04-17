@@ -6,12 +6,54 @@ import '../styles/enhanced-faculty-theme.css';
 import { EnhancedStatCard, EnhancedTable } from '../components/EnhancedFacultyComponents.jsx';
 import { Calendar, Download, Share2, Eye } from 'lucide-react';
 
+const parseTimetableData = (rawData) => {
+  if (!rawData) return {};
+  if (typeof rawData === 'object') return rawData;
+
+  if (typeof rawData === 'string') {
+    try {
+      return JSON.parse(rawData);
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+};
+
+const parseScheduleRows = (timetable = {}) => {
+  const data = parseTimetableData(timetable.data);
+
+  if (Array.isArray(data?.schedule)) return data.schedule;
+  if (Array.isArray(data?.groupedSchedules)) {
+    return data.groupedSchedules.flatMap((group) => {
+      if (Array.isArray(group?.entries)) return group.entries;
+      if (Array.isArray(group?.schedule)) return group.schedule;
+      return [];
+    });
+  }
+
+  return Array.isArray(timetable?.data) ? timetable.data : [];
+};
+
+const extractTimetableMeta = (timetable = {}) => {
+  const data = parseTimetableData(timetable.data);
+  const scope = data.scope || data.timetableScope || {};
+
+  return {
+    year: String(timetable.year || scope.year || data.year || data.academicYear || '').trim() || 'ALL',
+    semester: String(timetable.semester || scope.semester || data.semester || '').trim() || 'ALL',
+    specialization: String(scope.specialization || data.specialization || 'ALL').trim().toUpperCase() || 'ALL',
+  };
+};
+
 const FacultyTimetableReportEnhanced = ({ user }) => {
   const navigate = useNavigate();
   const [timetables, setTimetables] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filterYear, setFilterYear] = useState('');
   const [filterSemester, setFilterSemester] = useState('');
+  const [filterSpecialization, setFilterSpecialization] = useState('');
 
   useEffect(() => {
     loadTimetables();
@@ -30,10 +72,43 @@ const FacultyTimetableReportEnhanced = ({ user }) => {
   };
 
   const filteredTimetables = timetables.filter((t) => {
-    if (filterYear && t.year !== filterYear) return false;
-    if (filterSemester && t.semester !== filterSemester) return false;
+    const meta = extractTimetableMeta(t);
+    if (filterYear && meta.year !== filterYear) return false;
+    if (filterSemester && meta.semester !== filterSemester) return false;
+    if (filterSpecialization && meta.specialization !== filterSpecialization) return false;
     return true;
   });
+
+  const groupedTimetables = React.useMemo(() => {
+    const yearMap = new Map();
+
+    filteredTimetables.forEach((timetable) => {
+      const meta = extractTimetableMeta(timetable);
+
+      if (!yearMap.has(meta.year)) yearMap.set(meta.year, new Map());
+      const specializationMap = yearMap.get(meta.year);
+
+      if (!specializationMap.has(meta.specialization)) specializationMap.set(meta.specialization, new Map());
+      const semesterMap = specializationMap.get(meta.specialization);
+
+      if (!semesterMap.has(meta.semester)) semesterMap.set(meta.semester, []);
+      semesterMap.get(meta.semester).push(timetable);
+    });
+
+    return Array.from(yearMap.entries())
+      .map(([year, specializationMap]) => ({
+        year,
+        specializations: Array.from(specializationMap.entries())
+          .map(([specialization, semesterMap]) => ({
+            specialization,
+            semesters: Array.from(semesterMap.entries())
+              .map(([semester, items]) => ({ semester, items }))
+              .sort((a, b) => String(a.semester).localeCompare(String(b.semester))),
+          }))
+          .sort((a, b) => String(a.specialization).localeCompare(String(b.specialization))),
+      }))
+      .sort((a, b) => String(a.year).localeCompare(String(b.year)));
+  }, [filteredTimetables]);
 
   const tableColumns = [
     {
@@ -44,12 +119,17 @@ const FacultyTimetableReportEnhanced = ({ user }) => {
     {
       key: 'year',
       label: 'Year',
-      render: (year) => <span className="fc-badge primary">{year}</span>,
+      render: (_, row) => <span className="fc-badge primary">{extractTimetableMeta(row).year}</span>,
     },
     {
       key: 'semester',
       label: 'Semester',
-      render: (sem) => <span className="fc-badge secondary">{sem}</span>,
+      render: (_, row) => <span className="fc-badge secondary">{extractTimetableMeta(row).semester}</span>,
+    },
+    {
+      key: 'specialization',
+      label: 'Specialization',
+      render: (_, row) => <span className="fc-badge secondary">{extractTimetableMeta(row).specialization}</span>,
     },
     {
       key: 'createdAt',
@@ -88,7 +168,7 @@ const FacultyTimetableReportEnhanced = ({ user }) => {
   };
 
   const handleDownloadTimetable = (timetable) => {
-    const schedule = Array.isArray(timetable?.data) ? timetable.data : [];
+    const schedule = parseScheduleRows(timetable);
     if (!schedule.length) {
       window.alert('No schedule data available');
       return;
@@ -119,12 +199,13 @@ const FacultyTimetableReportEnhanced = ({ user }) => {
     URL.revokeObjectURL(url);
   };
 
-  const years = [...new Set(timetables.map((t) => t.year))];
-  const semesters = [...new Set(timetables.map((t) => t.semester))];
+  const years = [...new Set(timetables.map((t) => extractTimetableMeta(t).year))];
+  const semesters = [...new Set(timetables.map((t) => extractTimetableMeta(t).semester))];
+  const specializations = [...new Set(timetables.map((t) => extractTimetableMeta(t).specialization))];
   const averageSlotsPerDay = timetables.length > 0
     ? Math.round(
         timetables.reduce((sum, t) => {
-          const schedule = Array.isArray(t.data) ? t.data : [];
+          const schedule = parseScheduleRows(t);
           return sum + schedule.length;
         }, 0) / timetables.length
       )
@@ -223,11 +304,27 @@ const FacultyTimetableReportEnhanced = ({ user }) => {
                     ))}
                   </select>
                 </div>
+                <div>
+                  <label className="fc-filter-label">Specialization</label>
+                  <select
+                    className="fc-filter-select"
+                    value={filterSpecialization}
+                    onChange={(e) => setFilterSpecialization(e.target.value)}
+                  >
+                    <option value="">All Specializations</option>
+                    {specializations.map((spec) => (
+                      <option key={spec} value={spec}>
+                        {spec}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="md:col-span-2 flex items-end gap-2">
                   <button
                     onClick={() => {
                       setFilterYear('');
                       setFilterSemester('');
+                      setFilterSpecialization('');
                     }}
                     className="fc-btn secondary flex-1"
                   >
@@ -254,6 +351,47 @@ const FacultyTimetableReportEnhanced = ({ user }) => {
                 loading={loading}
                 emptyMessage="No timetables found. Generate one from the scheduler."
               />
+            </div>
+          </div>
+
+          <div className="fc-card" style={{ marginTop: '1rem' }}>
+            <div className="fc-card-header">
+              <h3>Year by Year / Specialization / Per Semester View</h3>
+            </div>
+            <div className="fc-card-content">
+              {groupedTimetables.length === 0 ? (
+                <p className="text-sm text-slate-600">No grouped timetable data found for the selected filters.</p>
+              ) : (
+                <div className="space-y-3">
+                  {groupedTimetables.map((yearGroup) => (
+                    <div key={`y-${yearGroup.year}`} className="rounded-xl border border-slate-200 p-3">
+                      <p className="text-sm font-semibold text-slate-900">Year {yearGroup.year}</p>
+                      <div className="mt-2 space-y-2">
+                        {yearGroup.specializations.map((specGroup) => (
+                          <div key={`s-${yearGroup.year}-${specGroup.specialization}`} className="rounded-lg border border-slate-200 p-2">
+                            <p className="text-xs font-semibold text-slate-700">{specGroup.specialization}</p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {specGroup.semesters.map((semesterGroup) => (
+                                <button
+                                  key={`sem-${yearGroup.year}-${specGroup.specialization}-${semesterGroup.semester}`}
+                                  className="fc-btn secondary text-xs"
+                                  onClick={() => {
+                                    const selected = semesterGroup.items[0];
+                                    if (!selected) return;
+                                    navigate(`/faculty/timetable-report?timetableId=${encodeURIComponent(String(selected.id || ''))}`);
+                                  }}
+                                >
+                                  Semester {semesterGroup.semester} ({semesterGroup.items.length})
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
