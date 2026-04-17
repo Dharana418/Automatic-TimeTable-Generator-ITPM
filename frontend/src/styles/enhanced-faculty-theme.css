@@ -79,7 +79,7 @@
 
   /* ──── Enhanced Stat Card ──── */
   .fc-stat-card {
-    @apply relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-md transition-all duration-300 hover:shadow-lg hover:border-blue-300;
+    @apply relative overflow-hidden rounded-2xl border border-sky-200/80 bg-gradient-to-br from-white via-slate-50 to-sky-50 p-6 shadow-md transition-all duration-300 hover:shadow-lg hover:border-sky-300;
   }
 
   .fc-stat-card::before {
@@ -121,7 +121,7 @@
 
   /* ──── Stats Grid ──── */
   .fc-stats-grid {
-    @apply grid grid-cols-1 gap-4 px-6 lg:grid-cols-2 lg:gap-6 lg:px-10 xl:grid-cols-4;
+    @apply grid grid-cols-1 gap-6 px-6 lg:grid-cols-2 lg:gap-8 lg:px-10 xl:grid-cols-4;
   }
 
   /* ──── Section Container ──── */
@@ -143,15 +143,15 @@
 
   /* ──── Enhanced Card ──── */
   .fc-card {
-    @apply overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md transition-all duration-300;
+    @apply overflow-hidden rounded-2xl border border-sky-200/80 bg-gradient-to-br from-white via-slate-50 to-sky-50/80 shadow-md transition-all duration-300;
   }
 
   .fc-card:hover {
-    @apply shadow-lg border-blue-200;
+    @apply border-sky-300 shadow-lg;
   }
 
   .fc-card-header {
-    @apply border-b border-slate-100 bg-gradient-to-r from-slate-50 to-blue-50 px-6 py-5;
+    @apply border-b border-sky-100 bg-gradient-to-r from-sky-50 via-cyan-50 to-blue-50 px-6 py-5;
   }
 
   .fc-card-header h3 {
@@ -163,12 +163,12 @@
   }
 
   .fc-card-footer {
-    @apply border-t border-slate-100 bg-slate-50 px-6 py-4;
+    @apply border-t border-sky-100 bg-gradient-to-r from-slate-50 to-sky-50 px-6 py-4;
   }
 
   /* ──── Data Visualization Container ──── */
   .fc-viz-container {
-    @apply rounded-2xl border border-slate-200 bg-white p-6 shadow-md;
+    @apply rounded-2xl border border-sky-200/80 bg-gradient-to-br from-white via-slate-50 to-cyan-50 p-6 shadow-md;
   }
 
   .fc-viz-title {
@@ -252,7 +252,7 @@
 
   /* ──── Filter Panel ──── */
   .fc-filter-panel {
-    @apply rounded-2xl border border-slate-200 bg-white p-6 shadow-md;
+    @apply rounded-2xl border border-sky-200/80 bg-gradient-to-br from-white via-slate-50 to-cyan-50 p-6 shadow-md;
   }
 
   .fc-filter-group {
@@ -274,11 +274,11 @@
 
   /* ──── Grid Layouts ──── */
   .fc-grid-2 {
-    @apply grid grid-cols-1 gap-6 lg:grid-cols-2;
+    @apply grid grid-cols-1 gap-8 lg:grid-cols-2;
   }
 
   .fc-grid-3 {
-    @apply grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3;
+    @apply grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3;
   }
 
   /* ──── Loading State ──── */

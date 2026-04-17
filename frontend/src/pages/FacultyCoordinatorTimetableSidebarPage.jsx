@@ -759,7 +759,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
       footerNote="Faculty Coordinator timetable report view"
       sidebarTheme="timetable"
     >
-      <div id="top" className="flex flex-col gap-6">
+      <div id="top" className="fc-layout-stack fc-layout-stack-tight">
         <section className="relative overflow-hidden rounded-3xl border border-sky-200/80 bg-gradient-to-br from-sky-50 via-white to-cyan-50 p-6 shadow-[0_20px_45px_rgba(14,116,144,0.12)]">
           <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.25),transparent_70%)]" />
           <div className="pointer-events-none absolute -bottom-24 -left-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(14,165,233,0.16),transparent_70%)]" />

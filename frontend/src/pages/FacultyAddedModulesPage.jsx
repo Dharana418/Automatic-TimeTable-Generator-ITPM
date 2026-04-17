@@ -299,7 +299,7 @@ const FacultyAddedModulesPage = ({ user }) => {
         }
       `}</style>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div className="fc-layout-stack fc-layout-stack-tight">
         <section id="addedModulesSummary" className="am-glass-card" style={{ padding: 24 }}>
           <p className="am-header">Governance Ledger</p>
           <h2 className="am-title">Added Modules Registry</h2>
