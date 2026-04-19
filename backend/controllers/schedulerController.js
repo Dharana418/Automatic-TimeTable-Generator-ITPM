@@ -2404,14 +2404,13 @@ export const runSchedulerForYearSemester = async (req, res) => {
       const details = parseJsonSafe(module?.details, {});
       const moduleDayType = String(module?.day_type || details?.day_type || 'weekday').trim().toLowerCase();
 
-      // CONSTRAINT: Lectures and labs can ONLY be on weekdays (Mon-Fri)
-      // Only explicitly 'weekend' type modules are scheduled in WE batch mode
+      // Keep explicit weekday/weekend modules isolated by batch mode.
+      // Flexible modules are allowed in either batch type and are constrained later by the optimizer.
       if (requestedBatchMode === 'WE') {
-        return moduleDayType === 'weekend'; // Only weekend modules for weekend batch
+        return ['weekend', 'any', 'both', ''].includes(moduleDayType);
       }
 
-      // For weekday batch, include weekday modules
-      // Note: 'any'/'both' modules are now restricted to weekdays by scheduler logic
+      // For weekday batch, include weekday and flexible modules.
       return ['weekday', 'any', 'both', ''].includes(moduleDayType);
     });
 
