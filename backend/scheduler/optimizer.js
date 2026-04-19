@@ -433,8 +433,26 @@ function resolveWeekdayFreeDay(options = {}) {
   return configuredDay;
 }
 
-function getAllowedDays(module, options = {}) {
-  const dt = String(module.day_type || module?.details?.day_type || 'weekday').toLowerCase();
+function normalizeBatchMode(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'we' || normalized === 'weekend') return 'WE';
+  if (normalized === 'wd' || normalized === 'weekday') return 'WD';
+  return '';
+}
+
+function resolveSessionBatchMode(session = {}) {
+  const targetBatch = session?.targetBatch;
+  if (targetBatch) {
+    const parsed = parseBatchIdentity(targetBatch.id || targetBatch.name || '');
+    const fromBatch = normalizeBatchMode(parsed?.mode || targetBatch.mode || targetBatch.dayType);
+    if (fromBatch) return fromBatch;
+  }
+
+  return normalizeBatchMode(session?.module?.day_type || session?.module?.details?.day_type);
+}
+
+function getAllowedDays(session, options = {}) {
+  const dt = resolveSessionBatchMode(session) || String(session.module.day_type || session.module?.details?.day_type || 'weekday').toLowerCase();
   const weekdayFreeDay = resolveWeekdayFreeDay(options);
 
   const weekdayDays = WEEKDAYS.filter((day) => day !== weekdayFreeDay);
@@ -443,17 +461,19 @@ function getAllowedDays(module, options = {}) {
   // CONSTRAINT: Lectures and labs can ONLY be on weekdays (Mon-Fri)
   // Only explicitly 'weekend' type modules get weekend slots
   if (dt === 'weekend') return WEEKEND;
+  if (dt === 'we') return WEEKEND;
   // 'weekday', 'any', 'both' all follow weekday constraint
   return safeWeekdayDays;
 }
 
-function getAllowedSlotIndexes(module, allSlots = SLOTS) {
-  const dt = String(module.day_type || module?.details?.day_type || 'weekday').toLowerCase();
+function getAllowedSlotIndexes(session, allSlots = SLOTS) {
+  const dt = resolveSessionBatchMode(session) || String(session.module.day_type || session.module?.details?.day_type || 'weekday').toLowerCase();
 
   // CONSTRAINT: Lectures and labs can ONLY be on weekdays (Mon-Fri)
   // Only explicitly 'weekend' type modules get extended weekend slots
   const allowedLabels =
     dt === 'weekend'
+      || dt === 'we'
       ? WEEKEND_SLOTS
       : WEEKDAY_SLOTS; // 'weekday', 'any', 'both' all use weekday slots only
 
@@ -544,8 +564,8 @@ export function buildProblem(constraints = {}, options = {}) {
 
   const placements = sessions.map((session) => {
     const possible = [];
-    const allowedDays = getAllowedDays(session.module, options);
-    const allowedSlotIndexes = getAllowedSlotIndexes(session.module, SLOTS);
+    const allowedDays = getAllowedDays(session, options);
+    const allowedSlotIndexes = getAllowedSlotIndexes(session, SLOTS);
     const maxStart = SLOTS.length - session.durationSlots;
 
     for (const day of allowedDays) {
@@ -573,7 +593,7 @@ export function buildProblem(constraints = {}, options = {}) {
     }
 
     if (!possible.length && halls.length) {
-      const fallbackDays = getAllowedDays(session.module, options);
+      const fallbackDays = getAllowedDays(session, options);
       const maxStartFallback = Math.max(0, SLOTS.length - session.durationSlots);
       for (const day of fallbackDays) {
         for (let start = 0; start <= maxStartFallback; start += 1) {
