@@ -15,6 +15,7 @@ const FAVORITES_STORAGE_KEY = 'faculty_timetable_favorites_v1';
 const REPORT_THEME_STORAGE_KEY = 'faculty_timetable_report_theme_v1';
 const REPORT_SCROLL_SECTIONS = [
   { id: 'report-hero', label: 'Overview' },
+  { id: 'report-summary', label: 'Summary' },
   { id: 'report-signals', label: 'Signals' },
   { id: 'report-risk', label: 'Risk' },
   { id: 'report-operations', label: 'Operations' },
@@ -861,6 +862,11 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
     return filteredTimetables.find((tt) => String(tt.id) === String(selectedId)) || null;
   }, [selectedId, filteredTimetables]);
 
+  const selectedTimetableMeta = useMemo(
+    () => (selectedTimetable ? extractTimetableMeta(selectedTimetable) : null),
+    [selectedTimetable]
+  );
+
   const schedule = useMemo(() => parseSchedule(selectedTimetable), [selectedTimetable]);
   const scopedSchedule = useMemo(
     () => (Array.isArray(schedule) ? schedule.filter((row) => rowMatchesModeFilter(row, dayModeFilter)) : []),
@@ -1000,6 +1006,11 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
 
   const riskInsights = useMemo(() => buildRiskInsights(schedule, dayModeFilter), [schedule, dayModeFilter]);
 
+  const reportHealthScore = useMemo(() => {
+    const penalty = (planningInsights.overlapCells * 8) + (riskInsights.summary.hallConflictCount * 14) + (riskInsights.summary.instructorConflictCount * 14);
+    return Math.max(48, Math.min(100, 100 - penalty));
+  }, [planningInsights.overlapCells, riskInsights.summary.hallConflictCount, riskInsights.summary.instructorConflictCount]);
+
   const dayLoadDistribution = useMemo(() => {
     const counts = getAllowedDaysForMode(dayModeFilter).map((day) => ({ day, count: 0 }));
     const indexMap = new Map(counts.map((item, idx) => [item.day, idx]));
@@ -1127,11 +1138,11 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
   return (
     <FacultyCoordinatorShell
       user={user}
-      title="Timetable Sidebar View"
-      subtitle="FET-style student timetable view by year, semester, and batch"
-      badge="Timetable Report"
+      title="Faculty Timetable Workspace"
+      subtitle="Review, filter, and export timetable layouts in a structured academic workflow."
+      badge="Timetable Planning"
       backgroundImage={facultyDashboardBg}
-      footerNote="Faculty Coordinator timetable report view"
+      footerNote="Faculty Coordinator timetable planning workspace"
       sidebarTheme="timetable"
     >
       <div id="top" className={`fc-layout-stack fc-layout-stack-tight ${reportTheme === 'dark' ? 'report-theme-dark' : 'report-theme-light'}`}>
@@ -1201,8 +1212,8 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
         <section className="theme-panel rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-[0_10px_26px_rgba(15,23,42,0.08)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 theme-text-soft">Section Progress Navigator</p>
-              <p className="text-[11px] text-slate-600 theme-text-medium">Scroll and jump between report sections with live progress tracking.</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 theme-text-soft">Workspace Navigator</p>
+              <p className="text-[11px] text-slate-600 theme-text-medium">Move through the timetable summary, filters, insights, and layout preview in order.</p>
             </div>
             <div className="w-full max-w-[300px] rounded-full bg-slate-200 theme-soft-plain">
               <div className="h-2 rounded-full bg-gradient-to-r from-sky-500 to-cyan-500 transition-all duration-500" style={{ width: `${sectionProgress}%` }} />
@@ -1228,17 +1239,17 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
         <section id="report-hero" className="theme-shell relative overflow-hidden rounded-3xl border border-sky-200/80 bg-gradient-to-br from-sky-50 via-white to-cyan-50 p-6 shadow-[0_20px_45px_rgba(14,116,144,0.12)]">
           <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.25),transparent_70%)]" />
           <div className="pointer-events-none absolute -bottom-24 -left-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(14,165,233,0.16),transparent_70%)]" />
-          <div className="relative grid grid-cols-1 gap-4 lg:grid-cols-[1.35fr_1fr]">
+          <div className="relative grid grid-cols-1 gap-4 xl:grid-cols-[1.25fr_0.75fr]">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700 theme-text-medium">Creative Timetable Studio</p>
-              <h2 className="theme-text-strong mt-2 text-2xl font-extrabold text-slate-900">Timetable View Intelligence Panel</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700 theme-text-medium">Academic Timetable Overview</p>
+              <h2 className="theme-text-strong mt-2 text-2xl font-extrabold text-slate-900">Timetable planning and review panel</h2>
               <p className="theme-text-medium mt-2 max-w-2xl text-sm leading-6 text-slate-700">
-                Explore generated timetables by year, semester, and specialization with a dynamic master grid and grouped academic layouts.
+                Review generated timetables by year, semester, and specialization with a clear master view, batch-based layouts, and conflict-aware checks.
               </p>
               <div className="mt-4 flex flex-wrap items-center gap-2">
-                <span className="theme-chip rounded-full border border-sky-300 bg-white px-3 py-1 text-xs font-semibold text-sky-700">{animatedInsightMetrics.timetables} filtered timetable(s)</span>
-                <span className="theme-chip rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700">{dayModeFilter === 'WD' ? 'Weekday Mode' : dayModeFilter === 'WE' ? 'Weekend Mode' : 'All Batch Modes'}</span>
-                <span className="theme-chip rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs text-emerald-700">Layout: {layoutMode === 'unified' ? 'Master View' : 'Grouped View'}</span>
+                <span className="theme-chip rounded-full border border-sky-300 bg-white px-3 py-1 text-xs font-semibold text-sky-700">{animatedInsightMetrics.timetables} timetable(s)</span>
+                <span className="theme-chip rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700">{dayModeFilter === 'WD' ? 'Weekday scope' : dayModeFilter === 'WE' ? 'Weekend scope' : 'All batches'}</span>
+                <span className="theme-chip rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs text-emerald-700">Layout: {layoutMode === 'unified' ? 'Master view' : 'Batch view'}</span>
                 <button
                   type="button"
                   onClick={() => setReportTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
@@ -1248,46 +1259,162 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                   {reportTheme === 'dark' ? 'Light Canvas' : 'Dark Canvas'}
                 </button>
               </div>
+              <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded-2xl border border-sky-200 bg-white/90 p-3 shadow-[0_10px_24px_rgba(14,116,144,0.08)]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Entries</p>
+                  <p className="mt-1 text-2xl font-black text-slate-900">{scopedSchedule.length}</p>
+                </div>
+                <div className="rounded-2xl border border-sky-200 bg-white/90 p-3 shadow-[0_10px_24px_rgba(14,116,144,0.08)]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Days</p>
+                  <p className="mt-1 text-2xl font-black text-slate-900">{unifiedTable.days.length}</p>
+                </div>
+                <div className="rounded-2xl border border-sky-200 bg-white/90 p-3 shadow-[0_10px_24px_rgba(14,116,144,0.08)]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Groups</p>
+                  <p className="mt-1 text-2xl font-black text-slate-900">{animatedInsightMetrics.groups}</p>
+                </div>
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50/90 p-3 shadow-[0_10px_24px_rgba(16,185,129,0.08)]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700">Health</p>
+                  <p className="mt-1 text-2xl font-black text-emerald-800">{reportHealthScore}%</p>
+                </div>
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="theme-soft rounded-2xl border border-sky-200 bg-white/95 p-3">
-                <p className="theme-text-soft text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Modules</p>
-                <p className="theme-text-strong mt-1 text-2xl font-extrabold text-slate-900">{animatedInsightMetrics.modules}</p>
-              </div>
-              <div className="theme-soft rounded-2xl border border-sky-200 bg-white/95 p-3">
-                <p className="theme-text-soft text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Groups</p>
-                <p className="theme-text-strong mt-1 text-2xl font-extrabold text-slate-900">{animatedInsightMetrics.groups}</p>
-              </div>
-              <div className="theme-soft col-span-2 rounded-2xl border border-sky-200 bg-white/95 p-3">
-                <p className="theme-text-soft text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Last Generated</p>
-                <p className="theme-text-medium mt-1 text-sm font-semibold text-slate-800">{insightMetrics.generatedAt}</p>
-              </div>
-              <div className="theme-soft col-span-2 rounded-2xl border border-amber-200 bg-amber-50/90 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-700">Planning Alerts</p>
-                <p className="theme-text-strong mt-1 text-sm font-semibold text-amber-900">
-                  Overlapping cells: {planningInsights.overlapCells} • Risky cells: {riskInsights.summary.riskyCellCount}
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <div className="theme-soft rounded-3xl border border-sky-200 bg-white/95 p-4 shadow-[0_10px_24px_rgba(14,116,144,0.08)] xl:p-5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Selected timetable</p>
+                <p className="mt-2 text-lg font-bold text-slate-900">
+                  {selectedTimetable?.name || 'No timetable selected'}
                 </p>
+                <p className="mt-2 text-xs leading-6 text-slate-600">
+                  {selectedTimetableMeta
+                    ? `Year ${selectedTimetableMeta.year} · Semester ${selectedTimetableMeta.semester} · ${selectedTimetableMeta.specialization} · Group ${selectedTimetableMeta.group} · Subgroup ${selectedTimetableMeta.subgroup}`
+                    : 'Choose a timetable to see its academic scope.'}
+                </p>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <div className="rounded-2xl bg-slate-50 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Last generated</p>
+                    <p className="mt-1 text-xs font-semibold text-slate-800">{insightMetrics.generatedAt}</p>
+                  </div>
+                  <div className="rounded-2xl bg-amber-50 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-600">Alerts</p>
+                    <p className="mt-1 text-xs font-semibold text-amber-800">{planningInsights.overlapCells} overlaps</p>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-3xl border border-slate-200 bg-slate-950/5 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Canvas snapshot</p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className="rounded-2xl border border-white/70 bg-white px-3 py-3 shadow-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Modules</p>
+                    <p className="mt-1 text-xl font-black text-slate-900">{animatedInsightMetrics.modules}</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/70 bg-white px-3 py-3 shadow-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Risk cells</p>
+                    <p className="mt-1 text-xl font-black text-slate-900">{riskInsights.summary.riskyCellCount}</p>
+                  </div>
+                  <div className="col-span-2 rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-500 to-cyan-500 px-3 py-3 text-white shadow-[0_14px_28px_rgba(2,132,199,0.24)]">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/80">Report health</p>
+                    <div className="mt-2 flex items-end justify-between gap-3">
+                      <p className="text-3xl font-black leading-none">{reportHealthScore}%</p>
+                      <p className="max-w-[160px] text-right text-xs leading-5 text-white/85">Balanced layout, selected scope, and conflict visibility</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </section>
 
+        <section id="report-summary" className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+          <div className="rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-[0_14px_35px_rgba(15,23,42,0.07)]">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Selected scope</p>
+                <h3 className="mt-2 text-xl font-bold text-slate-900">Timetable context at a glance</h3>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                  Use the current selection as the working context for downloads, layout switching, and risk review.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-right">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700">Selected timetable</p>
+                <p className="mt-1 text-sm font-bold text-emerald-900">{selectedTimetable?.status || 'Pending'}</p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Filtered timetables</p>
+                <p className="mt-1 text-2xl font-black text-slate-900">{filteredTimetables.length}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Schedule rows</p>
+                <p className="mt-1 text-2xl font-black text-slate-900">{schedule.length}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Layouts</p>
+                <p className="mt-1 text-2xl font-black text-slate-900">2</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Active view</p>
+                <p className="mt-1 text-sm font-bold text-slate-900">{layoutMode === 'unified' ? 'Master' : 'Grouped'}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.96),rgba(255,255,255,0.94))] p-5 shadow-[0_14px_35px_rgba(15,23,42,0.07)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Quick actions</p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setReportTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-sky-300 hover:bg-sky-50"
+              >
+                <p className="text-sm font-semibold text-slate-900">Switch canvas</p>
+                <p className="mt-1 text-xs text-slate-500">Toggle light and dark report modes</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/scheduler/by-year')}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-sky-300 hover:bg-sky-50"
+              >
+                <p className="text-sm font-semibold text-slate-900">Open generator</p>
+                <p className="mt-1 text-xs text-slate-500">Jump back to timetable creation</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setLayoutMode('unified')}
+                className={`rounded-2xl border px-4 py-3 text-left transition ${layoutMode === 'unified' ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50'}`}
+              >
+                <p className="text-sm font-semibold">Master view</p>
+                <p className={`mt-1 text-xs ${layoutMode === 'unified' ? 'text-sky-100' : 'text-slate-500'}`}>Single campus timetable grid</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setLayoutMode('grouped')}
+                className={`rounded-2xl border px-4 py-3 text-left transition ${layoutMode === 'grouped' ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50'}`}
+              >
+                <p className="text-sm font-semibold">Grouped view</p>
+                <p className={`mt-1 text-xs ${layoutMode === 'grouped' ? 'text-sky-100' : 'text-slate-500'}`}>Batch-by-batch breakdown</p>
+              </button>
+            </div>
+          </div>
+        </section>
+
         <section id="report-signals" className="grid grid-cols-1 gap-4 lg:grid-cols-4">
-          <div className="theme-panel rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+          <div className="theme-panel rounded-3xl border border-slate-200 bg-white p-4 shadow-[0_12px_28px_rgba(15,23,42,0.07)]">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Busiest Day</p>
-            <p className="theme-text-strong mt-2 text-base font-bold text-slate-900">{planningInsights.busiestDay}</p>
+            <p className="theme-text-strong mt-3 text-lg font-bold text-slate-900">{planningInsights.busiestDay}</p>
           </div>
-          <div className="theme-panel rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+          <div className="theme-panel rounded-3xl border border-slate-200 bg-white p-4 shadow-[0_12px_28px_rgba(15,23,42,0.07)]">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Peak Slot</p>
-            <p className="theme-text-strong mt-2 text-base font-bold text-slate-900">{planningInsights.peakSlot}</p>
+            <p className="theme-text-strong mt-3 text-lg font-bold text-slate-900">{planningInsights.peakSlot}</p>
           </div>
-          <div className="theme-panel rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+          <div className="theme-panel rounded-3xl border border-slate-200 bg-white p-4 shadow-[0_12px_28px_rgba(15,23,42,0.07)]">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Most Used Hall</p>
-            <p className="theme-text-strong mt-2 text-base font-bold text-slate-900">{planningInsights.busiestHall}</p>
+            <p className="theme-text-strong mt-3 text-lg font-bold text-slate-900">{planningInsights.busiestHall}</p>
           </div>
-          <div className="theme-panel rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+          <div className="theme-panel rounded-3xl border border-slate-200 bg-white p-4 shadow-[0_12px_28px_rgba(15,23,42,0.07)]">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Favorite Timetables</p>
-            <p className="theme-text-strong mt-2 text-base font-bold text-slate-900">{animatedInsightMetrics.favorites}</p>
+            <p className="theme-text-strong mt-3 text-lg font-bold text-slate-900">{animatedInsightMetrics.favorites}</p>
           </div>
         </section>
 
