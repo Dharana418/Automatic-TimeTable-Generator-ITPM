@@ -34,11 +34,7 @@ const makeProblem = ({ batchId, dayType = 'any' }) => buildProblem(
     instructors: [],
   },
   {
-    logicalScheduling: true,
-    fixedSessionBlueprint: true,
-    lectureSessionsPerWeek: 1,
-    labSessionsPerWeek: 0,
-    tutorialSessionsPerWeek: 0,
+    logicalScheduling: false,
   }
 );
 
