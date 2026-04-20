@@ -12,18 +12,21 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const WEEKEND = ['Sat', 'Sun'];
 const WEEKDAY_SLOTS = [
+  '08:00-09:00',
   '09:00-10:00',
   '10:00-11:00',
   '11:00-12:00',
-  '13:30-14:30',
-  '14:30-15:30',
-  '15:30-16:30',
-  '16:30-17:30',
+  '12:00-13:00',
+  '13:00-14:00',
+  '14:00-15:00',
+  '15:00-16:00',
+  '16:00-17:00',
 ];
 const WEEKEND_SLOTS = [
   ...WEEKDAY_SLOTS,
-  '17:30-18:30',
-  '18:30-19:30',
+  '17:00-18:00',
+  '18:00-19:00',
+  '19:00-20:00',
   '19:30-20:30',
 ];
 const SLOTS = [...WEEKEND_SLOTS];
@@ -144,7 +147,197 @@ function getModuleStructureRequirements(module = {}) {
   };
 }
 
-function hallMatchesModule(hall, module) {
+function getModuleCampus(module = {}) {
+  const details = module?.details || {};
+  return normalizeText(details.campus || details.campusName || module.campus || module.campus_name);
+}
+
+function getHallCampus(hall = {}) {
+  const features = hall?.features || {};
+  return normalizeText(features.campus || features.campusName || hall.campus || hall.campus_name);
+}
+
+function getModuleCohortKey(module = {}) {
+  const details = module?.details || {};
+
+  const specialization = normalizeText(
+    details.specialization || details.spec || details.stream || module.specialization || module.department
+  ) || 'general';
+  const academicYear = String(module?.academic_year || details?.academic_year || details?.year || 'na').trim().toLowerCase();
+  const semester = String(module?.semester || details?.semester || details?.sem || 'na').trim().toLowerCase();
+  const campus = getModuleCampus(module) || 'anycampus';
+
+  return `cohort:${specialization}:y${academicYear}:s${semester}:c${campus}`;
+}
+
+function normalizeSpecializationToken(value = '') {
+  const normalized = normalizeText(value).replace(/[^a-z0-9]/g, '');
+  const aliases = {
+    computerscience: 'cs',
+    informationsystemengineering: 'ise',
+    interactmedia: 'im',
+    interactivemedia: 'im',
+    cybersecurity: 'cybersecurity',
+  };
+
+  return aliases[normalized] || normalized;
+}
+
+function parseBatchIdentity(batchId = '') {
+  const [yearToken = '', semesterToken = '', modeToken = '', specializationToken = '', groupToken = '', subgroupToken = ''] = String(batchId)
+    .trim()
+    .split('.');
+
+  if (!yearToken || !semesterToken || !modeToken || !specializationToken || !groupToken || !subgroupToken) {
+    return null;
+  }
+
+  return {
+    year: Number(String(yearToken).replace(/[^0-9]/g, '')),
+    semester: Number(String(semesterToken).replace(/[^0-9]/g, '')),
+    mode: normalizeText(modeToken),
+    specialization: normalizeSpecializationToken(specializationToken),
+    group: String(groupToken).trim(),
+    subgroup: String(subgroupToken).trim(),
+  };
+}
+
+function inferModuleYear(module = {}) {
+  const details = module?.details || {};
+  const direct = Number(module?.academic_year || details?.academic_year || details?.year || 0);
+  if (direct >= 1 && direct <= 10) return direct;
+
+  const match = String(module?.code || '').toUpperCase().match(/^[A-Z]+(\d)/);
+  return match ? Number(match[1]) : null;
+}
+
+function inferModuleSemester(module = {}) {
+  const details = module?.details || {};
+  const direct = Number(module?.semester || details?.semester || details?.sem || 0);
+  if (direct === 1 || direct === 2) return direct;
+  return null;
+}
+
+function inferModuleSpecialization(module = {}) {
+  const details = module?.details || {};
+  const explicit =
+    details?.specialization ||
+    details?.spec ||
+    details?.stream ||
+    module?.specialization ||
+    module?.department ||
+    '';
+
+  const normalizedExplicit = normalizeSpecializationToken(explicit);
+  if (normalizedExplicit) return normalizedExplicit;
+
+  const code = String(module?.code || '').toLowerCase();
+  if (code.startsWith('it')) return 'it';
+  if (code.startsWith('se')) return 'se';
+  if (code.startsWith('ds')) return 'ds';
+  if (code.startsWith('is')) return 'ise';
+  if (code.startsWith('cs')) return 'cs';
+  if (code.startsWith('cn')) return 'cn';
+  if (code.startsWith('im') || code.startsWith('ie')) return 'im';
+  return '';
+}
+
+function getTargetBatchesForModule(module = {}, batches = []) {
+  const details = module?.details || {};
+  const explicitBatchIds = [
+    ...(Array.isArray(details.batch_ids) ? details.batch_ids : []),
+    ...(Array.isArray(details.batchIds) ? details.batchIds : []),
+    details.batch_id,
+    details.batchId,
+    module.batch_id,
+  ]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+
+  if (explicitBatchIds.length) {
+    const idSet = new Set(explicitBatchIds);
+    return batches.filter((batch) => idSet.has(String(batch?.id || '').trim()));
+  }
+
+  const moduleYear = inferModuleYear(module);
+  const moduleSemester = inferModuleSemester(module);
+  const moduleSpecialization = inferModuleSpecialization(module);
+  const dayType = normalizeText(module?.day_type || details?.day_type || 'weekday');
+
+  return batches.filter((batch) => {
+    const parsed = parseBatchIdentity(batch?.id || batch?.name || '');
+    if (!parsed) return false;
+
+    if (moduleYear && parsed.year && parsed.year !== moduleYear) return false;
+    if (moduleSemester && parsed.semester && parsed.semester !== moduleSemester) return false;
+    if (moduleSpecialization && parsed.specialization !== moduleSpecialization) return false;
+
+    if (dayType === 'weekend' && parsed.mode !== 'we') return false;
+    if ((dayType === 'weekday' || dayType === '') && parsed.mode !== 'wd') return false;
+
+    return true;
+  });
+}
+
+function parsePositiveInteger(value, fallback) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  const normalized = Math.round(parsed);
+  return normalized > 0 ? normalized : fallback;
+}
+
+function getModuleSessionBlueprints(module = {}, options = {}) {
+  const details = module?.details || {};
+  const logicalMode = options.logicalScheduling !== false;
+
+  if (options.fixedSessionBlueprint === true) {
+    const fixedLectureDuration = parsePositiveInteger(options.lectureDurationHours, 3);
+    const fixedLabDuration = parsePositiveInteger(options.labDurationHours, 2);
+
+    return [
+      { type: 'lecture', count: 1, durationSlots: fixedLectureDuration },
+      { type: 'lab', count: 1, durationSlots: fixedLabDuration },
+    ];
+  }
+
+  const lectureCount = parsePositiveInteger(
+    details.lecture_sessions_per_week || module.lecture_sessions_per_week || options.lectureSessionsPerWeek,
+    logicalMode ? 1 : parsePositiveInteger(module.lectures_per_week || details.lectures_per_week, 1)
+  );
+
+  const lectureDuration = parsePositiveInteger(
+    details.lecture_hours || details.lectureDurationHours || module.lecture_hours || options.lectureDurationHours,
+    logicalMode ? 3 : 1
+  );
+
+  const forceLabAndTutorial = logicalMode && options.enforceWeeklyLabAndTutorial !== false;
+
+  const labCount = parsePositiveInteger(
+    details.lab_sessions_per_week || module.lab_sessions_per_week || options.labSessionsPerWeek,
+    forceLabAndTutorial ? 1 : 0
+  );
+  const labDuration = parsePositiveInteger(
+    details.lab_hours || details.h_l || details.labDurationHours || module.lab_hours || options.labDurationHours,
+    2
+  );
+
+  const tutorialCount = parsePositiveInteger(
+    details.tutorial_sessions_per_week || module.tutorial_sessions_per_week || options.tutorialSessionsPerWeek,
+    forceLabAndTutorial ? 1 : 0
+  );
+  const tutorialDuration = parsePositiveInteger(
+    details.tutorial_hours || details.h_t || details.tutorialDurationHours || module.tutorial_hours || options.tutorialDurationHours,
+    1
+  );
+
+  return [
+    { type: 'lecture', count: lectureCount, durationSlots: lectureDuration },
+    { type: 'lab', count: labCount, durationSlots: labDuration },
+    { type: 'tutorial', count: tutorialCount, durationSlots: tutorialDuration },
+  ].filter((entry) => entry.count > 0 && entry.durationSlots > 0);
+}
+
+function hallMatchesModule(hall, module, sessionType = 'lecture') {
   const details = module?.details || {};
   const preferredHallIdsRaw = [
     ...(Array.isArray(details.preferredHallIds) ? details.preferredHallIds : []),
@@ -161,6 +354,12 @@ function hallMatchesModule(hall, module) {
   );
 
   if (preferredHallIds.size > 0 && !preferredHallIds.has(String(hall?.id || '').trim())) {
+    return false;
+  }
+
+  const moduleCampus = getModuleCampus(module);
+  const hallCampus = getHallCampus(hall);
+  if (moduleCampus && hallCampus && moduleCampus !== hallCampus) {
     return false;
   }
 
@@ -198,6 +397,17 @@ function hallMatchesModule(hall, module) {
     }
   }
 
+  if (sessionType === 'lab' && !hallType.includes('lab')) {
+    return false;
+  }
+
+  if (sessionType === 'tutorial') {
+    const isTutorialFriendly = hallType.includes('tutorial') || hallType.includes('lecture') || hallType.includes('class');
+    if (!isTutorialFriendly && hallType) {
+      return false;
+    }
+  }
+
   const moduleRoomType = String(module?.details?.roomType || module?.details?.room_type || module?.roomType || '').toLowerCase();
   const hallRoomType = String(hall?.features?.roomType || hall?.features?.room_type || '').toLowerCase();
   if (!moduleRoomType || !hallRoomType) return true;
@@ -223,27 +433,49 @@ function resolveWeekdayFreeDay(options = {}) {
   return configuredDay;
 }
 
-function getAllowedDays(module, options = {}) {
-  const dt = String(module.day_type || module?.details?.day_type || 'weekday').toLowerCase();
+function normalizeBatchMode(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'we' || normalized === 'weekend') return 'WE';
+  if (normalized === 'wd' || normalized === 'weekday') return 'WD';
+  return '';
+}
+
+function resolveSessionBatchMode(session = {}) {
+  const targetBatch = session?.targetBatch;
+  if (targetBatch) {
+    const parsed = parseBatchIdentity(targetBatch.id || targetBatch.name || '');
+    const fromBatch = normalizeBatchMode(parsed?.mode || targetBatch.mode || targetBatch.dayType);
+    if (fromBatch) return fromBatch;
+  }
+
+  return normalizeBatchMode(session?.module?.day_type || session?.module?.details?.day_type);
+}
+
+function getAllowedDays(session, options = {}) {
+  const dt = resolveSessionBatchMode(session) || String(session.module.day_type || session.module?.details?.day_type || 'weekday').toLowerCase();
   const weekdayFreeDay = resolveWeekdayFreeDay(options);
 
   const weekdayDays = WEEKDAYS.filter((day) => day !== weekdayFreeDay);
   const safeWeekdayDays = weekdayDays.length ? weekdayDays : [...WEEKDAYS];
 
+  // CONSTRAINT: Lectures and labs can ONLY be on weekdays (Mon-Fri)
+  // Only explicitly 'weekend' type modules get weekend slots
   if (dt === 'weekend') return WEEKEND;
-  if (dt === 'any' || dt === 'both') return [...safeWeekdayDays, ...WEEKEND];
+  if (dt === 'we') return WEEKEND;
+  // 'weekday', 'any', 'both' all follow weekday constraint
   return safeWeekdayDays;
 }
 
-function getAllowedSlotIndexes(module, allSlots = SLOTS) {
-  const dt = String(module.day_type || module?.details?.day_type || 'weekday').toLowerCase();
+function getAllowedSlotIndexes(session, allSlots = SLOTS) {
+  const dt = resolveSessionBatchMode(session) || String(session.module.day_type || session.module?.details?.day_type || 'weekday').toLowerCase();
 
+  // CONSTRAINT: Lectures and labs can ONLY be on weekdays (Mon-Fri)
+  // Only explicitly 'weekend' type modules get extended weekend slots
   const allowedLabels =
     dt === 'weekend'
+      || dt === 'we'
       ? WEEKEND_SLOTS
-      : dt === 'any' || dt === 'both'
-        ? allSlots
-        : WEEKDAY_SLOTS;
+      : WEEKDAY_SLOTS; // 'weekday', 'any', 'both' all use weekday slots only
 
   const allowedSet = new Set();
   allSlots.forEach((label, idx) => {
@@ -284,6 +516,9 @@ function getModuleBatchKeys(module, batches = []) {
     keys.add(`module:${module.id || module.code || module.name}`);
   }
 
+  // Force same cohort modules (specialization + year + semester + campus) to avoid overlap.
+  keys.add(getModuleCohortKey(module));
+
   return [...keys];
 }
 
@@ -302,25 +537,35 @@ export function buildProblem(constraints = {}, options = {}) {
 
   const sessions = [];
   modules.forEach((module) => {
-    const lectures = Number(module.lectures_per_week || module.lectures || module?.details?.lectures_per_week || 1);
-    const sessionCount = Number.isFinite(lectures) ? Math.max(1, Math.round(lectures)) : 1;
+    const components = getModuleSessionBlueprints(module, options);
+    const targetBatches = getTargetBatchesForModule(module, batches);
+    let runningIndex = 0;
 
-    for (let i = 0; i < sessionCount; i += 1) {
-      sessions.push({
-        module,
-        sessionIndex: i,
-        isLab: isLabModule(module),
-        durationSlots: getLabSpan(module),
-        expectedStudents: getModuleExpectedSize(module),
-        batchKeys: getModuleBatchKeys(module, batches),
+    const resolvedTargets = targetBatches.length ? targetBatches : [null];
+
+    resolvedTargets.forEach((targetBatch) => {
+      components.forEach((component) => {
+        for (let i = 0; i < component.count; i += 1) {
+          sessions.push({
+            module,
+            targetBatch,
+            sessionType: component.type,
+            sessionIndex: runningIndex,
+            isLab: component.type === 'lab' || isLabModule(module),
+            durationSlots: component.type === 'lab' ? Math.max(2, component.durationSlots) : component.durationSlots,
+            expectedStudents: Number(targetBatch?.capacity || getModuleExpectedSize(module)),
+            batchKeys: targetBatch?.id ? [String(targetBatch.id)] : getModuleBatchKeys(module, batches),
+          });
+          runningIndex += 1;
+        }
       });
-    }
+    });
   });
 
   const placements = sessions.map((session) => {
     const possible = [];
-    const allowedDays = getAllowedDays(session.module, options);
-    const allowedSlotIndexes = getAllowedSlotIndexes(session.module, SLOTS);
+    const allowedDays = getAllowedDays(session, options);
+    const allowedSlotIndexes = getAllowedSlotIndexes(session, SLOTS);
     const maxStart = SLOTS.length - session.durationSlots;
 
     for (const day of allowedDays) {
@@ -331,7 +576,7 @@ export function buildProblem(constraints = {}, options = {}) {
 
         for (let hallIndex = 0; hallIndex < halls.length; hallIndex += 1) {
           const hall = halls[hallIndex];
-          if (!hallMatchesModule(hall, session.module)) continue;
+          if (!hallMatchesModule(hall, session.module, session.sessionType)) continue;
 
           if (!instructors.length) {
             possible.push({ day, slotIndexes, hallIndex, instructorIndex: null });
@@ -348,7 +593,7 @@ export function buildProblem(constraints = {}, options = {}) {
     }
 
     if (!possible.length && halls.length) {
-      const fallbackDays = getAllowedDays(session.module, options);
+      const fallbackDays = getAllowedDays(session, options);
       const maxStartFallback = Math.max(0, SLOTS.length - session.durationSlots);
       for (const day of fallbackDays) {
         for (let start = 0; start <= maxStartFallback; start += 1) {
@@ -470,8 +715,11 @@ export function evaluateSolution(solution, problem, options = {}) {
     schedule.push({
       moduleId: session.module.id || session.module.code || session.module.name,
       moduleName: session.module.name || null,
+      sessionType: session.sessionType || 'lecture',
       isLab: session.isLab,
       durationSlots: session.durationSlots,
+      batchId: session.targetBatch?.id || null,
+      batchName: session.targetBatch?.name || session.targetBatch?.id || null,
       instructorId: instructor ? (instructor.id || instructor._id || instructor.email || instructor.name) : null,
       instructorName: instructor?.name || null,
       hallId: hall?.id || hall?.name || null,

@@ -169,6 +169,7 @@ export default function AcademicAssignmentsPage({ user }) {
       title="Module Assignments Matrix"
       subtitle="Map instructional staff to specific modules to ensure a complete teaching load."
       badge="Assignments"
+      themeVariant="academic"
     >
       <style>{`
         .ac-input-hover:focus { border-color: rgba(245,158,11,0.5) !important; box-shadow: 0 0 0 3px rgba(245,158,11,0.1) !important; }

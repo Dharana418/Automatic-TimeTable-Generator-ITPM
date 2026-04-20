@@ -1,602 +1,351 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-/* ── SVG icon set ─────────────────────────────────────────────── */
-const Icon = {
-  grid: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-      <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" />
-      <rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" />
-    </svg>
-  ),
-  calendar: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-      <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-    </svg>
-  ),
-  users: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  ),
-  building: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-      <path d="M3 21h18" />
-      <path d="M5 21V7l8-4v18" />
-      <path d="M19 21V11l-6-4" />
-      <path d="M9 9h1" />
-      <path d="M9 13h1" />
-      <path d="M9 17h1" />
-      <path d="M13 13h1" />
-      <path d="M13 17h1" />
-      <path d="M17 15h1" />
-      <path d="M17 19h1" />
-    </svg>
-  ),
-  book: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-    </svg>
-  ),
-  archive: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-      <rect x="3" y="4" width="18" height="5" rx="1" />
-      <path d="M5 9h14v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V9Z" />
-      <path d="M10 13h4" />
-    </svg>
-  ),
-  activity: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-    </svg>
-  ),
-  settings: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-      <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 0-.33 1V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-.33-1 1.65 1.65 0 0 0-1-.6 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 0-1-.33H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1-.33 1.65 1.65 0 0 0 .6-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6 1.65 1.65 0 0 0 .33-1V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 .33 1 1.65 1.65 0 0 0 1 .6 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.22.31.51.55.86.69.32.13.66.2 1 .2H21a2 2 0 1 1 0 4h-.09c-.34 0-.68.07-1 .2a1.65 1.65 0 0 0-.51.33Z" />
-    </svg>
-  ),
-  chevronLeft: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-      <polyline points="15 18 9 12 15 6" />
-    </svg>
-  ),
-  chevronRight: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-      <polyline points="9 18 15 12 9 6" />
-    </svg>
-  ),
-  menu: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-      <line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" />
-    </svg>
-  ),
-  bell: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
-    </svg>
-  ),
-  shield: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    </svg>
-  ),
-};
-
 const normalizeRoleKey = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-const FACULTY_NAV_GROUPS = [
-  {
-    title: 'Workspace',
-    items: [
-      { id: 'overview', label: 'Overview', to: '/dashboard', icon: Icon.grid },
-      { id: 'timetable', label: 'Timetables', to: '/scheduler/by-year', icon: Icon.calendar },
-      { id: 'timetableReport', label: 'Timetable Sidebar View', to: '/faculty/timetable-report', icon: Icon.calendar },
-    ],
-  },
-  {
-    title: 'Coordination',
-    items: [
-      { id: 'batches', label: 'Batches', to: '/faculty/batches', icon: Icon.users },
-      { id: 'modules', label: 'Modules', to: '/faculty/modules', icon: Icon.book },
-      { id: 'addedModules', label: 'Added Modules', to: '/faculty/modules/added', icon: Icon.archive },
-      { id: 'hallAllocations', label: 'Hall Allocations', to: '/faculty/hall-allocations', icon: Icon.building },
-    ],
-  },
-];
+/* ---------------- ICONS ---------------- */
+const Icon = {
+  grid: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>,
+  calendar: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+  users: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><circle cx="9" cy="7" r="4"/><path d="M17 21v-2a4 4 0 0 0-4-4H5"/></svg>,
+  book: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/></svg>,
+  shield: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><path d="M12 3l7 4v5c0 5-3.5 8-7 9-3.5-1-7-4-7-9V7l7-4z"/></svg>,
+  warning: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+  chevronLeft: <svg viewBox="0 0 24 24" stroke="currentColor" className="h-4 w-4"><polyline points="15 18 9 12 15 6"/></svg>,
+  chevronRight: <svg viewBox="0 0 24 24" stroke="currentColor" className="h-4 w-4"><polyline points="9 18 15 12 9 6"/></svg>,
+  menu: <svg viewBox="0 0 24 24" stroke="currentColor" className="h-5 w-5"><line x1="3" y1="12" x2="21"/><line x1="3" y1="6" x2="21"/><line x1="3" y1="18" x2="21"/></svg>,
+  bell: <svg viewBox="0 0 24 24" stroke="currentColor" className="h-4 w-4"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18"/></svg>,
+};
 
-const ACADEMIC_NAV_GROUPS = [
-  {
-    title: 'Mission Control',
-    items: [
-      { id: 'overview', label: 'Overview Dashboard', to: '/dashboard', icon: Icon.grid },
-      { id: 'conflicts', label: 'Conflict Resolutions', to: '/academic/conflicts', icon: Icon.shield, color: '#ef4444' },
-      { id: 'assignments', label: 'Module Assignments', to: '/academic/assignments', icon: Icon.activity, color: '#f59e0b' },
-      { id: 'hallAllocations', label: 'Hall Allocations', to: '/faculty/hall-allocations', icon: Icon.building, color: '#ef4444' },
-    ],
-  },
-  {
-    title: 'Registry Tools',
-    items: [
-      { id: 'modules', label: 'Module Registry', to: '/academic/modules', icon: Icon.book, color: '#38bdf8' },
-      { id: 'personnel', label: 'Personnel Roster', to: '/academic/personnel', icon: Icon.users, color: '#a78bfa' },
-      { id: 'calendar', label: 'Academic Calendar', to: '/academic/calendar', icon: Icon.calendar, color: '#f472b6' },
-      { id: 'timetable', label: 'Timetables', to: '/scheduler/by-year', icon: Icon.grid, color: '#4ade80' },
-    ],
-  },
-];
+/* ---------------- NAV ---------------- */
+const getRoleNav = (roleKey) => {
+  const common = [{ id: 'dashboard', label: 'Dashboard', to: '/dashboard', icon: Icon.grid }];
+
+  if (roleKey === 'academiccoordinator') {
+    return [
+      ...common,
+      { id: 'academic-modules', label: 'Module Registry', to: '/academic/modules', icon: Icon.book },
+      { id: 'academic-personnel', label: 'Personnel', to: '/academic/personnel', icon: Icon.users },
+      { id: 'academic-assignments', label: 'Assignments', to: '/academic/assignments', icon: Icon.calendar },
+      { id: 'academic-calendar', label: 'Calendar', to: '/academic/calendar', icon: Icon.calendar },
+      { id: 'academic-conflicts', label: 'Conflicts', to: '/academic/conflicts', icon: Icon.warning },
+      { id: 'academic-halls', label: 'Hall Allocation', to: '/academic/hall-allocation', icon: Icon.grid },
+      { id: 'shared-added-modules', label: 'Added Modules', to: '/faculty/modules/added', icon: Icon.book },
+    ];
+  }
+
+  if (roleKey === 'facultycoordinator') {
+    return [
+      ...common,
+      { id: 'scheduler', label: 'Scheduler', to: '/scheduler/by-year', icon: Icon.calendar },
+      { id: 'faculty-modules', label: 'Modules', to: '/faculty/modules', icon: Icon.book },
+      { id: 'faculty-added-modules', label: 'Added Modules', to: '/faculty/modules/added', icon: Icon.book },
+      { id: 'faculty-batches', label: 'Batches', to: '/faculty/batches', icon: Icon.users },
+      { id: 'faculty-report', label: 'Timetable Report', to: '/faculty/timetable-report', icon: Icon.calendar },
+    ];
+  }
+
+  if (roleKey === 'admin') {
+    return [
+      ...common,
+      { id: 'admin-role-history', label: 'Role History', to: '/admin/role-history', icon: Icon.shield },
+    ];
+  }
+
+  return common;
+};
+
+const getRoleWorkspaceLabel = (roleKey) => {
+  if (roleKey === 'academiccoordinator') return 'Academic Governance Workspace';
+  if (roleKey === 'facultycoordinator') return 'Faculty Scheduling Workspace';
+  if (roleKey === 'admin') return 'Administration Workspace';
+  if (roleKey === 'lic') return 'LIC Workspace';
+  if (roleKey === 'instructor') return 'Instructor Workspace';
+  return 'Unified Academic Workspace';
+};
+
+/* ---------------- COMPONENT ---------------- */
 
 export default function FacultyCoordinatorShell({
   user,
   title,
   subtitle,
-  badge = 'Academic Coordination',
-  backgroundImage,
   children,
-  headerActions,
-  footerNote,
-  navigationGroups,
   brandCode = 'FC',
   brandTitle = 'Faculty Coordinator',
   brandSubtitle = 'Scheduling Console',
+  badge = 'Faculty Workspace',
+  backgroundImage = null,
+  footerNote = 'Faculty coordinator workspace',
+  themeVariant = 'dark',
+  headerActions = null,
   sidebarSections = [],
 }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [hoveredNavId, setHoveredNavId] = useState('');
+  const roleKey = normalizeRoleKey(user?.role);
 
-  const displayName = user?.name || user?.username || 'Faculty Coordinator';
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [activeSectionId, setActiveSectionId] = useState('');
+  const navItems = useMemo(() => getRoleNav(roleKey), [roleKey]);
+  const workspaceLabel = useMemo(() => getRoleWorkspaceLabel(roleKey), [roleKey]);
+
+  const displayName = user?.name || 'Coordinator';
+
   const initials = useMemo(() => {
-    const chars = displayName
+    return displayName
       .split(' ')
-      .map((p) => p[0])
+      .map((x) => x[0])
       .join('')
       .slice(0, 2)
       .toUpperCase();
-    return chars || 'FC';
   }, [displayName]);
 
-  const currentYear = new Date().getFullYear();
-  const roleKey = normalizeRoleKey(user?.role);
-
-  const roleDefaultNavGroups = roleKey === 'academiccoordinator' ? ACADEMIC_NAV_GROUPS : FACULTY_NAV_GROUPS;
-
-  const navGroups = useMemo(() => {
-    const baseGroups = Array.isArray(navigationGroups) && navigationGroups.length
-      ? navigationGroups
-      : roleDefaultNavGroups;
-
-    if (!Array.isArray(sidebarSections) || !sidebarSections.length) {
-      return baseGroups;
-    }
-
-    const defaultSectionIcons = {
-      fcOverview: Icon.grid,
-      fcOperations: Icon.users,
-      fcActivity: Icon.activity,
-      fcTimetables: Icon.calendar,
-      fcSoftConstraints: Icon.settings,
-    };
-
-    const sectionGroup = {
-      title: 'Dashboard Sections',
-      items: sidebarSections.map((section, index) => ({
-        id: section.id || `section-${index}`,
-        label: section.label || `Section ${index + 1}`,
-        to: `/dashboard#${section.id || `section-${index}`}`,
-        icon: section.icon || defaultSectionIcons[section.id] || Icon.grid,
-        type: 'section',
-      })),
-    };
-
-    return [...baseGroups, sectionGroup];
-  }, [navigationGroups, roleDefaultNavGroups, sidebarSections]);
-
-  const hexToRgba = (hex, alpha) => {
-    const cleanHex = String(hex || '').replace('#', '');
-    if (!/^[\da-fA-F]{6}$/.test(cleanHex)) {
-      return `rgba(34, 197, 94, ${alpha})`;
-    }
-    const r = parseInt(cleanHex.slice(0, 2), 16);
-    const g = parseInt(cleanHex.slice(2, 4), 16);
-    const b = parseInt(cleanHex.slice(4, 6), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  };
-
-  const scrollToSection = (sectionId) => {
-    const target = document.getElementById(sectionId);
-    if (!target) {
-      return false;
-    }
-
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    return true;
-  };
-
-  const handleNavItemClick = (item) => {
-    if (item.type === 'section') {
-      const sectionId = item.id;
-      if (location.pathname === '/dashboard') {
-        navigate(`/dashboard#${sectionId}`);
-        setTimeout(() => {
-          scrollToSection(sectionId);
-        }, 80);
-      } else {
-        navigate(`/dashboard#${sectionId}`);
-      }
-      setMobileOpen(false);
-      return;
-    }
-
-    navigate(item.to);
-    setMobileOpen(false);
-  };
-
   useEffect(() => {
-    const previousScrollBehavior = document.documentElement.style.scrollBehavior;
     document.documentElement.style.scrollBehavior = 'smooth';
-
     return () => {
-      document.documentElement.style.scrollBehavior = previousScrollBehavior;
+      document.documentElement.style.scrollBehavior = 'auto';
     };
   }, []);
 
   useEffect(() => {
-    if (location.pathname !== '/dashboard' || !location.hash) {
-      return;
-    }
+    if (!Array.isArray(sidebarSections) || sidebarSections.length === 0) return;
 
-    const sectionId = location.hash.replace('#', '');
-    const timer = setTimeout(() => {
-      scrollToSection(sectionId);
-    }, 80);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
 
-    return () => clearTimeout(timer);
-  }, [location.pathname, location.hash]);
+        if (visible.length > 0) {
+          setActiveSectionId(visible[0].target.id);
+        }
+      },
+      { rootMargin: '-120px 0px -45% 0px', threshold: [0.15, 0.4, 0.7] },
+    );
+
+    const targets = sidebarSections
+      .map((section) => document.getElementById(section.id))
+      .filter(Boolean);
+
+    targets.forEach((target) => observer.observe(target));
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [sidebarSections, location.pathname]);
+
+  const isLightTheme = themeVariant === 'light';
+  const isAcademicTheme = themeVariant === 'academic';
+
+  const jumpToSection = (sectionId) => {
+    const target = document.getElementById(sectionId);
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setMobileOpen(false);
+  };
 
   return (
-    <div
-      className="relative min-h-screen overflow-x-hidden fc-shell-layout"
-      style={{
-        fontFamily: "'Inter', 'Segoe UI', sans-serif",
-        backgroundImage: backgroundImage
-          ? `linear-gradient(135deg, rgba(15,23,42,0.66) 0%, rgba(12,22,40,0.58) 55%, rgba(15,23,42,0.68) 100%), url(${backgroundImage})`
-          : 'linear-gradient(135deg, #091120 0%, #152238 52%, #091120 100%)',
-        backgroundSize: backgroundImage ? 'cover' : 'auto',
-        backgroundPosition: backgroundImage ? 'center' : 'initial',
-        backgroundRepeat: backgroundImage ? 'no-repeat' : 'repeat',
-        backgroundAttachment: backgroundImage ? 'fixed' : 'scroll',
-      }}
-    >
-      {/* Animated background orbs */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden" style={{ zIndex: 0 }}>
-        <div style={{ position: 'absolute', width: 600, height: 600, top: '-200px', left: '-150px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(34,197,94,0.1) 0%, transparent 70%)', animation: 'fcOrb1 20s ease-in-out infinite' }} />
-        <div style={{ position: 'absolute', width: 500, height: 500, bottom: '-100px', right: '-100px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(245,158,11,0.08) 0%, transparent 70%)', animation: 'fcOrb2 25s ease-in-out infinite' }} />
-        <div style={{ position: 'absolute', width: 300, height: 300, top: '40%', left: '50%', borderRadius: '50%', background: 'radial-gradient(circle, rgba(225,29,72,0.06) 0%, transparent 70%)', animation: 'fcOrb3 18s ease-in-out infinite' }} />
-      </div>
+    <div className={`fc-spacing-system relative min-h-screen overflow-hidden ${isLightTheme ? 'bg-slate-100 text-slate-900' : isAcademicTheme ? 'bg-[#040a16] text-slate-100' : 'bg-[#07111f] text-slate-100'}`}>
+      <div className={`pointer-events-none absolute inset-0 ${isLightTheme
+        ? 'bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.18),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(59,130,246,0.14),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.10),_transparent_30%),linear-gradient(145deg,_rgba(248,250,252,0.98),_rgba(240,249,255,0.96)_40%,_rgba(239,246,255,0.96)_100%)]'
+        : isAcademicTheme
+          ? 'bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.22),_transparent_32%),radial-gradient(circle_at_top_right,_rgba(14,165,233,0.22),_transparent_30%),radial-gradient(circle_at_bottom_left,_rgba(59,130,246,0.16),_transparent_34%),linear-gradient(155deg,_rgba(8,15,30,0.97),_rgba(4,12,28,0.99))]'
+          : 'bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.26),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(99,102,241,0.24),_transparent_28%),radial-gradient(circle_at_bottom_left,_rgba(14,165,233,0.16),_transparent_34%),linear-gradient(155deg,_rgba(10,20,38,0.95),_rgba(2,8,24,0.99))]'
+      }`} />
+      <div className={`pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:72px_72px] ${isLightTheme ? 'opacity-60' : isAcademicTheme ? 'opacity-30' : 'opacity-20'}`} />
 
-      <style>{`
-        @keyframes fcOrb1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(40px,-30px) scale(1.1); } }
-        @keyframes fcOrb2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-30px,20px) scale(0.95); } }
-        @keyframes fcOrb3 { 0%,100% { transform: translate(-50%,0) scale(1); } 50% { transform: translate(-50%,-20px) scale(1.08); } }
-        @keyframes fcSlideIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes fcPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-        @keyframes fcShimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-        .fc-nav-item { transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1); }
-        .fc-nav-item:hover { transform: translateX(3px); }
-        .fc-card-hover { transition: all 0.25s cubic-bezier(0.4,0,0.2,1); }
-        .fc-card-hover:hover { transform: translateY(-2px); }
-        .fc-btn { transition: all 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
-        .fc-btn:hover { transform: translateY(-1px); }
-        .fc-btn:active { transform: translateY(0); }
-        .fc-animate-in { animation: fcSlideIn 0.4s ease forwards; }
-        .fc-pulse-dot { animation: fcPulse 2s infinite; }
-        .fc-shell-sidebar {
-          position: fixed;
-          top: 0;
-          left: 0;
-          bottom: 0;
-          z-index: 50;
-          overflow-y: auto;
-        }
-        .fc-main-shell {
-          margin-left: 0;
-          width: 100%;
-        }
-        @media (min-width: 1024px) {
-          .fc-shell-sidebar {
-            top: 64px; /* Flush with the top Navigation bar */
-            bottom: 0px; /* Stretch completely to the bottom */
-            z-index: 40;
-            border-top-right-radius: 0px;
-            border-bottom-right-radius: 18px;
-          }
-          .fc-main-shell {
-            margin-left: var(--fc-sidebar-width);
-            width: calc(100% - var(--fc-sidebar-width));
-          }
-        }
-      `}</style>
-
-      {/* Mobile overlay */}
-      {mobileOpen && (
-        <button
-          type="button"
-          style={{ position: 'fixed', inset: 0, zIndex: 40, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+      <div className="relative grid min-h-screen grid-cols-1 lg:grid-cols-[auto_minmax(0,1fr)] lg:gap-6 lg:px-4 lg:pt-6">
+        <div
+          className={`fixed inset-0 z-30 ${isLightTheme ? 'bg-slate-900/35' : 'bg-black/55'} backdrop-blur-sm transition-opacity duration-300 lg:hidden ${mobileOpen ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
           onClick={() => setMobileOpen(false)}
-          aria-label="Close sidebar"
         />
-      )}
 
-      {/* Sidebar */}
-      <aside
-        style={{
-          display: 'flex', flexDirection: 'column',
-          width: sidebarCollapsed ? 72 : 260,
-          background: 'linear-gradient(180deg, rgba(2,8,23,0.97) 0%, rgba(7,20,43,0.97) 100%)',
-          borderRight: '1px solid rgba(148,163,184,0.1)',
-          boxShadow: '4px 0 40px rgba(0,0,0,0.5)',
-          backdropFilter: 'blur(20px)',
-          transition: 'width 0.3s cubic-bezier(0.4,0,0.2,1)',
-          transform: mobileOpen ? 'translateX(0)' : undefined,
-        }}
-        className={`fc-shell-sidebar ${mobileOpen ? '' : '-translate-x-full'} lg:translate-x-0`}
-      >
-        {/* Brand bar */}
-        <div style={{ padding: sidebarCollapsed ? '20px 12px' : '20px', borderBottom: '1px solid rgba(148,163,184,0.1)', display: 'flex', alignItems: 'center', gap: 12, overflow: 'hidden' }}>
-          <div style={{
-            minWidth: 42, height: 42, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'linear-gradient(135deg, #166534 0%, #22c55e 100%)',
-            boxShadow: '0 8px 24px rgba(34,197,94,0.35)',
-            fontSize: 16, fontWeight: 800, color: '#fff', letterSpacing: 1,
-          }}>
-            {brandCode}
-          </div>
-          {!sidebarCollapsed && (
-            <div style={{ overflow: 'hidden' }}>
-              <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(34,197,94,0.9)', margin: 0 }}>{brandTitle}</p>
-              <p style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', margin: 0, marginTop: 2 }}>{brandSubtitle}</p>
+        {/* SIDEBAR */}
+        <aside className={`fixed left-4 top-24 z-40 flex h-[calc(100vh-7rem)] flex-col overflow-y-auto rounded-[28px] border ${isLightTheme ? 'border-slate-200 bg-white/85 shadow-[0_24px_80px_rgba(15,23,42,0.16)]' : isAcademicTheme ? 'border-emerald-300/20 bg-slate-950/85 shadow-[0_24px_80px_rgba(2,10,24,0.55)]' : 'border-white/10 bg-slate-950/80 shadow-[0_24px_80px_rgba(2,6,23,0.48)]'} backdrop-blur-2xl transition-all duration-300 lg:sticky lg:left-0 lg:top-24 lg:h-[calc(100vh-7rem)]
+          ${collapsed ? 'w-20' : 'w-72'}
+          ${mobileOpen ? 'translate-x-0' : '-translate-x-[110%]'}
+          lg:translate-x-0`}>
+
+          <div className={`absolute inset-0 ${isLightTheme ? 'bg-[radial-gradient(circle_at_top_right,_rgba(14,165,233,0.12),_transparent_34%),radial-gradient(circle_at_bottom_left,_rgba(59,130,246,0.08),_transparent_30%)]' : isAcademicTheme ? 'bg-[radial-gradient(circle_at_top_right,_rgba(16,185,129,0.16),_transparent_34%),radial-gradient(circle_at_bottom_left,_rgba(14,165,233,0.14),_transparent_30%)]' : 'bg-[radial-gradient(circle_at_top_right,_rgba(59,130,246,0.18),_transparent_34%),radial-gradient(circle_at_bottom_left,_rgba(14,165,233,0.16),_transparent_30%)]'}`} />
+
+          <div className={`relative flex items-center gap-3 border-b ${isLightTheme ? 'border-slate-200/80' : 'border-white/10'} p-4`}>
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400 via-sky-500 to-indigo-600 text-sm font-black text-white shadow-[0_10px_24px_rgba(8,145,178,0.32)]">
+              {brandCode}
             </div>
-          )}
-        </div>
+            {!collapsed && (
+              <div className="min-w-0">
+                <p className={`text-[11px] font-semibold uppercase tracking-[0.24em] ${isLightTheme ? 'text-sky-700' : isAcademicTheme ? 'text-emerald-200/90' : 'text-cyan-200/80'}`}>{brandTitle}</p>
+                <p className={`truncate text-sm font-bold ${isLightTheme ? 'text-slate-900' : 'text-white'}`}>{brandSubtitle}</p>
+              </div>
+            )}
+          </div>
 
-        {/* Nav */}
-        <nav style={{ flex: 1, overflowY: 'auto', padding: sidebarCollapsed ? '16px 8px' : '16px 12px', display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {navGroups.map((group) => (
-            <div key={group.title}>
-              {!sidebarCollapsed && (
-                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.6)', marginBottom: 8, paddingLeft: 8 }}>
-                  {group.title}
-                </p>
-              )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {group.items.map((item) => {
-                  const itemAccent = item.color || '#38bdf8';
-                  const isActive = item.type === 'section'
-                    ? location.pathname === '/dashboard' && location.hash === `#${item.id}`
-                    : location.pathname === item.to;
+          <nav className="relative space-y-1 p-3">
+            {navItems.map((item) => {
+              const active = location.pathname === item.to;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    navigate(item.to);
+                    setMobileOpen(false);
+                  }}
+                  className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition duration-200 ${
+                    active
+                      ? (isLightTheme ? 'bg-gradient-to-r from-cyan-100 via-sky-100 to-indigo-100 text-slate-900 shadow-[0_10px_20px_rgba(14,116,144,0.12)] ring-1 ring-cyan-300/60' : isAcademicTheme ? 'bg-gradient-to-r from-emerald-500/18 via-cyan-500/15 to-sky-500/18 text-white shadow-[0_10px_20px_rgba(16,185,129,0.12)] ring-1 ring-emerald-300/25' : 'bg-gradient-to-r from-cyan-500/20 via-sky-500/18 to-indigo-500/20 text-white shadow-[0_10px_20px_rgba(8,145,178,0.14)] ring-1 ring-cyan-400/25')
+                      : (isLightTheme ? 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900' : isAcademicTheme ? 'text-slate-300 hover:bg-emerald-500/10 hover:text-emerald-100' : 'text-slate-300 hover:bg-white/5 hover:text-white')
+                  }`}
+                >
+                  <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${active ? (isLightTheme ? 'bg-white text-cyan-700' : isAcademicTheme ? 'bg-emerald-500/20 text-emerald-100' : 'bg-white/10 text-cyan-100') : (isLightTheme ? 'bg-slate-100 text-slate-600' : isAcademicTheme ? 'bg-slate-900/70 text-slate-300' : 'bg-white/5 text-slate-300')}`}>
+                    {item.icon}
+                  </span>
+                  {!collapsed && <span className="text-sm font-semibold">{item.label}</span>}
+                </button>
+              );
+            })}
+          </nav>
+
+          {Array.isArray(sidebarSections) && sidebarSections.length > 0 && (
+            <div className={`relative mx-3 mb-3 rounded-2xl border p-3 ${isLightTheme ? 'border-slate-200 bg-slate-50/85' : isAcademicTheme ? 'border-emerald-300/20 bg-slate-900/70' : 'border-white/10 bg-slate-900/70'}`}>
+              <p className={`mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${isLightTheme ? 'text-slate-500' : 'text-slate-400'}`}>
+                In Page
+              </p>
+              <div className="space-y-1">
+                {sidebarSections.map((section) => {
+                  const isActive = activeSectionId === section.id;
                   return (
                     <button
-                      key={item.id}
+                      key={section.id}
                       type="button"
-                      className="fc-nav-item"
-                      onClick={() => handleNavItemClick(item)}
-                      onMouseEnter={() => {
-                        if (sidebarCollapsed) setHoveredNavId(item.id);
-                      }}
-                      onMouseLeave={() => {
-                        if (sidebarCollapsed) setHoveredNavId('');
-                      }}
-                      onFocus={() => {
-                        if (sidebarCollapsed) setHoveredNavId(item.id);
-                      }}
-                      onBlur={() => {
-                        if (sidebarCollapsed) setHoveredNavId('');
-                      }}
-                      title={sidebarCollapsed ? item.label : undefined}
-                      style={{
-                        position: 'relative',
-                        display: 'flex', alignItems: 'center', gap: 10,
-                        padding: sidebarCollapsed ? '10px' : '10px 12px',
-                        borderRadius: 12,
-                        border: isActive ? `1px solid ${hexToRgba(itemAccent, 0.38)}` : '1px solid transparent',
-                        background: isActive
-                          ? `linear-gradient(90deg, ${hexToRgba(itemAccent, 0.24)} 0%, ${hexToRgba(itemAccent, 0.14)} 100%)`
-                          : 'transparent',
-                        boxShadow: isActive ? `0 0 0 1px ${hexToRgba(itemAccent, 0.32)}, 0 6px 24px ${hexToRgba(itemAccent, 0.22)}` : 'none',
-                        color: isActive ? '#e0f2fe' : 'rgba(148,163,184,0.85)',
-                        fontSize: 14, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
-                        justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-                      }}
+                      onClick={() => jumpToSection(section.id)}
+                      className={`w-full rounded-xl px-3 py-2 text-left text-xs font-semibold transition ${
+                        isActive
+                          ? (isLightTheme
+                            ? 'bg-white text-sky-700 shadow-[0_8px_18px_rgba(14,116,144,0.14)] ring-1 ring-sky-200'
+                            : isAcademicTheme
+                              ? 'bg-emerald-500/15 text-emerald-100 ring-1 ring-emerald-300/20'
+                              : 'bg-cyan-500/15 text-cyan-100 ring-1 ring-cyan-300/20')
+                          : (isLightTheme
+                            ? 'text-slate-600 hover:bg-white/90 hover:text-slate-900'
+                            : 'text-slate-300 hover:bg-white/5 hover:text-white')
+                      }`}
                     >
-                      <span style={{ color: isActive ? itemAccent : 'rgba(148,163,184,0.7)', flexShrink: 0 }}>{item.icon}</span>
-                      {!sidebarCollapsed && <span>{item.label}</span>}
-                      {sidebarCollapsed && hoveredNavId === item.id && (
-                        <span
-                          style={{
-                            position: 'absolute',
-                            left: 'calc(100% + 10px)',
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            whiteSpace: 'nowrap',
-                            fontSize: 12,
-                            fontWeight: 600,
-                            color: '#f8fafc',
-                            background: 'linear-gradient(135deg, rgba(2,8,23,0.95), rgba(15,23,42,0.95))',
-                            border: '1px solid rgba(148,163,184,0.3)',
-                            borderRadius: 8,
-                            padding: '5px 10px',
-                            boxShadow: '0 8px 20px rgba(0,0,0,0.35)',
-                            pointerEvents: 'none',
-                            zIndex: 70,
-                          }}
-                        >
-                          {item.label}
-                        </span>
-                      )}
-                      {isActive && !sidebarCollapsed && (
-                        <span style={{ marginLeft: 'auto', width: 6, height: 6, borderRadius: '50%', background: itemAccent, flexShrink: 0 }} className="fc-pulse-dot" />
-                      )}
+                      {section.label}
                     </button>
                   );
                 })}
               </div>
             </div>
-          ))}
-        </nav>
+          )}
 
-        {/* User info */}
-        <div style={{ padding: sidebarCollapsed ? '12px 8px' : '12px 16px', borderTop: '1px solid rgba(148,163,184,0.1)' }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            background: 'rgba(15,23,42,0.7)', borderRadius: 12, padding: sidebarCollapsed ? '10px 0' : '10px 12px',
-            border: '1px solid rgba(148,163,184,0.08)',
-            justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-          }}>
-            <div style={{
-              width: 34, height: 34, minWidth: 34, borderRadius: '50%',
-              background: 'linear-gradient(135deg, #14532d, #22c55e)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, fontWeight: 800, color: '#fff',
-            }}>{initials}</div>
-            {!sidebarCollapsed && (
-              <div style={{ overflow: 'hidden' }}>
-                <p style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</p>
-                <p style={{ fontSize: 10, color: '#34d399', margin: 0, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' }}>● Active Session</p>
+          <div className={`mt-auto flex items-center gap-3 border-t ${isLightTheme ? 'border-slate-200/80 bg-white/70' : 'border-white/10 bg-slate-950/60'} p-4 backdrop-blur-xl`}>
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400 to-cyan-500 text-sm font-bold text-white shadow-lg shadow-cyan-950/20">
+              {initials}
+            </div>
+            {!collapsed && (
+              <div className="min-w-0">
+                <p className={`truncate text-sm font-semibold ${isLightTheme ? 'text-slate-900' : 'text-white'}`}>{displayName}</p>
+                <p className={`text-xs ${isLightTheme ? 'text-slate-500' : 'text-slate-400'}`}>Active session</p>
               </div>
             )}
           </div>
-        </div>
 
-        {/* Collapse toggle */}
-        <button
-          type="button"
-          onClick={() => setSidebarCollapsed((p) => !p)}
-          style={{
-            position: 'absolute', top: 24, right: -12,
-            width: 24, height: 24, borderRadius: '50%',
-            background: 'linear-gradient(135deg, #0ea5e9, #6366f1)',
-            border: '2px solid rgba(2,8,23,0.97)',
-            display: 'none', alignItems: 'center', justifyContent: 'center',
-            color: '#fff', cursor: 'pointer', boxShadow: '0 4px 12px rgba(14,165,233,0.4)',
-          }}
-          className="lg:flex fc-btn"
-          aria-label="Toggle sidebar"
-        >
-          {sidebarCollapsed ? Icon.chevronRight : Icon.chevronLeft}
-        </button>
-      </aside>
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className={`absolute -right-3 top-6 z-10 flex h-8 w-8 items-center justify-center rounded-full border ${isLightTheme ? 'border-slate-300 bg-white text-cyan-700 shadow-[0_10px_24px_rgba(15,23,42,0.16)]' : 'border-white/10 bg-slate-900 text-cyan-100 shadow-[0_10px_24px_rgba(2,6,23,0.35)]'} transition hover:scale-105`}
+          >
+            {collapsed ? Icon.chevronRight : Icon.chevronLeft}
+          </button>
+        </aside>
 
-      {/* Main content */}
-      <main style={{ position: 'relative', zIndex: 10, minHeight: '100vh', display: 'flex', flexDirection: 'column', '--fc-sidebar-width': `${sidebarCollapsed ? 72 : 260}px` }} className="fc-main-shell transition-all duration-300">
-        {/* Top header */}
-        <header style={{
-          position: 'sticky', top: 0, zIndex: 30,
-          background: 'rgba(7,20,43,0.8)',
-          borderBottom: '1px solid rgba(148,163,184,0.12)',
-          backdropFilter: 'blur(20px)',
-          boxShadow: '0 4px 30px rgba(0,0,0,0.3)',
-          padding: '0 24px',
-          height: 64, display: 'flex', alignItems: 'center',
-          flexShrink: 0,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', maxWidth: 1400, margin: '0 auto', gap: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              {/* Mobile menu btn */}
-              <button
-                type="button"
-                onClick={() => setMobileOpen(true)}
-                className="fc-btn lg:hidden"
-                style={{ padding: '8px', borderRadius: 8, background: 'rgba(148,163,184,0.1)', border: '1px solid rgba(148,163,184,0.15)', color: '#94a3b8', cursor: 'pointer' }}
-              >
-                {Icon.menu}
-              </button>
+        {/* MAIN */}
+        <div className="relative flex min-w-0 flex-1 flex-col">
+          <header className={`sticky top-24 z-30 mx-4 mb-4 rounded-[28px] border ${isLightTheme ? 'border-sky-200/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.95),rgba(240,249,255,0.92),rgba(224,242,254,0.88))] shadow-[0_18px_40px_rgba(14,116,144,0.14)]' : 'border-cyan-300/20 bg-[linear-gradient(135deg,rgba(2,6,23,0.82),rgba(15,23,42,0.72),rgba(8,47,73,0.58))] shadow-[0_18px_40px_rgba(2,6,23,0.4)]'} px-5 py-4 backdrop-blur-2xl lg:mx-0`}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <button className={`rounded-xl border ${isLightTheme ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-white/10 bg-white/5 text-white'} p-2 lg:hidden`} onClick={() => setMobileOpen(true)}>
+                  {Icon.menu}
+                </button>
 
-              <div>
-                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#38bdf8' }}>{badge}</p>
-                <h1 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#f1f5f9', lineHeight: 1.3 }}>{title}</h1>
-                {subtitle && <p style={{ margin: 0, fontSize: 12, color: '#94a3b8' }}>{subtitle}</p>}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              {/* Notification bell */}
-              <button type="button" className="fc-btn" style={{
-                width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                borderRadius: 10, border: '1px solid rgba(148,163,184,0.15)',
-                background: 'rgba(148,163,184,0.08)', color: '#94a3b8', cursor: 'pointer',
-                position: 'relative',
-              }}>
-                {Icon.bell}
-                <span style={{ position: 'absolute', top: 8, right: 8, width: 7, height: 7, borderRadius: '50%', background: '#38bdf8', border: '1.5px solid rgba(7,20,43,0.97)' }} />
-              </button>
-
-              {headerActions}
-
-              {/* User chip */}
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 10, padding: '6px 12px 6px 6px',
-                background: 'rgba(15,23,42,0.7)', border: '1px solid rgba(148,163,184,0.12)',
-                borderRadius: 40, backdropFilter: 'blur(10px)',
-              }}>
-                <div style={{
-                  width: 30, height: 30, borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #0ea5e9, #6366f1)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 11, fontWeight: 800, color: '#fff',
-                }}>{initials}</div>
-                <div style={{ display: 'none' }} className="sm:block">
-                  <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#f1f5f9' }}>{displayName}</p>
-                  <p style={{ margin: 0, fontSize: 10, color: '#34d399', fontWeight: 600 }}>{Icon.shield} Coordinator</p>
+                <div className="min-w-0">
+                  <div className={`mb-2 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] ${isLightTheme ? 'border-cyan-300/80 bg-cyan-50 text-cyan-700' : 'border-cyan-400/20 bg-cyan-400/10 text-cyan-100'}`}>
+                    <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" />
+                    {badge}
+                  </div>
+                  <h1 className={`truncate text-lg font-bold sm:text-2xl ${isLightTheme ? 'text-slate-900' : 'text-white'}`}>{title}</h1>
+                  <p className={`truncate text-xs sm:text-sm ${isLightTheme ? 'text-slate-600' : 'text-slate-300'}`}>{subtitle}</p>
                 </div>
               </div>
-            </div>
-          </div>
-        </header>
 
-        {/* Page content - takes remaining space */}
-        <section style={{ flex: 1, maxWidth: 1400, margin: '0 auto', width: '100%', padding: '28px 24px', overflow: 'auto' }} className="fc-animate-in">
-          {children}
-        </section>
-
-        {/* Footer - stays at bottom */}
-        <footer
-          style={{
-            maxWidth: 1400,
-            margin: '0 auto',
-            width: '100%',
-            padding: '28px 24px 24px',
-            flexShrink: 0,
-          }}
-        >
-          <div
-            style={{
-              borderRadius: 14,
-              border: '1px solid rgba(148,163,184,0.16)',
-              background: 'linear-gradient(180deg, rgba(2,8,23,0.72), rgba(2,8,23,0.6))',
-              boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
-              backdropFilter: 'blur(10px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: 10,
-              padding: '12px 14px',
-            }}
-          >
-            <p style={{ margin: 0, fontSize: 12, color: '#cbd5e1' }}>
-              {footerNote || `SLIIT Timetable Coordinator Workspace • ${currentYear}`}
-            </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12 }}>
-              <span style={{ color: '#94a3b8' }}>Data sync secured</span>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }} className="fc-pulse-dot" />
+              <div className="flex items-center gap-2">
+                {headerActions}
+                <button className={`relative rounded-2xl border p-3 transition ${isLightTheme ? 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100' : 'border-white/10 bg-white/5 text-white hover:bg-white/10'}`}>
+                  {Icon.bell}
+                  <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-500 shadow-[0_0_0_4px_rgba(244,63,94,0.18)]" />
+                </button>
+              </div>
             </div>
-          </div>
-        </footer>
-      </main>
+          </header>
+
+          <main className="flex-1 px-4 pb-12 lg:px-0 lg:pb-16">
+            <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 fc-layout-stack fc-layout-stack-loose">
+              <section className={`relative overflow-hidden rounded-[32px] border p-6 backdrop-blur-xl lg:p-8 ${isLightTheme ? 'border-sky-200/80 bg-[linear-gradient(145deg,rgba(255,255,255,0.96),rgba(240,249,255,0.95),rgba(224,242,254,0.9))] shadow-[0_18px_50px_rgba(14,116,144,0.14)]' : 'border-cyan-300/20 bg-[linear-gradient(145deg,rgba(15,23,42,0.62),rgba(8,47,73,0.52),rgba(30,41,59,0.58))] shadow-[0_18px_50px_rgba(2,6,23,0.28)]'}`}>
+                <div className={`absolute inset-0 ${isLightTheme ? 'bg-[radial-gradient(circle_at_top_right,_rgba(34,211,238,0.12),_transparent_26%),radial-gradient(circle_at_bottom_left,_rgba(99,102,241,0.10),_transparent_30%)]' : 'bg-[radial-gradient(circle_at_top_right,_rgba(34,211,238,0.18),_transparent_26%),radial-gradient(circle_at_bottom_left,_rgba(99,102,241,0.18),_transparent_30%)]'}`} />
+                <div className="relative grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
+                  <div className="space-y-4">
+                    <p className={`text-[11px] font-semibold uppercase tracking-[0.28em] ${isLightTheme ? 'text-cyan-700' : isAcademicTheme ? 'text-emerald-200/90' : 'text-cyan-100/80'}`}>{brandTitle} Dashboard</p>
+                    <h2 className={`max-w-3xl text-3xl font-black leading-tight sm:text-4xl ${isLightTheme ? 'text-slate-900' : 'text-white'}`}>
+                      {title || 'Faculty Coordinator Workspace'}
+                    </h2>
+                    <p className={`max-w-3xl text-sm leading-7 sm:text-base ${isLightTheme ? 'text-slate-700' : 'text-slate-200/90'}`}>
+                      {subtitle || 'Plan, generate, and manage timetables with a streamlined academic workflow.'}
+                    </p>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${isLightTheme ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-white/10 bg-white/5 text-slate-100'}`}>Academic scheduling</span>
+                      <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${isLightTheme ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-white/10 bg-white/5 text-slate-100'}`}>Coordinator tools</span>
+                      <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${isLightTheme ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-white/10 bg-white/5 text-slate-100'}`}>Live module sync</span>
+                      <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${isLightTheme ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-emerald-300/20 bg-emerald-500/10 text-emerald-100'}`}>{workspaceLabel}</span>
+                    </div>
+                  </div>
+
+                  <div className={`relative overflow-hidden rounded-[28px] border p-4 ${isLightTheme ? 'border-slate-200 bg-slate-50/80 shadow-[0_16px_40px_rgba(15,23,42,0.08)]' : 'border-white/10 bg-slate-950/50 shadow-[0_16px_40px_rgba(2,6,23,0.3)]'}`}>
+                    <div className={`absolute inset-0 ${isLightTheme ? 'bg-gradient-to-br from-cyan-100/70 via-transparent to-indigo-100/70' : 'bg-gradient-to-br from-cyan-500/12 via-transparent to-indigo-500/18'}`} />
+                    <div className="relative grid gap-3 sm:grid-cols-2">
+                      <div className={`rounded-2xl border p-4 ${isLightTheme ? 'border-slate-200 bg-white' : 'border-white/10 bg-white/5'}`}>
+                        <p className={`text-[11px] uppercase tracking-[0.2em] ${isLightTheme ? 'text-slate-500' : 'text-slate-300'}`}>Workspace</p>
+                        <p className={`mt-2 text-lg font-bold ${isLightTheme ? 'text-slate-900' : 'text-white'}`}>{brandTitle}</p>
+                      </div>
+                      <div className={`rounded-2xl border p-4 ${isLightTheme ? 'border-slate-200 bg-white' : 'border-white/10 bg-white/5'}`}>
+                        <p className={`text-[11px] uppercase tracking-[0.2em] ${isLightTheme ? 'text-slate-500' : 'text-slate-300'}`}>Status</p>
+                        <p className={`mt-2 text-lg font-bold ${isLightTheme ? 'text-slate-900' : 'text-white'}`}>Ready</p>
+                      </div>
+                      <div className={`sm:col-span-2 rounded-2xl border p-4 ${isLightTheme ? 'border-slate-200 bg-white' : 'border-white/10 bg-white/5'}`}>
+                        <p className={`text-[11px] uppercase tracking-[0.2em] ${isLightTheme ? 'text-slate-500' : 'text-slate-300'}`}>User</p>
+                        <p className={`mt-2 text-sm font-semibold ${isLightTheme ? 'text-slate-900' : 'text-white'}`}>{displayName}</p>
+                      </div>
+                      {backgroundImage && (
+                        <div className="sm:col-span-2 overflow-hidden rounded-2xl border border-white/10">
+                          <img src={backgroundImage} alt="Faculty coordinator backdrop" className="h-40 w-full object-cover opacity-90" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className={`fc-shell-content rounded-[32px] border backdrop-blur-xl ${isLightTheme ? 'border-sky-200/80 bg-[linear-gradient(145deg,rgba(255,255,255,0.95),rgba(241,245,249,0.93),rgba(224,242,254,0.88))] shadow-[0_18px_50px_rgba(14,116,144,0.12)]' : 'border-cyan-300/20 bg-[linear-gradient(145deg,rgba(2,6,23,0.75),rgba(15,23,42,0.64),rgba(7,89,133,0.38))] shadow-[0_18px_50px_rgba(2,6,23,0.24)]'}`}>
+                {children}
+              </section>
+            </div>
+          </main>
+
+          <footer className={`mx-4 mb-8 rounded-[24px] border px-4 py-3 text-center text-xs backdrop-blur-xl lg:mx-0 lg:mb-10 ${isLightTheme ? 'border-sky-200/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.94),rgba(240,249,255,0.9))] text-slate-600 shadow-[0_12px_30px_rgba(14,116,144,0.12)]' : 'border-cyan-300/20 bg-[linear-gradient(135deg,rgba(2,6,23,0.8),rgba(15,23,42,0.72),rgba(8,47,73,0.56))] text-slate-200 shadow-[0_12px_30px_rgba(2,6,23,0.28)]'}`}>
+            {footerNote} · © {new Date().getFullYear()} SLIIT Scheduler
+          </footer>
+        </div>
+      </div>
     </div>
   );
 }

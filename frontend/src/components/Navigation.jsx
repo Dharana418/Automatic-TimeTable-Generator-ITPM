@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import autoschedule from '../assets/SLIIT_LOGO.png';
-import { LogOut, LayoutDashboard, User, Calendar, LogIn, Home } from 'lucide-react';
+import { LogOut, LayoutDashboard, User, Calendar, LogIn, Home, Clock3, GraduationCap } from 'lucide-react';
 
 const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", hasFixedSidebarOffset = false }) => {
     const location = useLocation();
@@ -32,9 +32,9 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
     const profilePhoto = user?.profilePhoto || null;
 
     const navBtnBase = 'inline-flex items-center justify-center rounded-lg border px-3 py-2 text-xs font-semibold tracking-wide transition duration-200';
-    const navBtnNeutral = `${navBtnBase} border-slate-300/90 bg-white/90 text-slate-700 shadow-sm hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700`;
-    const navBtnPrimary = `${navBtnBase} border-blue-300/80 bg-gradient-to-r from-blue-600 via-indigo-600 to-slate-900 text-white shadow-[0_10px_20px_rgba(30,64,175,0.28)] hover:-translate-y-0.5 hover:brightness-110`;
-    const navBtnDanger = `${navBtnBase} border-rose-300/80 bg-gradient-to-r from-rose-600 to-red-700 text-white shadow-[0_10px_20px_rgba(190,24,93,0.28)] hover:-translate-y-0.5 hover:brightness-110`;
+    const navBtnNeutral = `${navBtnBase} border-slate-300/90 bg-white/90 text-slate-700 shadow-sm hover:-translate-y-0.5 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-800`;
+    const navBtnPrimary = `${navBtnBase} border-slate-300/80 bg-gradient-to-r from-slate-800 via-indigo-700 to-slate-950 text-white shadow-[0_10px_20px_rgba(15,23,42,0.28)] hover:-translate-y-0.5 hover:brightness-110`;
+    const navBtnDanger = `${navBtnBase} border-rose-300/80 bg-gradient-to-r from-rose-700 to-red-800 text-white shadow-[0_10px_20px_rgba(127,29,29,0.28)] hover:-translate-y-0.5 hover:brightness-110`;
 
     const handleLogout = async () => {
         if (isLoggingOut) {
@@ -98,10 +98,10 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
 
         const result = await Swal.fire({
             icon: 'warning',
-            title: 'Are you sure?',
-            text: 'Do you want to logout now?',
+            title: 'Are you sure you want to log out?',
+            text: 'You will be signed out of the system.',
             showCancelButton: true,
-            confirmButtonText: 'Yes, logout',
+            confirmButtonText: 'Log out',
             cancelButtonText: 'Cancel',
             confirmButtonColor: '#dc2626',
             cancelButtonColor: '#64748b',
@@ -119,11 +119,12 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
         || location.pathname.startsWith('/faculty')
         || location.pathname.startsWith('/scheduler')
         || location.pathname.startsWith('/academic')
+        || location.pathname.startsWith('/admin')
     );
 
     return (
-        <nav className={`sticky top-0 z-50 border-b border-blue-300 bg-gradient-to-r from-blue-800 via-blue-700 to-blue-900 text-white shadow-md ${shouldOffsetForSidebar ? 'lg:pl-[284px]' : ''}`}>
-            <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <nav className={`sticky top-0 z-50 border-b border-sky-700/70 bg-gradient-to-r from-sky-700 via-sky-600 to-cyan-600 text-white shadow-[0_10px_30px_rgba(3,105,161,0.35)] ${shouldOffsetForSidebar ? 'lg:pl-[260px]' : ''}`}>
+            <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between px-4 py-2 sm:px-6 lg:px-8">
                 {/* Brand / Logo Area */}
                 <Link to="/" className="group flex items-center gap-3 no-underline transition-transform hover:scale-105 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-lg">
                     <img 
@@ -131,36 +132,47 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
                         alt="SLIIT Logo" 
                         className="h-10 w-auto object-contain drop-shadow-sm transition-all duration-300 group-hover:brightness-110" 
                     />
-                    <h2 className="hidden m-0 text-xl font-extrabold tracking-tight sm:block text-white">
-                        SLIIT Scheduler
-                    </h2>
+                    <div className="hidden sm:flex sm:flex-col">
+                        <h2 className="m-0 text-xl font-extrabold tracking-tight text-white">
+                            SLIIT Scheduler
+                        </h2>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold tracking-wide text-indigo-200/95">
+                            <GraduationCap className="h-3.5 w-3.5" />
+                            Academic Timetable Intelligence
+                        </span>
+                    </div>
                 </Link>
 
                 {/* Navigation and Settings Area */}
                 <div className="flex items-center space-x-1 sm:space-x-3">
                     {/* Divider line before auth controls */}
-                    <div className="h-6 w-px bg-blue-300/60 mx-1 hidden sm:block"></div>
+                    <div className="h-6 w-px bg-slate-500/60 mx-1 hidden sm:block"></div>
+
+                    <span className="hidden md:inline-flex items-center gap-1 rounded-full border border-sky-200/60 bg-white/15 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-white">
+                        <Clock3 className="h-3.5 w-3.5" />
+                        Live Planner
+                    </span>
 
                     {isAuthenticated ? (
                         <>
                             {/* Navigation Links Group */}
                             <div className="flex space-x-1 md:space-x-2">
                                 {location.pathname !== '/dashboard' && (
-                                    <Link to="/dashboard" className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-blue-50 transition-all duration-200 hover:bg-blue-100/20 hover:text-white outline-none focus-visible:ring-2 focus-visible:ring-blue-200">
+                                    <Link to="/dashboard" className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-slate-100 transition-all duration-200 hover:bg-white/10 hover:text-white outline-none focus-visible:ring-2 focus-visible:ring-indigo-200">
                                         <LayoutDashboard className="h-4 w-4" />
                                         <span className="hidden md:inline">Dashboard</span>
                                     </Link>
                                 )}
 
                                 {location.pathname !== '/profile' && (
-                                    <Link to="/profile" className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-blue-50 transition-all duration-200 hover:bg-blue-100/20 hover:text-white outline-none focus-visible:ring-2 focus-visible:ring-blue-200">
+                                    <Link to="/profile" className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-slate-100 transition-all duration-200 hover:bg-white/10 hover:text-white outline-none focus-visible:ring-2 focus-visible:ring-indigo-200">
                                         <User className="h-4 w-4" />
                                         <span className="hidden md:inline">Profile</span>
                                     </Link>
                                 )}
 
                                 {user?.role === 'Faculty Coordinator' && location.pathname !== '/scheduler' && (
-                                    <Link to="/scheduler" className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-blue-50 transition-all duration-200 hover:bg-blue-100/20 hover:text-white outline-none focus-visible:ring-2 focus-visible:ring-blue-200">
+                                    <Link to="/scheduler" className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-slate-100 transition-all duration-200 hover:bg-white/10 hover:text-white outline-none focus-visible:ring-2 focus-visible:ring-indigo-200">
                                         <Calendar className="h-4 w-4" />
                                         <span className="hidden md:inline">Scheduler</span>
                                     </Link>
@@ -168,7 +180,7 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
                             </div>
 
                             {/* Divider line before avatar */}
-                            <div className="h-6 w-px bg-blue-300/60 mx-1 hidden sm:block"></div>
+                            <div className="h-6 w-px bg-slate-500/60 mx-1 hidden sm:block"></div>
 
                             {/* User Profile Info */}
                             <div className="hidden lg:flex flex-col items-end justify-center mr-2">
@@ -177,21 +189,21 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
                                         {displayName}
                                     </span>
                                 )}
-                                <span className="text-xs font-semibold tracking-wide text-blue-100 uppercase">
+                                    <span className="text-xs font-semibold tracking-wide text-sky-100 uppercase">
                                     {displayRole}
                                 </span>
                             </div>
 
                             {/* User Avatar */}
-                            <Link to="/profile" className="relative group cursor-pointer transition-transform hover:scale-105 outline-none rounded-full focus-visible:ring-2 focus-visible:ring-blue-200 focus-visible:ring-offset-2">
+                            <Link to="/profile" className="relative group cursor-pointer transition-transform hover:scale-105 outline-none rounded-full focus-visible:ring-2 focus-visible:ring-indigo-200 focus-visible:ring-offset-2">
                                 {profilePhoto ? (
                                     <img
                                         src={profilePhoto}
                                         alt="Profile"
-                                        className="h-10 w-10 rounded-full border-2 border-blue-200 object-cover shadow-sm group-hover:border-blue-100 transition-colors"
+                                        className="h-10 w-10 rounded-full border-2 border-indigo-200 object-cover shadow-sm group-hover:border-indigo-100 transition-colors"
                                     />
                                 ) : (
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-blue-200 bg-gradient-to-br from-blue-500 to-blue-700 text-sm font-bold text-white shadow-sm group-hover:from-blue-400 group-hover:to-blue-600 transition-all">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-indigo-200 bg-gradient-to-br from-slate-700 to-indigo-700 text-sm font-bold text-white shadow-sm group-hover:from-slate-600 group-hover:to-indigo-600 transition-all">
                                         {(displayName || displayRole || 'U').trim().charAt(0).toUpperCase()}
                                     </div>
                                 )}
@@ -199,8 +211,8 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
 
                             {/* Logout Action */}
                             <button
-                                onClick={handleLogout} 
-                                className="group ml-1 flex items-center justify-center rounded-xl bg-white/10 p-2 text-white transition-all duration-200 hover:bg-white/20 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:ring-offset-2"
+                                onClick={requestLogoutConfirmation} 
+                                className="group ml-1 flex items-center justify-center rounded-xl bg-white/10 p-2 text-white transition-all duration-200 hover:bg-white/20 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:ring-offset-2"
                                 aria-label="Logout"
                                 title="Logout"
                             >
@@ -211,7 +223,7 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
                     ) : (
                         <>
                             {location.pathname !== '/' && (
-                                <Link to="/" className="flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-blue-50 transition-all duration-200 hover:bg-blue-100/20 hover:text-white outline-none focus-visible:ring-2 focus-visible:ring-blue-200">
+                                <Link to="/" className="flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-slate-100 transition-all duration-200 hover:bg-white/10 hover:text-white outline-none focus-visible:ring-2 focus-visible:ring-indigo-200">
                                     <Home className="h-4 w-4" />
                                     <span className="hidden sm:inline">Home</span>
                                 </Link>
@@ -220,11 +232,11 @@ const Navigation = ({ isAuthenticated, user, apiBase = "http://localhost:5000", 
                             {location.pathname !== '/login' && (
                                 <Link
                                     to="/login"
-                                    className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl border border-blue-100/80 bg-white px-4 py-2 text-sm font-bold text-blue-700 shadow-[0_8px_18px_rgba(15,23,42,0.18)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_24px_rgba(15,23,42,0.24)] hover:border-white outline-none focus-visible:ring-2 focus-visible:ring-blue-200 focus-visible:ring-offset-2"
+                                    className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl border border-slate-200/80 bg-white px-4 py-2 text-sm font-bold text-slate-800 shadow-[0_8px_18px_rgba(15,23,42,0.16)] transition-all duration-300 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-[0_12px_24px_rgba(15,23,42,0.22)] outline-none focus-visible:ring-2 focus-visible:ring-indigo-200 focus-visible:ring-offset-2"
                                 >
-                                    <span className="absolute inset-0 bg-gradient-to-r from-blue-50 via-white to-blue-100 opacity-0 transition-opacity duration-300 group-hover:opacity-100" aria-hidden />
+                                    <span className="absolute inset-0 bg-gradient-to-r from-slate-50 via-white to-indigo-50 opacity-0 transition-opacity duration-300 group-hover:opacity-100" aria-hidden />
                                     <span className="absolute -left-12 top-0 h-full w-10 -skew-x-12 bg-white/70 blur-[1px] transition-transform duration-700 group-hover:translate-x-44" aria-hidden />
-                                    <span className="relative inline-flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-blue-800 text-white shadow-sm">
+                                    <span className="relative inline-flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-slate-700 to-indigo-700 text-white shadow-sm">
                                         <LogIn className="h-3.5 w-3.5" />
                                     </span>
                                     <span className="relative tracking-wide">Sign in</span>
