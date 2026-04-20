@@ -118,32 +118,32 @@ const HallResourcesPanel = ({ hallId, apiBase }) => {
   };
 
   return (
-    <div className="mt-4 rounded-xl border border-slate-700 bg-slate-900/90 p-4 text-slate-100 shadow-[0_12px_28px_rgba(2,6,23,0.4)]">
+    <div className="rounded-lg border border-slate-200 bg-white p-4 mt-4">
       <div className="flex items-center justify-between mb-3">
-        <h4 className="font-semibold text-cyan-100">📦 Hall Resources</h4>
+        <h4 className="font-semibold text-slate-800">📦 Hall Resources</h4>
         <button
           onClick={() => setShowAddResource(!showAddResource)}
-          className="rounded-lg border border-cyan-500/60 bg-cyan-800/70 px-3 py-1 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-700/80"
+          className="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
         >
           {showAddResource ? 'Cancel' : '+ Add Resource'}
         </button>
       </div>
 
       {toast && (
-        <div className={`mb-3 rounded-lg border p-2 text-sm ${toast.type === 'success' ? 'border-emerald-500/60 bg-emerald-950/70 text-emerald-200' : 'border-rose-500/60 bg-rose-950/70 text-rose-200'}`}>
+        <div className={`mb-3 p-2 rounded text-sm ${toast.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
           {toast.message}
         </div>
       )}
 
       {showAddResource && (
-        <form onSubmit={handleAddResource} className="mb-4 rounded-lg border border-slate-700 bg-slate-950/70 p-3">
+        <form onSubmit={handleAddResource} className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
           <div className="grid grid-cols-2 gap-2 mb-2">
             <div>
-              <label className="text-xs font-medium text-slate-200">Type</label>
+              <label className="text-xs font-medium">Type</label>
               <select
                 value={resourceForm.resourceType}
                 onChange={(e) => setResourceForm({ ...resourceForm, resourceType: e.target.value })}
-                className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-sm text-slate-100"
+                className="w-full border rounded px-2 py-1 text-sm"
               >
                 {RESOURCE_TYPES.map(t => (
                   <option key={t.id} value={t.id}>{t.label}</option>
@@ -151,11 +151,11 @@ const HallResourcesPanel = ({ hallId, apiBase }) => {
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-200">Condition</label>
+              <label className="text-xs font-medium">Condition</label>
               <select
                 value={resourceForm.condition}
                 onChange={(e) => setResourceForm({ ...resourceForm, condition: e.target.value })}
-                className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-sm text-slate-100"
+                className="w-full border rounded px-2 py-1 text-sm"
               >
                 {CONDITIONS.map(c => (
                   <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
@@ -165,71 +165,71 @@ const HallResourcesPanel = ({ hallId, apiBase }) => {
           </div>
           <div className="grid grid-cols-2 gap-2 mb-2">
             <div>
-              <label className="text-xs font-medium text-slate-200">Name</label>
+              <label className="text-xs font-medium">Name</label>
               <input
                 type="text"
                 value={resourceForm.resourceName}
                 onChange={(e) => setResourceForm({ ...resourceForm, resourceName: e.target.value })}
                 placeholder="e.g., Projector"
-                className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-sm text-slate-100 placeholder:text-slate-400"
+                className="w-full border rounded px-2 py-1 text-sm"
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-200">Quantity</label>
+              <label className="text-xs font-medium">Quantity</label>
               <input
                 type="number"
                 min="1"
                 value={resourceForm.quantity}
                 onChange={(e) => setResourceForm({ ...resourceForm, quantity: parseInt(e.target.value) || 1 })}
-                className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-sm text-slate-100"
+                className="w-full border rounded px-2 py-1 text-sm"
               />
             </div>
           </div>
           <div className="mb-2">
-            <label className="text-xs font-medium text-slate-200">Notes</label>
+            <label className="text-xs font-medium">Notes</label>
             <input
               type="text"
               value={resourceForm.notes}
               onChange={(e) => setResourceForm({ ...resourceForm, notes: e.target.value })}
               placeholder="Additional notes..."
-              className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-sm text-slate-100 placeholder:text-slate-400"
+              className="w-full border rounded px-2 py-1 text-sm"
             />
           </div>
-          <button type="submit" className="w-full rounded border border-emerald-500/60 bg-emerald-900/70 px-2 py-1 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-800/80">
+          <button type="submit" className="w-full px-2 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700">
             Add Resource
           </button>
         </form>
       )}
 
       {loading ? (
-        <p className="text-sm text-slate-300">Loading resources...</p>
+        <p className="text-sm text-slate-600">Loading resources...</p>
       ) : resources.length === 0 ? (
-        <p className="text-sm text-slate-400">No resources added yet</p>
+        <p className="text-sm text-slate-500">No resources added yet</p>
       ) : (
         <div className="space-y-2">
           {resources.map(resource => (
-            <div key={resource.id} className="rounded-lg border border-slate-700 bg-slate-950/60 p-3 text-sm">
+            <div key={resource.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm">
               <div className="flex justify-between items-start">
                 <div>
-                  <div className="font-medium text-slate-100">{resource.resource_name}</div>
-                  <div className="text-xs text-slate-300">{resource.resource_type} • Qty: {resource.quantity}</div>
+                  <div className="font-medium text-slate-800">{resource.resource_name}</div>
+                  <div className="text-xs text-slate-600">{resource.resource_type} • Qty: {resource.quantity}</div>
                   <div className={`inline-block mt-1 px-2 py-0.5 rounded text-xs font-medium ${
-                    resource.condition === 'excellent' ? 'border border-emerald-500/60 bg-emerald-950/70 text-emerald-200' :
-                    resource.condition === 'good' ? 'border border-cyan-500/60 bg-cyan-950/70 text-cyan-200' :
-                    resource.condition === 'fair' ? 'border border-amber-500/60 bg-amber-950/70 text-amber-200' :
-                    'border border-rose-500/60 bg-rose-950/70 text-rose-200'
+                    resource.condition === 'excellent' ? 'bg-green-100 text-green-800' :
+                    resource.condition === 'good' ? 'bg-blue-100 text-blue-800' :
+                    resource.condition === 'fair' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-red-100 text-red-800'
                   }`}>
                     {resource.condition}
                   </div>
                 </div>
                 <button
                   onClick={() => handleDeleteResource(resource.id)}
-                  className="text-xs font-medium text-rose-300 hover:text-rose-200"
+                  className="text-red-600 hover:text-red-800 text-xs font-medium"
                 >
                   Delete
                 </button>
               </div>
-              {resource.notes && <div className="mt-1 text-xs text-slate-300">Note: {resource.notes}</div>}
+              {resource.notes && <div className="text-xs text-slate-600 mt-1">Note: {resource.notes}</div>}
             </div>
           ))}
         </div>
