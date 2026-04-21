@@ -154,7 +154,7 @@ const HallAllocation = ({ apiBase }) => {
   const [capacityTolerance, setCapacityTolerance] = useState('15');
   const [selectedHall, setSelectedHall] = useState(null);
   const [showRecommendationsModal, setShowRecommendationsModal] = useState(false);
-  const pageSize = 8;
+  const pageSize = 5;
   const todayDate = new Date().toISOString().split('T')[0];
 
   const normalizeHall = useCallback((hall) => {

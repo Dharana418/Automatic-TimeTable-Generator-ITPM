@@ -73,6 +73,7 @@ export default function AcademicConflictsPage({ user }) {
       subtitle="Investigate and mathematically resolve un-bookable bottlenecks flagged by the Timetable Generator"
       badge="Generator Triage"
       themeVariant="academic"
+      mainTopMarginClass="mt-9"
     >
       <style>{`
         .conflict-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }

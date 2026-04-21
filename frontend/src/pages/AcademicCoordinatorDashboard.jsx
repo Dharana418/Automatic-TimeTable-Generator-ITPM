@@ -91,6 +91,8 @@ export default function AcademicCoordinatorDashboard({ user }) {
       brandTitle="Academic Coordinator"
       brandSubtitle="Operations Console"
       themeVariant="academic"
+      topOffsetClass="pt-[28px]"
+      mainTopMarginClass="mt-20"
     >
       <style>{`
         .ac-action-tile { display: block; border-radius: 20px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -161,7 +163,7 @@ export default function AcademicCoordinatorDashboard({ user }) {
               color="#f472b6" 
             />
             <ActionTile 
-              to="/academic/hall-allocations" 
+              to="/faculty/hall-allocations" 
               title="Hall Allocations" 
               desc="Review SLIIT campus hall allocations that feed the scheduler engine." 
               icon={<IconCalendar />} 
