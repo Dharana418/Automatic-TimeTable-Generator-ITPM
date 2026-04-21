@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api/scheduler.js';
+import { getAcademicYears, getModulesByYear } from '../api/moduleManagement.js';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 
 /* ── Department helpers ─────────────────────────────────────────── */
@@ -156,10 +157,33 @@ const FacultyModulesPage = ({ user }) => {
       try {
         setIsLoading(true);
         setErr('');
-        const res = await api.listItems('modules');
+        const [schedulerRes, yearsRes] = await Promise.all([
+          api.listItems('modules').catch(() => ({ items: [] })),
+          getAcademicYears().catch(() => ({ data: [] })),
+        ]);
+
         if (!mounted) return;
-        const items = Array.isArray(res?.items) ? res.items : [];
-        setModules(items.map(toView));
+
+        const schedulerItems = Array.isArray(schedulerRes?.items) ? schedulerRes.items : [];
+        const yearRows = Array.isArray(yearsRes?.data) ? yearsRes.data : [];
+
+        const academicItems = [];
+        for (const row of yearRows) {
+          const year = String(row?.academic_year || '').trim();
+          if (!year) continue;
+          const perYear = await getModulesByYear(year).catch(() => ({ data: [] }));
+          const list = Array.isArray(perYear?.data) ? perYear.data : [];
+          academicItems.push(...list);
+        }
+
+        const mergedMap = new Map();
+        [...schedulerItems, ...academicItems].forEach((item) => {
+          const key = String(item?.id || item?.code || '').trim() || `${String(item?.code || '').trim()}::${String(item?.name || '').trim()}`;
+          if (!key) return;
+          if (!mergedMap.has(key)) mergedMap.set(key, item);
+        });
+
+        setModules(Array.from(mergedMap.values()).map(toView));
       } catch (e) {
         if (!mounted) return;
         setErr(e.message || 'Failed to load modules.');
