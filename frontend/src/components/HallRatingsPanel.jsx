@@ -5,6 +5,8 @@ const HallRatingsPanel = ({ hallId, apiBase }) => {
   const [stats, setStats] = useState(null);
   const [showAddRating, setShowAddRating] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [hasLoadedRatings, setHasLoadedRatings] = useState(false);
+  const [hasActivityLogs, setHasActivityLogs] = useState(false);
   const [ratingForm, setRatingForm] = useState({
     rating: 5,
     comment: '',
@@ -17,6 +19,7 @@ const HallRatingsPanel = ({ hallId, apiBase }) => {
   const loadRatings = useCallback(async () => {
     try {
       setLoading(true);
+      setHasLoadedRatings(false);
       const res = await fetch(`${apiBase}/api/halls/${hallId}/ratings`, {
         credentials: 'include'
       });
@@ -28,6 +31,7 @@ const HallRatingsPanel = ({ hallId, apiBase }) => {
       console.error('Error loading ratings:', error);
     } finally {
       setLoading(false);
+      setHasLoadedRatings(true);
     }
   }, [hallId, apiBase]);
 
@@ -45,12 +49,29 @@ const HallRatingsPanel = ({ hallId, apiBase }) => {
     }
   }, [hallId, apiBase]);
 
+  const loadActivityLogPresence = useCallback(async () => {
+    try {
+      const res = await fetch(`${apiBase}/api/halls/${hallId}/logs`, {
+        credentials: 'include'
+      });
+      const data = await res.json();
+      if (data.success) {
+        const activityCount = Array.isArray(data.logs) ? data.logs.length : 0;
+        setHasActivityLogs(activityCount > 0);
+      }
+    } catch (error) {
+      console.error('Error loading activity logs for ratings view:', error);
+      setHasActivityLogs(false);
+    }
+  }, [hallId, apiBase]);
+
   useEffect(() => {
     if (hallId) {
       loadRatings();
       loadStats();
+      loadActivityLogPresence();
     }
-  }, [hallId, loadRatings, loadStats]);
+  }, [hallId, loadRatings, loadStats, loadActivityLogPresence]);
 
   const handleAddRating = async (e) => {
     e.preventDefault();
@@ -106,7 +127,7 @@ const HallRatingsPanel = ({ hallId, apiBase }) => {
     return (
       <div className="flex gap-0.5">
         {[...Array(max)].map((_, i) => (
-          <span key={i} className={i < value ? 'text-yellow-400 text-lg' : 'text-gray-300 text-lg'}>★</span>
+          <span key={i} className={i < value ? 'text-amber-300 text-lg' : 'text-slate-600 text-lg'}>★</span>
         ))}
       </div>
     );
@@ -115,7 +136,7 @@ const HallRatingsPanel = ({ hallId, apiBase }) => {
   return (
     <div className="mt-4 rounded-2xl border border-slate-300 bg-gradient-to-br from-slate-100 via-white to-slate-200 p-4 shadow-[0_12px_30px_rgba(15,23,42,0.14)]">
       <div className="flex items-center justify-between mb-3">
-        <h4 className="font-semibold text-slate-800">⭐ Hall Ratings & Feedback</h4>
+        <h4 className="font-semibold text-cyan-100">⭐ Hall Ratings & Feedback</h4>
         <button
           onClick={() => setShowAddRating(!showAddRating)}
           className="rounded-lg border border-sky-400/50 bg-gradient-to-r from-sky-600 to-cyan-600 px-3 py-1 text-sm font-semibold text-white transition hover:brightness-110"
@@ -162,7 +183,7 @@ const HallRatingsPanel = ({ hallId, apiBase }) => {
                   key={star}
                   type="button"
                   onClick={() => setRatingForm({ ...ratingForm, rating: star })}
-                  className="text-2xl hover:scale-125 transition"
+                  className={`text-2xl transition hover:scale-125 ${star <= ratingForm.rating ? 'text-amber-300' : 'text-slate-600 hover:text-slate-400'}`}
                 >
                   {star <= ratingForm.rating ? '★' : '☆'}
                 </button>
@@ -179,7 +200,7 @@ const HallRatingsPanel = ({ hallId, apiBase }) => {
                     key={star}
                     type="button"
                     onClick={() => setRatingForm({ ...ratingForm, cleanlinessRating: star })}
-                    className="text-lg hover:scale-110 transition"
+                    className={`text-lg transition hover:scale-110 ${star <= ratingForm.cleanlinessRating ? 'text-amber-300' : 'text-slate-600 hover:text-slate-400'}`}
                   >
                     {star <= ratingForm.cleanlinessRating ? '★' : '☆'}
                   </button>
@@ -202,7 +223,7 @@ const HallRatingsPanel = ({ hallId, apiBase }) => {
           </div>
 
           <div className="mb-3">
-            <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
+             <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
               <input
                 type="checkbox"
                 checked={ratingForm.equipmentWorking}
