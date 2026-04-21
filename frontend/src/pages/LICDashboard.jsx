@@ -218,7 +218,7 @@ const LICDashboard = ({ user }) => {
           <div className="stat-row">
             <div className="stat">
               <div className="stat-value">{instructors.length}</div>
-              <div className="stat-label">My Instructors</div>
+              <div className="stat-label">My Instructors/Lectures</div>
             </div>
             <div className="stat">
               <div className="stat-value">{modules.length}</div>
