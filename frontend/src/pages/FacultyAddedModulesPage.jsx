@@ -72,15 +72,20 @@ const normalizeSpecialization = (value = '') => {
   return aliases[compact] || normalized;
 };
 
-const isAcademicCoordinatorModule = (module, user) => {
+const isAcademicCoordinatorModule = (module) => {
   const creatorRole = normalizeRoleKey(module.creatorRole);
   if (creatorRole === 'academiccoordinator') {
     return true;
   }
 
-  return normalizeRoleKey(user?.role) === 'academiccoordinator'
-    && module.createdBy
-    && String(module.createdBy) === String(user?.id || '');
+  const details = parseDetails(module.details);
+  const source = normalizeRoleKey(details.source || details.created_by_role || details.creator_role || '');
+
+  if (source.includes('catalog') || source.includes('academiccoordinator')) {
+    return true;
+  }
+
+  return !module.createdBy;
 };
 
 const formatAcademicYear = (value) => {
@@ -186,8 +191,8 @@ const FacultyAddedModulesPage = ({ user }) => {
   }, [loadModules]);
 
   const coordinatorModules = useMemo(
-    () => modules.filter((module) => isAcademicCoordinatorModule(module, user)),
-    [modules, user]
+    () => modules.filter((module) => isAcademicCoordinatorModule(module)),
+    [modules]
   );
 
   const departments = useMemo(() => {
