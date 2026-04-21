@@ -190,9 +190,16 @@ const FacultyAddedModulesPage = ({ user }) => {
     loadModules();
   }, [loadModules]);
 
-  const coordinatorModules = useMemo(
+  const strictCoordinatorModules = useMemo(
     () => modules.filter((module) => isAcademicCoordinatorModule(module)),
     [modules]
+  );
+
+  const usingMetadataFallback = strictCoordinatorModules.length === 0 && modules.length > 0;
+
+  const coordinatorModules = useMemo(
+    () => (strictCoordinatorModules.length > 0 ? strictCoordinatorModules : modules),
+    [strictCoordinatorModules, modules]
   );
 
   const departments = useMemo(() => {
@@ -397,6 +404,12 @@ const FacultyAddedModulesPage = ({ user }) => {
         {error && (
           <div className="rounded-2xl border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-sm font-medium text-rose-100">
             {error}
+          </div>
+        )}
+
+        {usingMetadataFallback && (
+          <div className="rounded-2xl border border-amber-300/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            Showing module records using fallback mode because creator metadata is incomplete in existing data.
           </div>
         )}
 
