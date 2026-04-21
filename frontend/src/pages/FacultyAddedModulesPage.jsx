@@ -1,6 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
-import { motion as Motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../api/scheduler.js';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 import backgroundImage from '../assets/room-interior-design.jpg';
@@ -36,39 +34,138 @@ const toView = (module = {}) => {
     id: String(module.id || `${module.code}-${module.name}`),
     code: String(module.code || module.id || '').trim(),
     name: String(module.name || module.title || module.code || 'Untitled Module').trim(),
-    department: getDep(module),
+    department: normalizeSpecialization(getDep(module)),
     credits: module.credits || details.credits || '',
     lecturesPerWeek: module.lectures_per_week || details.lectures_per_week || '',
     academicYear: String(module.academic_year || details.academic_year || ''),
     semester: String(module.semester || details.semester || ''),
     createdAt: module.created_at || module.createdAt || null,
+    createdBy: module.created_by || module.createdBy || null,
+    creatorName: module.created_by_name || module.createdByName || '',
+    creatorRole: module.created_by_role || module.createdByRole || '',
   };
 };
 
 const normalizeRoleKey = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
+const normalizeSpecialization = (value = '') => {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (!normalized) return 'GENERAL';
+
+  const aliases = {
+    SOFTWAREENGINEERING: 'SE',
+    SOFTWARE_ENG: 'SE',
+    INFORMATIONTECHNOLOGY: 'IT',
+    INTERACTIVEMEDIA: 'IME',
+    COMPUTERSCIENCE: 'CS',
+    INFORMATIONSYSTEMSENGINEERING: 'ISE',
+    COMPUTER_SYSTEMS_NETWORK_ENGINEERING: 'CSNE',
+    INFORMATICS: 'IM',
+    IM: 'IME',
+    IE: 'IME',
+    CYBERSECURITY: 'CYBER SECURITY',
+    CYBER: 'CYBER SECURITY',
+    GENERAL: 'GENERAL',
+  };
+
+  const compact = normalized.replace(/[^A-Z0-9]/g, '');
+  return aliases[compact] || normalized;
+};
+
+const isAcademicCoordinatorModule = (module, user) => {
+  const creatorRole = normalizeRoleKey(module.creatorRole);
+  if (creatorRole === 'academiccoordinator') {
+    return true;
+  }
+
+  return normalizeRoleKey(user?.role) === 'academiccoordinator'
+    && module.createdBy
+    && String(module.createdBy) === String(user?.id || '');
+};
+
+const formatAcademicYear = (value) => {
+  const text = String(value || '').trim();
+  if (!text) return 'N/A';
+  return text.includes('-') ? text.replace('-', ' - ') : text;
+};
+
+const StatCard = ({ label, value, helper, tone = 'cyan' }) => {
+  const toneStyles = {
+    cyan: 'from-cyan-500/20 to-sky-500/10 text-cyan-100 border-cyan-300/15',
+    emerald: 'from-emerald-500/20 to-teal-500/10 text-emerald-100 border-emerald-300/15',
+    amber: 'from-amber-500/20 to-orange-500/10 text-amber-100 border-amber-300/15',
+    indigo: 'from-indigo-500/20 to-slate-500/10 text-indigo-100 border-indigo-300/15',
+  };
+
+  return (
+    <div className={`rounded-3xl border bg-gradient-to-br px-5 py-4 shadow-[0_18px_38px_rgba(2,6,23,0.32)] backdrop-blur ${toneStyles[tone]}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/60">{label}</p>
+      <div className="mt-2 text-3xl font-black text-white">{value}</div>
+      {helper && <p className="mt-2 text-xs leading-5 text-white/68">{helper}</p>}
+    </div>
+  );
+};
+
+const ModuleCard = ({ module }) => {
+  const createdAtLabel = module.createdAt ? new Date(module.createdAt).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+  }) : 'Recently added';
+
+  return (
+    <article className="group rounded-[28px] border border-white/10 bg-white/6 p-5 shadow-[0_20px_46px_rgba(2,6,23,0.35)] backdrop-blur transition duration-300 hover:-translate-y-1 hover:border-cyan-300/25 hover:bg-white/8">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-200/80">Module Code</p>
+          <h3 className="mt-2 text-lg font-bold text-white">{module.code || 'Untitled'}</h3>
+        </div>
+        <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-cyan-100">
+          Published
+        </span>
+      </div>
+
+      <p className="mt-4 text-base font-medium leading-6 text-slate-100">{module.name || 'Module name unavailable'}</p>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <span className="rounded-full border border-sky-300/20 bg-sky-400/10 px-3 py-1 text-xs font-bold text-sky-100">
+          {module.department || 'GENERAL'}
+        </span>
+        <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs font-semibold text-slate-200">
+          Year {formatAcademicYear(module.academicYear)}
+        </span>
+        <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs font-semibold text-slate-200">
+          Semester {module.semester || 'N/A'}
+        </span>
+      </div>
+
+      <div className="mt-5 grid grid-cols-2 gap-3 text-sm text-slate-200">
+        <div className="rounded-2xl border border-white/10 bg-slate-950/30 p-3">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Credits</p>
+          <p className="mt-1 font-semibold text-white">{module.credits || 'N/A'}</p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-slate-950/30 p-3">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Lectures / Week</p>
+          <p className="mt-1 font-semibold text-white">{module.lecturesPerWeek || 'N/A'}</p>
+        </div>
+      </div>
+
+      <div className="mt-5 flex items-center justify-between gap-3 border-t border-white/10 pt-4 text-xs text-slate-300">
+        <span>{module.creatorName ? `Academic Coordinator: ${module.creatorName}` : 'Academic Coordinator published'}</span>
+        <span>{createdAtLabel}</span>
+      </div>
+    </article>
+  );
+};
+
 const FacultyAddedModulesPage = ({ user }) => {
-  const roleKey = normalizeRoleKey(user?.role);
-  const canManageModules = roleKey === 'academiccoordinator';
-  const navigate = useNavigate();
   const [modules, setModules] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [search, setSearch] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('ALL');
-  const [editingId, setEditingId] = useState('');
-  const [savingId, setSavingId] = useState('');
-  const [deletingId, setDeletingId] = useState('');
-  const [editingForm, setEditingForm] = useState({
-    code: '',
-    name: '',
-    department: 'GENERAL',
-    academicYear: '1',
-    semester: '1',
-    credits: '',
-    lecturesPerWeek: '',
-  });
+  const [selectedYear, setSelectedYear] = useState('ALL');
+  const [selectedSemester, setSelectedSemester] = useState('ALL');
 
   const loadModules = useCallback(async () => {
     try {
@@ -78,7 +175,7 @@ const FacultyAddedModulesPage = ({ user }) => {
       const items = Array.isArray(response?.items) ? response.items : [];
       setModules(items.map(toView));
     } catch (err) {
-      setError(err.message || 'Failed to load added modules.');
+      setError(err.message || 'Failed to load module catalog.');
     } finally {
       setLoading(false);
     }
@@ -88,381 +185,243 @@ const FacultyAddedModulesPage = ({ user }) => {
     loadModules();
   }, [loadModules]);
 
-  const clearMessages = () => {
-    setError('');
-    setSuccess('');
-  };
-
-  const startEdit = (module) => {
-    clearMessages();
-    setEditingId(module.id);
-    setEditingForm({
-      code: module.code || '',
-      name: module.name || '',
-      department: module.department || 'GENERAL',
-      academicYear: module.academicYear || '1',
-      semester: module.semester || '1',
-      credits: module.credits === '' ? '' : String(module.credits),
-      lecturesPerWeek: module.lecturesPerWeek === '' ? '' : String(module.lecturesPerWeek),
-    });
-  };
-
-  const cancelEdit = () => {
-    setEditingId('');
-  };
-
-  const saveEdit = async (event) => {
-    event.preventDefault();
-    if (!editingId) return;
-
-    if (!editingForm.code.trim() || !editingForm.name.trim()) {
-      setError('Module code and name are required.');
-      return;
-    }
-
-    try {
-      setSavingId(editingId);
-      clearMessages();
-      await api.updateItem('modules', editingId, {
-        code: editingForm.code.trim(),
-        name: editingForm.name.trim(),
-        specialization: editingForm.department,
-        academic_year: editingForm.academicYear,
-        semester: editingForm.semester,
-        credits: editingForm.credits ? Number(editingForm.credits) : null,
-        lectures_per_week: editingForm.lecturesPerWeek ? Number(editingForm.lecturesPerWeek) : null,
-      });
-      setSuccess('Module updated successfully.');
-      setEditingId('');
-      await loadModules();
-    } catch (err) {
-      setError(err.message || 'Failed to update module.');
-    } finally {
-      setSavingId('');
-    }
-  };
-
-  const deleteModule = async (moduleId) => {
-    const confirmed = window.confirm('Delete this module? This cannot be undone.');
-    if (!confirmed) return;
-
-    try {
-      setDeletingId(moduleId);
-      clearMessages();
-      await api.deleteItem('modules', moduleId);
-      if (editingId === moduleId) {
-        setEditingId('');
-      }
-      setSuccess('Module deleted successfully.');
-      await loadModules();
-    } catch (err) {
-      setError(err.message || 'Failed to delete module.');
-    } finally {
-      setDeletingId('');
-    }
-  };
+  const coordinatorModules = useMemo(
+    () => modules.filter((module) => isAcademicCoordinatorModule(module, user)),
+    [modules, user]
+  );
 
   const departments = useMemo(() => {
-    const set = new Set(modules.map((m) => m.department).filter(Boolean));
+    const set = new Set(coordinatorModules.map((module) => module.department).filter(Boolean));
     return ['ALL', ...Array.from(set).sort()];
-  }, [modules]);
+  }, [coordinatorModules]);
+
+  const years = useMemo(() => {
+    const set = new Set(coordinatorModules.map((module) => module.academicYear).filter(Boolean));
+    return ['ALL', ...Array.from(set).sort((left, right) => String(left).localeCompare(String(right)))];
+  }, [coordinatorModules]);
+
+  const semesters = useMemo(() => {
+    const set = new Set(coordinatorModules.map((module) => module.semester).filter(Boolean));
+    return ['ALL', ...Array.from(set).sort((left, right) => Number(left) - Number(right))];
+  }, [coordinatorModules]);
 
   const filteredModules = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return modules.filter((module) => {
+    const query = search.trim().toLowerCase();
+
+    return coordinatorModules.filter((module) => {
       const matchDepartment = selectedDepartment === 'ALL' || module.department === selectedDepartment;
-      const searchableText = `${module.code} ${module.name} ${module.department} ${module.academicYear}`.toLowerCase();
-      return matchDepartment && (!q || searchableText.includes(q));
+      const matchYear = selectedYear === 'ALL' || module.academicYear === selectedYear;
+      const matchSemester = selectedSemester === 'ALL' || module.semester === selectedSemester;
+      const searchableText = [
+        module.code,
+        module.name,
+        module.department,
+        module.academicYear,
+        module.semester,
+        module.creatorName,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return matchDepartment && matchYear && matchSemester && (!query || searchableText.includes(query));
     });
-  }, [modules, search, selectedDepartment]);
+  }, [coordinatorModules, search, selectedDepartment, selectedYear, selectedSemester]);
+
+  const summaryStats = useMemo(() => {
+    const averageCredits = filteredModules.filter((module) => Number(module.credits) > 0);
+    const averageLectures = filteredModules.filter((module) => Number(module.lecturesPerWeek) > 0);
+
+    return {
+      published: coordinatorModules.length,
+      visible: filteredModules.length,
+      departments: new Set(coordinatorModules.map((module) => module.department)).size,
+      avgCredits: averageCredits.length
+        ? (averageCredits.reduce((total, module) => total + Number(module.credits || 0), 0) / averageCredits.length).toFixed(1)
+        : '0.0',
+      avgLectures: averageLectures.length
+        ? (averageLectures.reduce((total, module) => total + Number(module.lecturesPerWeek || 0), 0) / averageLectures.length).toFixed(1)
+        : '0.0',
+    };
+  }, [coordinatorModules, filteredModules]);
+
+  const sortedModules = useMemo(
+    () => [...filteredModules].sort((left, right) => {
+      const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+      const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+      return rightTime - leftTime || String(left.code || '').localeCompare(String(right.code || ''));
+    }),
+    [filteredModules]
+  );
+
+  const clearFilters = () => {
+    setSearch('');
+    setSelectedDepartment('ALL');
+    setSelectedYear('ALL');
+    setSelectedSemester('ALL');
+  };
 
   return (
     <FacultyCoordinatorShell
       user={user}
-      title="Added Modules"
-      subtitle="Govern and maintain the academic module registry"
-      badge="Governance Control Center"
+      title="Academic Coordinator Added Modules"
+      subtitle="Read-only catalogue of modules published from the academic coordinator side"
       backgroundImage={backgroundImage}
-      footerNote={canManageModules ? 'Use Update for corrections and Delete for retired modules only.' : 'View-only mode: modules are managed by Academic Coordinator.'}
+      brandTitle="Academic Coordinator"
+      brandSubtitle="Published Module Archive"
+      badge="Read-Only Catalogue"
+      themeVariant="academic"
+      footerNote="Only modules added by the academic coordinator are shown here."
       sidebarSections={[
         { id: 'addedModulesSummary', label: 'Summary' },
         { id: 'addedModulesFilters', label: 'Filters' },
-        { id: 'addedModulesTable', label: 'Registry Table' },
+        { id: 'addedModulesTable', label: 'Module Cards' },
       ]}
       headerActions={
         <button
           type="button"
-          onClick={() => navigate(canManageModules ? '/academic/modules' : '/scheduler/by-year')}
-          className="rounded-xl border border-cyan-300/70 bg-cyan-50 px-3 py-2 text-xs font-bold uppercase tracking-[0.08em] text-cyan-700 transition hover:bg-cyan-100"
+          onClick={loadModules}
+          className="rounded-xl border border-emerald-300/40 bg-emerald-500/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.1em] text-emerald-100 transition hover:bg-emerald-500/20"
         >
-          {canManageModules ? 'Academic Modules' : 'Open Scheduler'}
+          Refresh
         </button>
       }
     >
-      <style>{`
-        .am-glass-card {
-          border-radius: 20px;
-          border: 1px solid rgba(255,255,255,0.05);
-          background: linear-gradient(135deg, rgba(2,6,23,0.84), rgba(30,41,59,0.74));
-          backdrop-filter: blur(12px);
-          box-shadow: 0 16px 44px rgba(2,6,23,0.45);
-        }
-        .am-header {
-          font-size: 11px;
-          font-weight: 800;
-          letter-spacing: 0.18em;
-          text-transform: uppercase;
-          color: rgba(148,163,184,0.88);
-          margin: 0;
-        }
-        .am-title {
-          margin: 8px 0 4px;
-          font-size: 28px;
-          font-weight: 900;
-          color: #f8fafc;
-        }
-        .am-filters-grid {
-          display: grid;
-          grid-template-columns: 2fr 1fr;
-          gap: 12px;
-        }
-        .am-input,
-        .am-select {
-          width: 100%;
-          padding: 12px;
-          border-radius: 12px;
-          border: 1px solid rgba(255,255,255,0.05);
-          background: rgba(15,23,42,0.78);
-          color: #f8fafc;
-          outline: none;
-          box-sizing: border-box;
-        }
-        .am-table-shell {
-          border-radius: 22px;
-          overflow: hidden;
-          border: 1px solid rgba(255,255,255,0.05);
-          background: linear-gradient(180deg, rgba(2,6,23,0.9), rgba(15,23,42,0.84));
-          backdrop-filter: blur(12px);
-          box-shadow: 0 16px 42px rgba(2,6,23,0.45);
-        }
-        .am-table-row {
-          transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-        }
-        .am-table-row:nth-child(odd) {
-          background: rgba(2,6,23,0.52);
-        }
-        .am-table-row:nth-child(even) {
-          background: rgba(15,23,42,0.52);
-        }
-        .am-table-row:hover {
-          transform: translateY(-1px);
-          background: rgba(30,41,59,0.82) !important;
-          box-shadow: 0 8px 22px rgba(59,130,246,0.14);
-        }
-        .am-pill {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          padding: 4px 10px;
-          border-radius: 999px;
-          font-size: 11px;
-          font-weight: 800;
-          letter-spacing: 0.05em;
-        }
-        .am-pill-se { background: rgba(59,130,246,0.18); color: #bfdbfe; border: 1px solid rgba(59,130,246,0.26); }
-        .am-pill-it { background: rgba(168,85,247,0.18); color: #e9d5ff; border: 1px solid rgba(168,85,247,0.26); }
-        .am-pill-other { background: rgba(148,163,184,0.14); color: #e2e8f0; border: 1px solid rgba(148,163,184,0.22); }
-        .am-action-btn {
-          padding: 8px 13px;
-          border-radius: 10px;
-          font-size: 12px;
-          font-weight: 800;
-          letter-spacing: 0.03em;
-          transition: transform 0.2s ease, filter 0.2s ease;
-          border: 1px solid transparent;
-        }
-        .am-action-btn:hover { transform: translateY(-1px); filter: brightness(1.08); }
-        .am-update-btn {
-          border-color: rgba(59,130,246,0.55);
-          background: linear-gradient(135deg, rgba(30,58,138,0.92), rgba(30,64,175,0.84));
-          color: #dbeafe;
-        }
-        .am-delete-btn {
-          border-color: rgba(248,113,113,0.55);
-          background: linear-gradient(135deg, rgba(127,29,29,0.94), rgba(153,27,27,0.86));
-          color: #fee2e2;
-        }
-        @media (max-width: 920px) {
-          .am-filters-grid {
-            grid-template-columns: 1fr;
-          }
-        }
-      `}</style>
-
       <div className="fc-layout-stack fc-layout-stack-tight">
-        <section id="addedModulesSummary" className="am-glass-card" style={{ padding: 24 }}>
-          <p className="am-header">Governance Ledger</p>
-          <h2 className="am-title">Added Modules Registry</h2>
-          <p style={{ margin: 0, color: 'rgba(203,213,225,0.82)', fontSize: 13 }}>
-            Data-centric review and control for all module records.
-          </p>
+        <section
+          id="addedModulesSummary"
+          className="rounded-[30px] border border-white/10 bg-[linear-gradient(135deg,rgba(4,15,30,0.92),rgba(10,26,48,0.82))] p-6 shadow-[0_24px_70px_rgba(2,6,23,0.45)] backdrop-blur"
+        >
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-emerald-200/80">Governance Ledger</p>
+              <h2 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-4xl">Academic Coordinator Added Modules</h2>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 sm:text-[15px]">
+                A clean, read-only archive of modules published from the academic coordinator side. Use the filters to narrow the list by specialization, year, semester, or text search.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-right text-xs text-slate-300 sm:min-w-[260px]">
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Visible</p>
+                <p className="mt-1 text-2xl font-black text-white">{summaryStats.visible}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Published</p>
+                <p className="mt-1 text-2xl font-black text-white">{summaryStats.published}</p>
+              </div>
+            </div>
+          </div>
         </section>
 
-        <section id="addedModulesFilters" className="am-glass-card am-filters-grid" style={{ padding: 16 }}>
-          <input
-            className="am-input"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by code, name, department or year"
-          />
-          <select className="am-select" value={selectedDepartment} onChange={(e) => setSelectedDepartment(e.target.value)}>
-            {departments.map((dep) => (
-              <option key={dep} value={dep} style={{ background: '#0f172a' }}>
-                {dep === 'ALL' ? 'All Departments' : dep}
-              </option>
-            ))}
-          </select>
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Published modules" value={summaryStats.published} helper="Modules available in the academic coordinator archive." tone="emerald" />
+          <StatCard label="Visible in view" value={summaryStats.visible} helper="Matches your current filters." tone="cyan" />
+          <StatCard label="Specializations" value={summaryStats.departments} helper="Unique module streams currently displayed." tone="indigo" />
+          <StatCard label="Avg. workload" value={`${summaryStats.avgCredits} / ${summaryStats.avgLectures}`} helper="Credits and lectures per week in the filtered set." tone="amber" />
         </section>
 
-        {(error || success) && (
-          <div
-            className="am-glass-card"
-            style={{
-              padding: '12px 14px',
-              background: error ? 'rgba(220,38,38,0.14)' : 'rgba(16,185,129,0.14)',
-              borderColor: error ? 'rgba(252,165,165,0.35)' : 'rgba(110,231,183,0.35)',
-              color: error ? '#fecaca' : '#a7f3d0',
-              fontWeight: 600,
-              fontSize: 13,
-            }}
-          >
-            {error || success}
-          </div>
-        )}
+        <section id="addedModulesFilters" className="rounded-[28px] border border-white/10 bg-white/6 p-5 shadow-[0_18px_44px_rgba(2,6,23,0.28)] backdrop-blur">
+          <div className="grid gap-4 lg:grid-cols-[2fr_1fr_1fr_1fr_auto]">
+            <label className="flex flex-col gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Search</span>
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search code, name, coordinator, or year"
+                className="rounded-2xl border border-white/10 bg-slate-950/35 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/40 focus:bg-slate-950/50"
+              />
+            </label>
 
-        {!canManageModules && (
-          <div
-            className="am-glass-card"
-            style={{
-              padding: '10px 14px',
-              color: '#cbd5e1',
-              fontWeight: 700,
-              fontSize: 12,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              borderColor: 'rgba(125,211,252,0.2)',
-              background: 'rgba(15,23,42,0.6)',
-            }}
-          >
-            Faculty Coordinator View: Added modules are read-only and managed by Academic Coordinator.
-          </div>
-        )}
-
-        <section id="addedModulesTable" className="am-table-shell">
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)', color: 'rgba(186,230,253,0.95)', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.12em' }}>
-            {loading ? 'Loading modules' : `${filteredModules.length} modules shown`}
-          </div>
-
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 1100 }}>
-              <thead>
-                <tr style={{ background: 'linear-gradient(90deg, rgba(15,23,42,0.97), rgba(30,41,59,0.9))' }}>
-                  {['Code', 'Name', 'Department', 'Academic Year', 'Semester', 'Credits', 'Lectures/Week', 'Created', ...(canManageModules ? ['Actions'] : [])].map((head) => (
-                    <th
-                      key={head}
-                      style={{
-                        textAlign: 'left',
-                        padding: '12px 14px',
-                        fontSize: 11,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.1em',
-                        color: 'rgba(148,163,184,0.9)',
-                        borderBottom: '1px solid rgba(255,255,255,0.05)',
-                        position: 'sticky',
-                        top: 0,
-                        zIndex: 1,
-                        backdropFilter: 'blur(10px)',
-                      }}
-                    >
-                      {head}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {!loading && filteredModules.length === 0 && (
-                  <tr>
-                    <td colSpan={canManageModules ? 9 : 8} style={{ padding: '30px 14px', textAlign: 'center', color: 'rgba(148,163,184,0.9)', fontSize: 14 }}>
-                      No modules found for this filter.
-                    </td>
-                  </tr>
-                )}
-
-                {filteredModules.map((module) => (
-                  <Fragment key={module.id}>
-                    <tr className="am-table-row">
-                      <td style={{ padding: '12px 14px', color: '#f8fafc', fontWeight: 700 }}>{module.code || '-'}</td>
-                      <td style={{ padding: '12px 14px', color: 'rgba(226,232,240,0.95)' }}>{module.name || '-'}</td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <span className={String(module.department || '').toLowerCase() === 'se' ? 'am-pill am-pill-se' : String(module.department || '').toLowerCase() === 'it' ? 'am-pill am-pill-it' : 'am-pill am-pill-other'}>
-                          {module.department || '-'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 14px', color: '#cbd5e1' }}>{module.academicYear || '-'}</td>
-                      <td style={{ padding: '12px 14px', color: '#cbd5e1' }}>{module.semester || '-'}</td>
-                      <td style={{ padding: '12px 14px', color: '#cbd5e1' }}>{module.credits || '-'}</td>
-                      <td style={{ padding: '12px 14px', color: '#cbd5e1' }}>{module.lecturesPerWeek || '-'}</td>
-                      <td style={{ padding: '12px 14px', color: 'rgba(148,163,184,0.85)' }}>
-                        {module.createdAt ? new Date(module.createdAt).toLocaleDateString() : '-'}
-                      </td>
-                      {canManageModules && (
-                        <td style={{ padding: '12px 14px' }}>
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            <button type="button" onClick={() => startEdit(module)} className="am-action-btn am-update-btn">
-                              Update
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => deleteModule(module.id)}
-                              disabled={deletingId === module.id}
-                              className="am-action-btn am-delete-btn"
-                              style={{ opacity: deletingId === module.id ? 0.7 : 1, cursor: deletingId === module.id ? 'not-allowed' : 'pointer' }}
-                            >
-                              {deletingId === module.id ? 'Deleting...' : 'Delete'}
-                            </button>
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-
-                    {canManageModules && editingId === module.id && (
-                      <tr style={{ background: 'rgba(15,23,42,0.82)' }}>
-                        <td colSpan={9} style={{ padding: 14, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                          <form onSubmit={saveEdit} style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
-                            <input className="am-input" value={editingForm.code} onChange={(e) => setEditingForm((prev) => ({ ...prev, code: e.target.value }))} placeholder="Code" />
-                            <input className="am-input" value={editingForm.name} onChange={(e) => setEditingForm((prev) => ({ ...prev, name: e.target.value }))} placeholder="Name" />
-                            <input className="am-input" value={editingForm.department} onChange={(e) => setEditingForm((prev) => ({ ...prev, department: e.target.value.toUpperCase() }))} placeholder="Department" />
-                            <input className="am-input" value={editingForm.academicYear} onChange={(e) => setEditingForm((prev) => ({ ...prev, academicYear: e.target.value }))} placeholder="Academic Year" />
-                            <input className="am-input" value={editingForm.semester} onChange={(e) => setEditingForm((prev) => ({ ...prev, semester: e.target.value }))} placeholder="Semester" />
-                            <input className="am-input" value={editingForm.credits} onChange={(e) => setEditingForm((prev) => ({ ...prev, credits: e.target.value }))} placeholder="Credits" />
-                            <input className="am-input" value={editingForm.lecturesPerWeek} onChange={(e) => setEditingForm((prev) => ({ ...prev, lecturesPerWeek: e.target.value }))} placeholder="Lectures / Week" />
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              <button type="submit" disabled={savingId === module.id} className="am-action-btn am-update-btn" style={{ cursor: savingId === module.id ? 'not-allowed' : 'pointer' }}>
-                                {savingId === module.id ? 'Saving...' : 'Save'}
-                              </button>
-                              <button type="button" onClick={cancelEdit} className="am-action-btn" style={{ border: '1px solid rgba(148,163,184,0.45)', background: 'rgba(15,23,42,0.7)', color: '#cbd5e1' }}>
-                                Cancel
-                              </button>
-                            </div>
-                          </form>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
+            <label className="flex flex-col gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Specialization</span>
+              <select
+                value={selectedDepartment}
+                onChange={(e) => setSelectedDepartment(e.target.value)}
+                className="rounded-2xl border border-white/10 bg-slate-950/35 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/40 focus:bg-slate-950/50"
+              >
+                {departments.map((dep) => (
+                  <option key={dep} value={dep} className="bg-slate-950 text-white">
+                    {dep === 'ALL' ? 'All specializations' : dep}
+                  </option>
                 ))}
-              </tbody>
-            </table>
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Academic year</span>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="rounded-2xl border border-white/10 bg-slate-950/35 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/40 focus:bg-slate-950/50"
+              >
+                {years.map((year) => (
+                  <option key={year} value={year} className="bg-slate-950 text-white">
+                    {year === 'ALL' ? 'All years' : formatAcademicYear(year)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Semester</span>
+              <select
+                value={selectedSemester}
+                onChange={(e) => setSelectedSemester(e.target.value)}
+                className="rounded-2xl border border-white/10 bg-slate-950/35 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/40 focus:bg-slate-950/50"
+              >
+                {semesters.map((semester) => (
+                  <option key={semester} value={semester} className="bg-slate-950 text-white">
+                    {semester === 'ALL' ? 'All semesters' : `Semester ${semester}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="flex items-end">
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="w-full rounded-2xl border border-emerald-300/25 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-100 transition hover:bg-emerald-500/20"
+              >
+                Reset
+              </button>
+            </div>
           </div>
+        </section>
+
+        {error && (
+          <div className="rounded-2xl border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-sm font-medium text-rose-100">
+            {error}
+          </div>
+        )}
+
+        <section id="addedModulesTable" className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(3,10,20,0.92),rgba(8,18,34,0.9))] p-5 shadow-[0_22px_58px_rgba(2,6,23,0.42)] backdrop-blur">
+          <div className="flex flex-col gap-2 border-b border-white/10 pb-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Module Cards</p>
+              <h3 className="mt-2 text-xl font-bold text-white">{loading ? 'Loading module archive' : `${sortedModules.length} modules in view`}</h3>
+            </div>
+            <p className="text-sm text-slate-400">Only modules published by the academic coordinator are shown.</p>
+          </div>
+
+          {loading ? (
+            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 6 }, (_, index) => (
+                <div key={index} className="h-56 animate-pulse rounded-[28px] border border-white/8 bg-white/5" />
+              ))}
+            </div>
+          ) : sortedModules.length === 0 ? (
+            <div className="mt-6 rounded-[24px] border border-dashed border-white/15 bg-white/5 px-6 py-12 text-center">
+              <p className="text-lg font-semibold text-white">No academic-coordinator modules match this view.</p>
+              <p className="mt-2 text-sm text-slate-400">Try clearing the filters or wait for the academic coordinator to publish more modules.</p>
+            </div>
+          ) : (
+            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {sortedModules.map((module) => (
+                <ModuleCard key={module.id} module={module} />
+              ))}
+            </div>
+          )}
         </section>
       </div>
     </FacultyCoordinatorShell>
