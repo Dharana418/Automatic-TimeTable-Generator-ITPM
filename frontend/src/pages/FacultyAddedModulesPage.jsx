@@ -3,7 +3,6 @@ import { motion as Motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/scheduler.js';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
-import backgroundImage from '../assets/room-interior-design.jpg';
 
 const normalizeDep = (value = '') => String(value || '').trim().toUpperCase();
 
@@ -182,7 +181,6 @@ const FacultyAddedModulesPage = ({ user }) => {
       title="Added Modules"
       subtitle="Govern and maintain the academic module registry"
       badge="Governance Control Center"
-      backgroundImage={backgroundImage}
       footerNote={canManageModules ? 'Use Update for corrections and Delete for retired modules only.' : 'View-only mode: modules are managed by Academic Coordinator.'}
       sidebarSections={[
         { id: 'addedModulesSummary', label: 'Summary' },

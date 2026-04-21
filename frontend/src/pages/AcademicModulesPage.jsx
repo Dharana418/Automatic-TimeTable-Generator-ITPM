@@ -183,7 +183,7 @@ export default function AcademicModulesPage({ user }) {
       const res = await api.listItems('modules');
       const normalized = Array.isArray(res.items) ? res.items.map((item) => normalizeModuleRecord(item)) : [];
       setModules(normalized);
-    } catch (err) {
+    } catch {
       toast.error('Failed to load module registry.');
     } finally {
       setLoading(false);
@@ -674,8 +674,6 @@ export default function AcademicModulesPage({ user }) {
       }));
   }, [activeEditingSource, editingForm]);
 
-  const isActionLocked = isEditModalOpen || Boolean(deleteTarget) || Boolean(updatingModuleId) || Boolean(deletingModuleId);
-
   return (
     <FacultyCoordinatorShell
       user={user}
@@ -683,6 +681,7 @@ export default function AcademicModulesPage({ user }) {
       subtitle="Register, update, and manage degree modules across all specializations."
       badge="Modules"
       themeVariant="academic"
+      mainTopMarginClass="mt-9"
     >
       <style>{`
         .ac-input-hover:focus { border-color: rgba(56,189,248,0.5) !important; box-shadow: 0 0 0 3px rgba(56,189,248,0.1) !important; }

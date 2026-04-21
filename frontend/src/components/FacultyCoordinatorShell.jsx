@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 const normalizeRoleKey = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -29,7 +29,7 @@ const getRoleNav = (roleKey) => {
       { id: 'academic-assignments', label: 'Assignments', to: '/academic/assignments', icon: Icon.calendar },
       { id: 'academic-calendar', label: 'Calendar', to: '/academic/calendar', icon: Icon.calendar },
       { id: 'academic-conflicts', label: 'Conflicts', to: '/academic/conflicts', icon: Icon.warning },
-      { id: 'academic-halls', label: 'Hall Allocation', to: '/academic/hall-allocation', icon: Icon.grid },
+      { id: 'academic-halls', label: 'Hall Allocation', to: '/faculty/hall-allocations', icon: Icon.grid },
       { id: 'shared-added-modules', label: 'Added Modules', to: '/faculty/modules/added', icon: Icon.book },
     ];
   }
@@ -79,15 +79,12 @@ export default function FacultyCoordinatorShell({
   footerNote = 'Faculty coordinator workspace',
   themeVariant = 'dark',
   headerActions = null,
-  sidebarSections = [],
+  topOffsetClass = 'pt-4',
 }) {
   const navigate = useNavigate();
   const location = useLocation();
   const roleKey = normalizeRoleKey(user?.role);
 
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
-  const [activeSectionId, setActiveSectionId] = useState('');
   const navItems = useMemo(() => getRoleNav(roleKey), [roleKey]);
   const workspaceLabel = useMemo(() => getRoleWorkspaceLabel(roleKey), [roleKey]);
 
@@ -109,42 +106,8 @@ export default function FacultyCoordinatorShell({
     };
   }, []);
 
-  useEffect(() => {
-    if (!Array.isArray(sidebarSections) || sidebarSections.length === 0) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-
-        if (visible.length > 0) {
-          setActiveSectionId(visible[0].target.id);
-        }
-      },
-      { rootMargin: '-120px 0px -45% 0px', threshold: [0.15, 0.4, 0.7] },
-    );
-
-    const targets = sidebarSections
-      .map((section) => document.getElementById(section.id))
-      .filter(Boolean);
-
-    targets.forEach((target) => observer.observe(target));
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [sidebarSections, location.pathname]);
-
   const isLightTheme = themeVariant === 'light';
   const isAcademicTheme = themeVariant === 'academic';
-
-  const jumpToSection = (sectionId) => {
-    const target = document.getElementById(sectionId);
-    if (!target) return;
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setMobileOpen(false);
-  };
 
   return (
     <div className={`fc-spacing-system relative min-h-screen overflow-hidden ${isLightTheme ? 'bg-slate-100 text-slate-900' : isAcademicTheme ? 'bg-[#040a16] text-slate-100' : 'bg-[#07111f] text-slate-100'}`}>
@@ -156,119 +119,58 @@ export default function FacultyCoordinatorShell({
       }`} />
       <div className={`pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:72px_72px] ${isLightTheme ? 'opacity-60' : isAcademicTheme ? 'opacity-30' : 'opacity-20'}`} />
 
-      <div className="relative grid min-h-screen grid-cols-1 lg:grid-cols-[auto_minmax(0,1fr)] lg:gap-6 lg:px-4 lg:pt-6">
-        <div
-          className={`fixed inset-0 z-30 ${isLightTheme ? 'bg-slate-900/35' : 'bg-black/55'} backdrop-blur-sm transition-opacity duration-300 lg:hidden ${mobileOpen ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
-          onClick={() => setMobileOpen(false)}
-        />
+      <div className={`relative min-h-screen px-4 ${topOffsetClass} lg:grid lg:grid-cols-[20rem_minmax(0,1fr)] lg:gap-6 lg:px-4`}>
 
-        {/* SIDEBAR */}
-        <aside className={`fixed left-4 top-24 z-40 flex h-[calc(100vh-7rem)] flex-col overflow-y-auto rounded-[28px] border ${isLightTheme ? 'border-slate-200 bg-white/85 shadow-[0_24px_80px_rgba(15,23,42,0.16)]' : isAcademicTheme ? 'border-emerald-300/20 bg-slate-950/85 shadow-[0_24px_80px_rgba(2,10,24,0.55)]' : 'border-white/10 bg-slate-950/80 shadow-[0_24px_80px_rgba(2,6,23,0.48)]'} backdrop-blur-2xl transition-all duration-300 lg:sticky lg:left-0 lg:top-24 lg:h-[calc(100vh-7rem)]
-          ${collapsed ? 'w-20' : 'w-72'}
-          ${mobileOpen ? 'translate-x-0' : '-translate-x-[110%]'}
-          lg:translate-x-0`}>
-
-          <div className={`absolute inset-0 ${isLightTheme ? 'bg-[radial-gradient(circle_at_top_right,_rgba(14,165,233,0.12),_transparent_34%),radial-gradient(circle_at_bottom_left,_rgba(59,130,246,0.08),_transparent_30%)]' : isAcademicTheme ? 'bg-[radial-gradient(circle_at_top_right,_rgba(16,185,129,0.16),_transparent_34%),radial-gradient(circle_at_bottom_left,_rgba(14,165,233,0.14),_transparent_30%)]' : 'bg-[radial-gradient(circle_at_top_right,_rgba(59,130,246,0.18),_transparent_34%),radial-gradient(circle_at_bottom_left,_rgba(14,165,233,0.16),_transparent_30%)]'}`} />
-
-          <div className={`relative flex items-center gap-3 border-b ${isLightTheme ? 'border-slate-200/80' : 'border-white/10'} p-4`}>
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400 via-sky-500 to-indigo-600 text-sm font-black text-white shadow-[0_10px_24px_rgba(8,145,178,0.32)]">
+        <aside className={`hidden lg:sticky lg:top-16 lg:flex lg:h-[calc(100dvh-4rem)] lg:flex-col lg:overflow-x-hidden lg:overflow-y-hidden rounded-[28px] border ${isLightTheme ? 'border-slate-200 bg-white/85 shadow-[0_24px_80px_rgba(15,23,42,0.16)]' : isAcademicTheme ? 'border-emerald-300/20 bg-slate-950/85 shadow-[0_24px_80px_rgba(2,10,24,0.55)]' : 'border-white/10 bg-slate-950/80 shadow-[0_24px_80px_rgba(2,6,23,0.48)]'} backdrop-blur-2xl`}>
+          <div className={`relative flex items-center gap-2 border-b ${isLightTheme ? 'border-slate-200/80' : 'border-white/10'} p-3`}>
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400 via-sky-500 to-indigo-600 text-sm font-black text-white shadow-[0_10px_24px_rgba(8,145,178,0.32)]">
               {brandCode}
             </div>
-            {!collapsed && (
-              <div className="min-w-0">
-                <p className={`text-[11px] font-semibold uppercase tracking-[0.24em] ${isLightTheme ? 'text-sky-700' : isAcademicTheme ? 'text-emerald-200/90' : 'text-cyan-200/80'}`}>{brandTitle}</p>
-                <p className={`truncate text-sm font-bold ${isLightTheme ? 'text-slate-900' : 'text-white'}`}>{brandSubtitle}</p>
-              </div>
-            )}
+            <div className="min-w-0">
+              <p className={`text-[11px] font-semibold uppercase tracking-[0.24em] ${isLightTheme ? 'text-sky-700' : isAcademicTheme ? 'text-emerald-200/90' : 'text-cyan-200/80'}`}>{brandTitle}</p>
+              <p className={`truncate text-sm font-bold ${isLightTheme ? 'text-slate-900' : 'text-white'}`}>{brandSubtitle}</p>
+            </div>
           </div>
 
-          <nav className="relative space-y-1 p-3">
+          <nav className="relative space-y-1 p-2">
             {navItems.map((item) => {
               const active = location.pathname === item.to;
               return (
                 <button
-                  key={item.id}
-                  onClick={() => {
-                    navigate(item.to);
-                    setMobileOpen(false);
-                  }}
-                  className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition duration-200 ${
+                  key={`sidebar-${item.id}`}
+                  type="button"
+                  onClick={() => navigate(item.to)}
+                  className={`flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left transition duration-200 ${
                     active
                       ? (isLightTheme ? 'bg-gradient-to-r from-cyan-100 via-sky-100 to-indigo-100 text-slate-900 shadow-[0_10px_20px_rgba(14,116,144,0.12)] ring-1 ring-cyan-300/60' : isAcademicTheme ? 'bg-gradient-to-r from-emerald-500/18 via-cyan-500/15 to-sky-500/18 text-white shadow-[0_10px_20px_rgba(16,185,129,0.12)] ring-1 ring-emerald-300/25' : 'bg-gradient-to-r from-cyan-500/20 via-sky-500/18 to-indigo-500/20 text-white shadow-[0_10px_20px_rgba(8,145,178,0.14)] ring-1 ring-cyan-400/25')
                       : (isLightTheme ? 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900' : isAcademicTheme ? 'text-slate-300 hover:bg-emerald-500/10 hover:text-emerald-100' : 'text-slate-300 hover:bg-white/5 hover:text-white')
                   }`}
                 >
-                  <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${active ? (isLightTheme ? 'bg-white text-cyan-700' : isAcademicTheme ? 'bg-emerald-500/20 text-emerald-100' : 'bg-white/10 text-cyan-100') : (isLightTheme ? 'bg-slate-100 text-slate-600' : isAcademicTheme ? 'bg-slate-900/70 text-slate-300' : 'bg-white/5 text-slate-300')}`}>
+                  <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${active ? (isLightTheme ? 'bg-white text-cyan-700' : isAcademicTheme ? 'bg-emerald-500/20 text-emerald-100' : 'bg-white/10 text-cyan-100') : (isLightTheme ? 'bg-slate-100 text-slate-600' : isAcademicTheme ? 'bg-slate-900/70 text-slate-300' : 'bg-white/5 text-slate-300')}`}>
                     {item.icon}
                   </span>
-                  {!collapsed && <span className="text-sm font-semibold">{item.label}</span>}
+                  <span className="text-[13px] font-semibold leading-tight">{item.label}</span>
                 </button>
               );
             })}
           </nav>
 
-          {Array.isArray(sidebarSections) && sidebarSections.length > 0 && (
-            <div className={`relative mx-3 mb-3 rounded-2xl border p-3 ${isLightTheme ? 'border-slate-200 bg-slate-50/85' : isAcademicTheme ? 'border-emerald-300/20 bg-slate-900/70' : 'border-white/10 bg-slate-900/70'}`}>
-              <p className={`mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${isLightTheme ? 'text-slate-500' : 'text-slate-400'}`}>
-                In Page
-              </p>
-              <div className="space-y-1">
-                {sidebarSections.map((section) => {
-                  const isActive = activeSectionId === section.id;
-                  return (
-                    <button
-                      key={section.id}
-                      type="button"
-                      onClick={() => jumpToSection(section.id)}
-                      className={`w-full rounded-xl px-3 py-2 text-left text-xs font-semibold transition ${
-                        isActive
-                          ? (isLightTheme
-                            ? 'bg-white text-sky-700 shadow-[0_8px_18px_rgba(14,116,144,0.14)] ring-1 ring-sky-200'
-                            : isAcademicTheme
-                              ? 'bg-emerald-500/15 text-emerald-100 ring-1 ring-emerald-300/20'
-                              : 'bg-cyan-500/15 text-cyan-100 ring-1 ring-cyan-300/20')
-                          : (isLightTheme
-                            ? 'text-slate-600 hover:bg-white/90 hover:text-slate-900'
-                            : 'text-slate-300 hover:bg-white/5 hover:text-white')
-                      }`}
-                    >
-                      {section.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          <div className={`mt-auto flex items-center gap-3 border-t ${isLightTheme ? 'border-slate-200/80 bg-white/70' : 'border-white/10 bg-slate-950/60'} p-4 backdrop-blur-xl`}>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400 to-cyan-500 text-sm font-bold text-white shadow-lg shadow-cyan-950/20">
+          <div className={`mt-auto flex items-center gap-2 border-t ${isLightTheme ? 'border-slate-200/80 bg-white/70' : 'border-white/10 bg-slate-950/60'} p-3 backdrop-blur-xl`}>
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400 to-cyan-500 text-xs font-bold text-white shadow-lg shadow-cyan-950/20">
               {initials}
             </div>
-            {!collapsed && (
-              <div className="min-w-0">
-                <p className={`truncate text-sm font-semibold ${isLightTheme ? 'text-slate-900' : 'text-white'}`}>{displayName}</p>
-                <p className={`text-xs ${isLightTheme ? 'text-slate-500' : 'text-slate-400'}`}>Active session</p>
-              </div>
-            )}
+            <div className="min-w-0">
+              <p className={`truncate text-xs font-semibold ${isLightTheme ? 'text-slate-900' : 'text-white'}`}>{displayName}</p>
+              <p className={`text-xs ${isLightTheme ? 'text-slate-500' : 'text-slate-400'}`}>Active session</p>
+            </div>
           </div>
-
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className={`absolute -right-3 top-6 z-10 flex h-8 w-8 items-center justify-center rounded-full border ${isLightTheme ? 'border-slate-300 bg-white text-cyan-700 shadow-[0_10px_24px_rgba(15,23,42,0.16)]' : 'border-white/10 bg-slate-900 text-cyan-100 shadow-[0_10px_24px_rgba(2,6,23,0.35)]'} transition hover:scale-105`}
-          >
-            {collapsed ? Icon.chevronRight : Icon.chevronLeft}
-          </button>
         </aside>
 
         {/* MAIN */}
-        <div className="relative flex min-w-0 flex-1 flex-col">
-          <header className={`sticky top-24 z-30 mx-4 mb-4 rounded-[28px] border ${isLightTheme ? 'border-sky-200/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.95),rgba(240,249,255,0.92),rgba(224,242,254,0.88))] shadow-[0_18px_40px_rgba(14,116,144,0.14)]' : 'border-cyan-300/20 bg-[linear-gradient(135deg,rgba(2,6,23,0.82),rgba(15,23,42,0.72),rgba(8,47,73,0.58))] shadow-[0_18px_40px_rgba(2,6,23,0.4)]'} px-5 py-4 backdrop-blur-2xl lg:mx-0`}>
+        <div className="relative flex min-w-0 flex-1 flex-col mt-9">
+          <header className={`relative z-20 mx-4 mb-4 rounded-[28px] border ${isLightTheme ? 'border-sky-200/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.95),rgba(240,249,255,0.92),rgba(224,242,254,0.88))] shadow-[0_18px_40px_rgba(14,116,144,0.14)]' : 'border-cyan-300/20 bg-[linear-gradient(135deg,rgba(2,6,23,0.82),rgba(15,23,42,0.72),rgba(8,47,73,0.58))] shadow-[0_18px_40px_rgba(2,6,23,0.4)]'} px-5 py-4 backdrop-blur-2xl lg:mx-0`}>
             <div className="flex items-center justify-between gap-4">
               <div className="flex min-w-0 items-center gap-3">
-                <button className={`rounded-xl border ${isLightTheme ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-white/10 bg-white/5 text-white'} p-2 lg:hidden`} onClick={() => setMobileOpen(true)}>
-                  {Icon.menu}
-                </button>
-
                 <div className="min-w-0">
                   <div className={`mb-2 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] ${isLightTheme ? 'border-cyan-300/80 bg-cyan-50 text-cyan-700' : 'border-cyan-400/20 bg-cyan-400/10 text-cyan-100'}`}>
                     <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" />
@@ -291,9 +193,12 @@ export default function FacultyCoordinatorShell({
 
           <main className="flex-1 px-4 pb-12 lg:px-0 lg:pb-16">
             <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 fc-layout-stack fc-layout-stack-loose">
-              <section className={`relative overflow-hidden rounded-[32px] border p-6 backdrop-blur-xl lg:p-8 ${isLightTheme ? 'border-sky-200/80 bg-[linear-gradient(145deg,rgba(255,255,255,0.96),rgba(240,249,255,0.95),rgba(224,242,254,0.9))] shadow-[0_18px_50px_rgba(14,116,144,0.14)]' : 'border-cyan-300/20 bg-[linear-gradient(145deg,rgba(15,23,42,0.62),rgba(8,47,73,0.52),rgba(30,41,59,0.58))] shadow-[0_18px_50px_rgba(2,6,23,0.28)]'}`}>
+              <section
+                className={`relative overflow-hidden rounded-[32px] border backdrop-blur-xl ${isLightTheme ? 'border-sky-200/80 bg-[linear-gradient(145deg,rgba(255,255,255,0.96),rgba(240,249,255,0.95),rgba(224,242,254,0.9))] shadow-[0_18px_50px_rgba(14,116,144,0.14)]' : 'border-cyan-300/20 bg-[linear-gradient(145deg,rgba(15,23,42,0.62),rgba(8,47,73,0.52),rgba(30,41,59,0.58))] shadow-[0_18px_50px_rgba(2,6,23,0.28)]'}`}
+                style={{ padding: '24px 24px 110px' }}
+              >
                 <div className={`absolute inset-0 ${isLightTheme ? 'bg-[radial-gradient(circle_at_top_right,_rgba(34,211,238,0.12),_transparent_26%),radial-gradient(circle_at_bottom_left,_rgba(99,102,241,0.10),_transparent_30%)]' : 'bg-[radial-gradient(circle_at_top_right,_rgba(34,211,238,0.18),_transparent_26%),radial-gradient(circle_at_bottom_left,_rgba(99,102,241,0.18),_transparent_30%)]'}`} />
-                <div className="relative grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
+                <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-stretch">
                   <div className="space-y-4">
                     <p className={`text-[11px] font-semibold uppercase tracking-[0.28em] ${isLightTheme ? 'text-cyan-700' : isAcademicTheme ? 'text-emerald-200/90' : 'text-cyan-100/80'}`}>{brandTitle} Dashboard</p>
                     <h2 className={`max-w-3xl text-3xl font-black leading-tight sm:text-4xl ${isLightTheme ? 'text-slate-900' : 'text-white'}`}>
@@ -310,7 +215,7 @@ export default function FacultyCoordinatorShell({
                     </div>
                   </div>
 
-                  <div className={`relative overflow-hidden rounded-[28px] border p-4 ${isLightTheme ? 'border-slate-200 bg-slate-50/80 shadow-[0_16px_40px_rgba(15,23,42,0.08)]' : 'border-white/10 bg-slate-950/50 shadow-[0_16px_40px_rgba(2,6,23,0.3)]'}`}>
+                  <div className={`relative h-full overflow-hidden rounded-[28px] border p-4 ${isLightTheme ? 'border-slate-200 bg-slate-50/80 shadow-[0_16px_40px_rgba(15,23,42,0.08)]' : 'border-white/10 bg-slate-950/50 shadow-[0_16px_40px_rgba(2,6,23,0.3)]'}`}>
                     <div className={`absolute inset-0 ${isLightTheme ? 'bg-gradient-to-br from-cyan-100/70 via-transparent to-indigo-100/70' : 'bg-gradient-to-br from-cyan-500/12 via-transparent to-indigo-500/18'}`} />
                     <div className="relative grid gap-3 sm:grid-cols-2">
                       <div className={`rounded-2xl border p-4 ${isLightTheme ? 'border-slate-200 bg-white' : 'border-white/10 bg-white/5'}`}>

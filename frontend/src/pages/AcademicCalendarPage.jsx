@@ -205,6 +205,7 @@ export default function AcademicCalendarPage({ user }) {
       subtitle="Publish and review significant academic milestones and semester boundaries."
       badge="Timeline Planner"
       themeVariant="academic"
+      mainTopMarginClass="mt-9"
     >
       <style>{`
         .ac-input-hover:focus { border-color: rgba(244,114,182,0.5) !important; box-shadow: 0 0 0 3px rgba(244,114,182,0.1) !important; }

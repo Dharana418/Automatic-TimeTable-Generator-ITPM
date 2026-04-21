@@ -5,8 +5,6 @@ const HallRatingsPanel = ({ hallId, apiBase }) => {
   const [stats, setStats] = useState(null);
   const [showAddRating, setShowAddRating] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [hasLoadedRatings, setHasLoadedRatings] = useState(false);
-  const [hasActivityLogs, setHasActivityLogs] = useState(false);
   const [ratingForm, setRatingForm] = useState({
     rating: 5,
     comment: '',
@@ -19,7 +17,6 @@ const HallRatingsPanel = ({ hallId, apiBase }) => {
   const loadRatings = useCallback(async () => {
     try {
       setLoading(true);
-      setHasLoadedRatings(false);
       const res = await fetch(`${apiBase}/api/halls/${hallId}/ratings`, {
         credentials: 'include'
       });
@@ -31,7 +28,6 @@ const HallRatingsPanel = ({ hallId, apiBase }) => {
       console.error('Error loading ratings:', error);
     } finally {
       setLoading(false);
-      setHasLoadedRatings(true);
     }
   }, [hallId, apiBase]);
 
@@ -49,29 +45,12 @@ const HallRatingsPanel = ({ hallId, apiBase }) => {
     }
   }, [hallId, apiBase]);
 
-  const loadActivityLogPresence = useCallback(async () => {
-    try {
-      const res = await fetch(`${apiBase}/api/halls/${hallId}/logs`, {
-        credentials: 'include'
-      });
-      const data = await res.json();
-      if (data.success) {
-        const activityCount = Array.isArray(data.logs) ? data.logs.length : 0;
-        setHasActivityLogs(activityCount > 0);
-      }
-    } catch (error) {
-      console.error('Error loading activity logs for ratings view:', error);
-      setHasActivityLogs(false);
-    }
-  }, [hallId, apiBase]);
-
   useEffect(() => {
     if (hallId) {
       loadRatings();
       loadStats();
-      loadActivityLogPresence();
     }
-  }, [hallId, loadRatings, loadStats, loadActivityLogPresence]);
+  }, [hallId, loadRatings, loadStats]);
 
   const handleAddRating = async (e) => {
     e.preventDefault();
