@@ -74,6 +74,8 @@ export default function AcademicConflictsPage({ user }) {
       badge="Generator Triage"
       themeVariant="academic"
       mainTopMarginClass="mt-9"
+      contentSectionWidthClass="max-w-none"
+      contentSectionClassName="lg:w-[calc(100%+21.5rem)] lg:ml-[-21.5rem]"
     >
       <style>{`
         .conflict-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }

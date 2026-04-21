@@ -28,6 +28,7 @@ const getRoleNav = (roleKey) => {
       { id: 'academic-personnel', label: 'Personnel', to: '/academic/personnel', icon: Icon.users },
       { id: 'academic-assignments', label: 'Assignments', to: '/academic/assignments', icon: Icon.calendar },
       { id: 'academic-calendar', label: 'Calendar', to: '/academic/calendar', icon: Icon.calendar },
+      { id: 'academic-timetables', label: 'Time Tables', to: '/academic/timetables', icon: Icon.calendar },
       { id: 'academic-conflicts', label: 'Conflicts', to: '/academic/conflicts', icon: Icon.warning },
       { id: 'academic-halls', label: 'Hall Allocation', to: '/faculty/hall-allocations', icon: Icon.grid },
       { id: 'shared-added-modules', label: 'Added Modules', to: '/faculty/modules/added', icon: Icon.book },
@@ -80,6 +81,9 @@ export default function FacultyCoordinatorShell({
   themeVariant = 'dark',
   headerActions = null,
   topOffsetClass = 'pt-4',
+  contentWidthClass = 'max-w-7xl',
+  contentSectionWidthClass = 'max-w-7xl',
+  contentSectionClassName = '',
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -121,7 +125,7 @@ export default function FacultyCoordinatorShell({
 
       <div className={`relative min-h-screen px-4 ${topOffsetClass} lg:grid lg:grid-cols-[20rem_minmax(0,1fr)] lg:gap-6 lg:px-4`}>
 
-        <aside className={`hidden lg:sticky lg:top-16 lg:flex lg:h-[calc(100dvh-4rem)] lg:flex-col lg:overflow-x-hidden lg:overflow-y-hidden rounded-[28px] border ${isLightTheme ? 'border-slate-200 bg-white/85 shadow-[0_24px_80px_rgba(15,23,42,0.16)]' : isAcademicTheme ? 'border-emerald-300/20 bg-slate-950/85 shadow-[0_24px_80px_rgba(2,10,24,0.55)]' : 'border-white/10 bg-slate-950/80 shadow-[0_24px_80px_rgba(2,6,23,0.48)]'} backdrop-blur-2xl`}>
+        <aside className={`hidden lg:sticky lg:top-16 lg:flex lg:h-[calc(100dvh-2rem)] lg:flex-col lg:overflow-x-hidden lg:overflow-y-hidden rounded-[28px] border ${isLightTheme ? 'border-slate-200 bg-white/85 shadow-[0_24px_80px_rgba(15,23,42,0.16)]' : isAcademicTheme ? 'border-emerald-300/20 bg-slate-950/85 shadow-[0_24px_80px_rgba(2,10,24,0.55)]' : 'border-white/10 bg-slate-950/80 shadow-[0_24px_80px_rgba(2,6,23,0.48)]'} backdrop-blur-2xl`}>
           <div className={`relative flex items-center gap-2 border-b ${isLightTheme ? 'border-slate-200/80' : 'border-white/10'} p-3`}>
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400 via-sky-500 to-indigo-600 text-sm font-black text-white shadow-[0_10px_24px_rgba(8,145,178,0.32)]">
               {brandCode}
@@ -192,9 +196,9 @@ export default function FacultyCoordinatorShell({
           </header>
 
           <main className="flex-1 px-4 pb-12 lg:px-0 lg:pb-16">
-            <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 fc-layout-stack fc-layout-stack-loose">
+            <div className="mx-auto flex w-full flex-col gap-6 fc-layout-stack fc-layout-stack-loose">
               <section
-                className={`relative overflow-hidden rounded-[32px] border backdrop-blur-xl ${isLightTheme ? 'border-sky-200/80 bg-[linear-gradient(145deg,rgba(255,255,255,0.96),rgba(240,249,255,0.95),rgba(224,242,254,0.9))] shadow-[0_18px_50px_rgba(14,116,144,0.14)]' : 'border-cyan-300/20 bg-[linear-gradient(145deg,rgba(15,23,42,0.62),rgba(8,47,73,0.52),rgba(30,41,59,0.58))] shadow-[0_18px_50px_rgba(2,6,23,0.28)]'}`}
+                className={`mx-auto w-full ${contentWidthClass} relative overflow-hidden rounded-[32px] border backdrop-blur-xl ${isLightTheme ? 'border-sky-200/80 bg-[linear-gradient(145deg,rgba(255,255,255,0.96),rgba(240,249,255,0.95),rgba(224,242,254,0.9))] shadow-[0_18px_50px_rgba(14,116,144,0.14)]' : 'border-cyan-300/20 bg-[linear-gradient(145deg,rgba(15,23,42,0.62),rgba(8,47,73,0.52),rgba(30,41,59,0.58))] shadow-[0_18px_50px_rgba(2,6,23,0.28)]'}`}
                 style={{ padding: '24px 24px 110px' }}
               >
                 <div className={`absolute inset-0 ${isLightTheme ? 'bg-[radial-gradient(circle_at_top_right,_rgba(34,211,238,0.12),_transparent_26%),radial-gradient(circle_at_bottom_left,_rgba(99,102,241,0.10),_transparent_30%)]' : 'bg-[radial-gradient(circle_at_top_right,_rgba(34,211,238,0.18),_transparent_26%),radial-gradient(circle_at_bottom_left,_rgba(99,102,241,0.18),_transparent_30%)]'}`} />
@@ -240,7 +244,7 @@ export default function FacultyCoordinatorShell({
                 </div>
               </section>
 
-              <section className={`fc-shell-content rounded-[32px] border backdrop-blur-xl ${isLightTheme ? 'border-sky-200/80 bg-[linear-gradient(145deg,rgba(255,255,255,0.95),rgba(241,245,249,0.93),rgba(224,242,254,0.88))] shadow-[0_18px_50px_rgba(14,116,144,0.12)]' : 'border-cyan-300/20 bg-[linear-gradient(145deg,rgba(2,6,23,0.75),rgba(15,23,42,0.64),rgba(7,89,133,0.38))] shadow-[0_18px_50px_rgba(2,6,23,0.24)]'}`}>
+              <section className={`fc-shell-content mx-auto w-full mt-25 ${contentSectionWidthClass} ${contentSectionClassName} rounded-[32px] border backdrop-blur-xl ${isLightTheme ? 'border-sky-200/80 bg-[linear-gradient(145deg,rgba(255,255,255,0.95),rgba(241,245,249,0.93),rgba(224,242,254,0.88))] shadow-[0_18px_50px_rgba(14,116,144,0.12)]' : 'border-cyan-300/20 bg-[linear-gradient(145deg,rgba(2,6,23,0.75),rgba(15,23,42,0.64),rgba(7,89,133,0.38))] shadow-[0_18px_50px_rgba(2,6,23,0.24)]'}`}>
                 {children}
               </section>
             </div>
