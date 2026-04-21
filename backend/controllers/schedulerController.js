@@ -1195,15 +1195,22 @@ export const listItems = async (req, res) => {
       let rows = [];
       if (isFacultyCoordinator(req.user)) {
         const listResult = await pool.query(
-          `SELECT m.*
+          `SELECT m.*, u.name AS created_by_name, u.role AS created_by_role
            FROM modules m
-           JOIN users u ON u.id = m.created_by
+           LEFT JOIN users u ON u.id = m.created_by
            WHERE regexp_replace(lower(COALESCE(u.role, '')), '[^a-z0-9]', '', 'g') = 'academiccoordinator'
+              OR m.created_by IS NULL
+              OR lower(COALESCE(m.details::jsonb ->> 'source', '')) = 'catalog-replacement'
            ORDER BY m.created_at DESC`
         );
         rows = listResult.rows;
       } else {
-        const listResult = await pool.query(`SELECT * FROM modules ORDER BY created_at DESC`);
+        const listResult = await pool.query(
+          `SELECT m.*, u.name AS created_by_name, u.role AS created_by_role
+           FROM modules m
+           LEFT JOIN users u ON u.id = m.created_by
+           ORDER BY m.created_at DESC`
+        );
         rows = listResult.rows;
       }
 
