@@ -603,9 +603,13 @@ router.get('/modules/year/:academicYear', async (req, res) => {
     let query = `
       SELECT m.*
       FROM modules m
-      JOIN users u ON u.id = m.created_by
+      LEFT JOIN users u ON u.id = m.created_by
       WHERE m.academic_year = $1
-        AND regexp_replace(lower(COALESCE(u.role, '')), '[^a-z0-9]', '', 'g') = 'academiccoordinator'
+        AND (
+          regexp_replace(lower(COALESCE(u.role, '')), '[^a-z0-9]', '', 'g') = 'academiccoordinator'
+          OR m.created_by IS NULL
+          OR lower(COALESCE(m.details::jsonb ->> 'source', '')) = 'catalog-replacement'
+        )
     `;
     const params = [academicYear];
     

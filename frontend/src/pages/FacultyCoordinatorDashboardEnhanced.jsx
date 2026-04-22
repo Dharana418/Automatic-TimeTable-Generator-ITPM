@@ -545,7 +545,7 @@ const FacultyCoordinatorDashboardEnhanced = ({ user }) => {
               <div className="fc-card-content">
                 <div className="space-y-3">
                   <button onClick={() => navigate('/faculty/batches')} className="fc-btn outline w-full text-left">Review Batches</button>
-                  <button onClick={() => navigate('/faculty/modules')} className="fc-btn outline w-full text-left">Review Modules</button>
+                  <button onClick={() => navigate('/faculty/modules/added')} className="fc-btn outline w-full text-left">Review Added Modules</button>
                   <button onClick={() => navigate('/scheduler/by-year')} className="fc-btn outline w-full text-left">Generate New Timetable</button>
                 </div>
               </div>
@@ -783,19 +783,19 @@ const FacultyCoordinatorDashboardEnhanced = ({ user }) => {
 
             <div className="fc-card">
               <div className="fc-card-header">
-                <h3>Module Management</h3>
+                <h3>Added Module Management</h3>
               </div>
               <div className="fc-card-content">
                 <p className="text-sm text-slate-600 mb-4">
-                  Review and manage department modules and credits
+                  Review academic coordinator published modules and credit load
                 </p>
               </div>
               <div className="fc-card-footer">
                 <button
-                  onClick={() => navigate('/faculty/modules')}
+                  onClick={() => navigate('/faculty/modules/added')}
                   className="fc-btn primary w-full text-center"
                 >
-                  Open Modules
+                  Open Added Modules
                 </button>
               </div>
             </div>
