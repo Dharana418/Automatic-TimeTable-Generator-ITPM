@@ -187,6 +187,8 @@ const ModuleCard = ({ module }) => {
 };
 
 const FacultyAddedModulesPage = ({ user }) => {
+  const roleKey = normalizeRoleKey(user?.role);
+  const canManageModules = roleKey === 'academiccoordinator' || roleKey === 'admin';
   const [modules, setModules] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -201,15 +203,26 @@ const FacultyAddedModulesPage = ({ user }) => {
     try {
       setLoading(true);
       setError('');
-      const response = await api.listItems('modules');
-      const items = Array.isArray(response?.items) ? response.items : [];
+
+      const filters = {};
+      if (selectedYear && selectedYear !== 'ALL') filters.year = selectedYear;
+      if (selectedSemester && selectedSemester !== 'ALL') filters.semester = selectedSemester;
+      if (selectedDepartment && selectedDepartment !== 'ALL') filters.specialization = selectedDepartment;
+
+      const response = await api.listItems('modules', filters);
+      const items = Array.isArray(response?.items)
+        ? response.items
+        : Array.isArray(response?.data)
+        ? response.data
+        : [];
+
       setModules(items.map(toView));
     } catch (err) {
       setError(err.message || 'Failed to load module catalog.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedDepartment, selectedYear, selectedSemester]);
 
   useEffect(() => {
     loadModules();
