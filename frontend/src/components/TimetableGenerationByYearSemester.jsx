@@ -343,7 +343,11 @@ const TimetableGenerationByYearSemester = () => {
       // try the scheduler `modules` list and filter locally.
       if (modulesData.length === 0) {
         try {
-          const schedRes = await listItems('modules');
+          const schedRes = await listItems('modules', {
+            year: selectedYear,
+            semester: selectedSemester,
+            specialization: selectedSpecialization,
+          });
           const rawModules = Array.isArray(schedRes?.items)
             ? schedRes.items
             : Array.isArray(schedRes?.data)
