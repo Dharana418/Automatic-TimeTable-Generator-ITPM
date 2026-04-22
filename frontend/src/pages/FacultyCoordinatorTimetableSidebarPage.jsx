@@ -1164,6 +1164,78 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
       sidebarTheme="timetable"
     >
       <div id="top" className={`fc-layout-stack fc-layout-stack-tight ${reportTheme === 'dark' ? 'report-theme-dark' : 'report-theme-light'}`}>
+
+        {/* SUCCESS TOAST */}
+        {deleteSuccess && (
+          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl border border-emerald-300 bg-gradient-to-br from-emerald-50 to-green-50 px-5 py-4 shadow-2xl" style={{animation:'timetableFadeIn 350ms ease-out both'}}>
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500 text-white">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-5 w-5"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-emerald-900">Deleted Successfully</p>
+              <p className="text-xs text-emerald-700">{deleteSuccess}</p>
+            </div>
+            <button type="button" onClick={() => setDeleteSuccess('')} className="ml-2 rounded-full p-1 text-emerald-600 hover:bg-emerald-100">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        )}
+
+        {/* DELETE CONFIRMATION MODAL */}
+        {deleteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(2,6,23,0.68)',backdropFilter:'blur(6px)'}}>
+            <div className="w-full max-w-md rounded-3xl border-2 border-rose-200 bg-gradient-to-br from-white via-rose-50 to-pink-50 p-8 shadow-[0_32px_64px_rgba(244,63,94,0.22)]" style={{animation:'timetableEnterUp 380ms cubic-bezier(0.2,0.8,0.2,1) both'}}>
+              {/* Icon */}
+              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-rose-400 to-pink-600 shadow-lg shadow-rose-200">
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" className="h-8 w-8">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                  <path d="M10 11v6M14 11v6"/>
+                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                </svg>
+              </div>
+              {/* Title */}
+              <h2 className="text-center text-2xl font-extrabold text-slate-900">Delete Timetable?</h2>
+              <p className="mt-2 text-center text-sm leading-6 text-slate-600">
+                This action is <strong className="text-rose-700">permanent and cannot be undone</strong>. The timetable and all its generated schedule data will be removed from the database.
+              </p>
+              {/* Timetable name box */}
+              <div className="mt-4 rounded-xl border border-rose-200 bg-white px-4 py-3 text-center shadow-sm">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-rose-500 mb-1">Timetable to be deleted</p>
+                <p className="text-base font-bold text-slate-900">{deleteModal.name}</p>
+                <p className="text-xs text-slate-500 mt-0.5">ID #{deleteModal.id}</p>
+              </div>
+              {/* Error */}
+              {deleteError && (
+                <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">{deleteError}</p>
+              )}
+              {/* Buttons */}
+              <div className="mt-6 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setDeleteModal(null); setDeleteError(''); }}
+                  disabled={deleteLoading}
+                  className="flex-1 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteTimetable}
+                  disabled={deleteLoading}
+                  className="flex-1 rounded-xl bg-gradient-to-br from-rose-500 to-pink-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-rose-200 transition hover:from-rose-600 hover:to-pink-700 hover:shadow-rose-300 disabled:opacity-60 flex items-center justify-center gap-2"
+                >
+                  {deleteLoading ? (
+                    <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Deleting...</>
+                  ) : (
+                    <><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-4 w-4"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg> Yes, Delete It</>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <style>{`
           @keyframes timetableEnterUp {
             0% { opacity: 0; transform: translateY(14px) scale(0.985); }
@@ -1913,55 +1985,126 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                 </div>
               </div>
 
-              <div className={`mt-3 grid grid-cols-1 gap-2 ${reportViewMode === 'compact' ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
-              {filteredTimetables.slice(0, 9).map((tt) => {
-                const meta = extractTimetableMeta(tt);
-                const active = String(selectedId) === String(tt.id);
-                const isFavorite = favoriteIds.includes(String(tt.id));
-                return (
-                  <button
-                    key={tt.id}
-                    type="button"
-                    onClick={() => setSelectedId(String(tt.id))}
-                    className={`rounded-xl border px-3 py-3 text-left transition ${active ? 'border-sky-500 bg-sky-100/70 shadow-sm' : 'border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50'} ${pageAnimated ? 'timetable-enter' : 'opacity-0'}`}
-                    style={{ animationDelay: `${220 + (Number(tt.id) % 9) * 35}ms` }}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="truncate text-sm font-semibold text-slate-900">{tt.name || `Timetable #${tt.id}`}</p>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${isFavorite ? 'bg-amber-200 text-amber-800' : 'bg-slate-200 text-slate-600'}`}>
-                        {isFavorite ? 'STAR' : 'SAVE'}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-slate-600">Y{meta.year} • S{meta.semester} • {meta.specialization} • G{meta.group} • SG{meta.subgroup}</p>
-                    <p className="mt-1 text-[11px] uppercase tracking-[0.08em] text-slate-500">{tt.status || 'pending'}</p>
-                    <div className="mt-2">
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          toggleFavorite(tt.id);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key !== 'Enter' && event.key !== ' ') return;
-                          event.preventDefault();
-                          event.stopPropagation();
-                          toggleFavorite(tt.id);
-                        }}
-                        className="inline-flex rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-700"
-                      >
-                        {isFavorite ? 'Remove Favorite' : 'Mark Favorite'}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-              {!filteredTimetables.length && (
-                <div className="rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-4 text-sm text-slate-600">
-                  No generated timetables match this filter.
+              {/* ADVANCED TIMETABLE TABLE */}
+              <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
+                {/* Table header */}
+                <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-gradient-to-r from-slate-800 to-slate-700 px-4 py-3">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-200">Generated Timetables</p>
+                  <span className="rounded-full bg-sky-600 px-2.5 py-0.5 text-[10px] font-bold text-white">{filteredTimetables.length}</span>
                 </div>
-              )}
+                {!filteredTimetables.length ? (
+                  <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-6 w-6"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    </div>
+                    <p className="text-sm font-semibold text-slate-500">No timetables match this filter.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full border-collapse text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-100 bg-slate-50">
+                          <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-slate-500">Name</th>
+                          <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest text-slate-500">Year</th>
+                          <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest text-slate-500">Sem</th>
+                          <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest text-slate-500">Spec</th>
+                          <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest text-slate-500">Status</th>
+                          <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest text-slate-500">Created</th>
+                          <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest text-slate-500">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredTimetables.map((tt, rowIdx) => {
+                          const meta = extractTimetableMeta(tt);
+                          const isActive = String(selectedId) === String(tt.id);
+                          const isFav = favoriteIds.includes(String(tt.id));
+                          const statusColors = {
+                            approved: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+                            rejected: 'bg-rose-100 text-rose-800 border-rose-200',
+                            pending: 'bg-amber-100 text-amber-800 border-amber-200',
+                          };
+                          const statusClass = statusColors[String(tt.status || 'pending').toLowerCase()] || statusColors.pending;
+                          return (
+                            <tr
+                              key={tt.id}
+                              className={`border-b border-slate-100 transition-colors ${
+                                isActive ? 'bg-sky-50' : rowIdx % 2 === 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/60 hover:bg-sky-50/50'
+                              }`}
+                            >
+                              {/* Name */}
+                              <td className="px-4 py-3 max-w-[160px]">
+                                <button type="button" onClick={() => setSelectedId(String(tt.id))}
+                                  className="flex items-center gap-2 text-left group w-full">
+                                  {isActive && <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-sky-500" />}
+                                  <span className={`truncate text-xs font-bold ${isActive ? 'text-sky-700' : 'text-slate-800 group-hover:text-sky-700'} transition-colors`}>
+                                    {tt.name || `Timetable #${tt.id}`}
+                                  </span>
+                                  {isFav && <span className="flex-shrink-0 text-amber-400" title="Favourite">★</span>}
+                                </button>
+                              </td>
+                              {/* Year */}
+                              <td className="px-3 py-3 text-center">
+                                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-800">{meta.year}</span>
+                              </td>
+                              {/* Semester */}
+                              <td className="px-3 py-3 text-center">
+                                <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-800">S{meta.semester}</span>
+                              </td>
+                              {/* Specialization */}
+                              <td className="px-3 py-3 text-center">
+                                <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-800">{meta.specialization}</span>
+                              </td>
+                              {/* Status */}
+                              <td className="px-3 py-3 text-center">
+                                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${statusClass}`}>
+                                  {tt.status || 'pending'}
+                                </span>
+                              </td>
+                              {/* Created */}
+                              <td className="px-3 py-3 text-center">
+                                <span className="text-[10px] text-slate-500">
+                                  {tt.created_at ? new Date(tt.created_at).toLocaleDateString() : 'N/A'}
+                                </span>
+                              </td>
+                              {/* Actions */}
+                              <td className="px-3 py-3">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  {/* View */}
+                                  <button type="button"
+                                    onClick={() => setSelectedId(String(tt.id))}
+                                    title="View in timetable grid"
+                                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-700 transition hover:bg-sky-100"
+                                  >
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                  </button>
+                                  {/* Download CSV */}
+                                  <button type="button"
+                                    onClick={() => downloadTimetableAsCSV(parseSchedule(tt), meta.year, meta.semester, meta.group, meta.subgroup)}
+                                    title="Download CSV"
+                                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 transition hover:bg-emerald-100"
+                                  >
+                                    <Download size={12} />
+                                  </button>
+                                  {/* Delete */}
+                                  <button type="button"
+                                    onClick={() => setDeleteModal({ id: tt.id, name: tt.name || `Timetable #${tt.id}` })}
+                                    title="Delete timetable"
+                                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 transition hover:bg-rose-100 hover:text-rose-700"
+                                  >
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
+
+
 
               <div className="mt-4 rounded-xl border border-slate-300 bg-white p-3">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
