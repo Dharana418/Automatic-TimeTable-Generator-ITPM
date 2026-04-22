@@ -87,12 +87,6 @@ const normalizeSlot = (row) => {
   const slotText = String(rawSlot || '').trim();
   if (!slotText) return 'TBA';
 
-  // Align stored scheduler slot labels to campus-facing timeline labels.
-  if (slotText === '13:00-14:00') return '13:30-14:30';
-  if (slotText === '14:00-15:00') return '14:30-15:30';
-  if (slotText === '12:00-13:00') return '12:30-13:30';
-  if (slotText === '12:30-13:30') return '12:30-13:30';
-
   if (/^\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}$/.test(slotText)) {
     return slotText.replace(/\s+/g, '');
   }
@@ -554,7 +548,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
           // Do not force a module limit here — allow scheduler to use all available modules for the scope
           specialization: filterSpecialization !== 'ALL' ? filterSpecialization : undefined,
         },
-        timetableName: he,
+        timetableName: name,
       });
 
       const listResponse = await schedulerApi.getAcademicCoordinatorTimetables();
