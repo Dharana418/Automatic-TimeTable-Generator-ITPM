@@ -187,6 +187,8 @@ const ModuleCard = ({ module }) => {
 };
 
 const FacultyAddedModulesPage = ({ user }) => {
+  const roleKey = normalizeRoleKey(user?.role);
+  const canManageModules = roleKey === 'academiccoordinator' || roleKey === 'admin';
   const [modules, setModules] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
