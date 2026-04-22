@@ -249,7 +249,9 @@ const LICDashboard = ({ user }) => {
                 onChange={(e) => setAssignmentForm({ ...assignmentForm, lecturerId: e.target.value })} required>
                 <option value="">Select lecturer</option>
                 {instructors.map((lecturer) => (
-                  <option key={lecturer.id} value={lecturer.id}>{lecturer.name}</option>
+                  <option key={lecturer.id} value={lecturer.id}>
+                    {lecturer.name}{lecturer.role_label ? ` (${lecturer.role_label})` : ''}
+                  </option>
                 ))}
               </select>
 
