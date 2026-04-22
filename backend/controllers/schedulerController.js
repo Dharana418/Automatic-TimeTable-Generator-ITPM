@@ -2295,16 +2295,25 @@ export const runSchedulerForYearSemester = async (req, res) => {
     // Fetch data with year/semester filters
     const [hallsRes, modulesRes, licsRes, instructorsRes, batchesRes] = await Promise.all([
       pool.query('SELECT * FROM halls WHERE status IN ($1, $2)', ['available', 'occupied']),
-      // Fetch modules for the year/semester without restricting by creator role
-      // so modules added via the UI (or other sources) are available for scheduling.
+      // Fetch modules for the year/semester while tolerating different storage formats
+      // (some modules store year/semester in the JSON details or as text). Use
+      // flexible text comparisons so older records are included.
       pool.query(
         `SELECT m.*
          FROM modules m
          LEFT JOIN users u ON u.id = m.created_by
-         WHERE m.academic_year = $1
-           AND m.semester = $2
+         WHERE (
+           ($1::TEXT IS NULL) OR
+           (m.academic_year::TEXT = $1::TEXT) OR
+           (COALESCE(m.details->> 'academic_year','') = $1::TEXT)
+         )
+           AND (
+             ($2::TEXT IS NULL) OR
+             (m.semester::TEXT = $2::TEXT) OR
+             (COALESCE(m.details->> 'semester','') = $2::TEXT)
+           )
          ORDER BY m.created_at DESC`,
-        [academicYear, semester]
+        [String(academicYear), String(semester)]
       ),
       pool.query('SELECT * FROM lics'),
       pool.query('SELECT * FROM instructors'),
