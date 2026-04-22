@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Radar, SlidersHorizontal, Search, Download, RefreshCcw, Sparkles, ChevronDown, ChevronRight, Filter, Sun, Moon } from 'lucide-react';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
-import schedulerApi from '../api/scheduler.js';
+import schedulerApi, { deleteTimetable as apiDeleteTimetable } from '../api/scheduler.js';
 import { downloadTimetableAsCSV } from '../api/timetableGeneration.js';
 import facultyDashboardBg from '../assets/Gemini_Generated_Image_hqfdrqhqfdrqhqfd.png';
 
@@ -484,6 +484,12 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
   const [trendHoverIndex, setTrendHoverIndex] = useState(-1);
   const animatedInsightRef = useRef({ timetables: 0, modules: 0, groups: 0, favorites: 0 });
 
+  // Delete confirmation modal state
+  const [deleteModal, setDeleteModal] = useState(null); // { id, name }
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleteSuccess, setDeleteSuccess] = useState('');
+
   useEffect(() => {
     setFilterPresets(safeReadStorageJson(FILTER_PRESET_STORAGE_KEY, []));
     setFavoriteIds(safeReadStorageJson(FAVORITES_STORAGE_KEY, []));
@@ -533,6 +539,24 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
       mounted = false;
     };
   }, []);
+
+  const handleDeleteTimetable = async () => {
+    if (!deleteModal) return;
+    setDeleteLoading(true);
+    setDeleteError('');
+    try {
+      await apiDeleteTimetable(deleteModal.id);
+      setTimetables((prev) => prev.filter((tt) => String(tt.id) !== String(deleteModal.id)));
+      if (String(selectedId) === String(deleteModal.id)) setSelectedId('');
+      setDeleteSuccess(`"${deleteModal.name}" was deleted successfully.`);
+      setTimeout(() => setDeleteSuccess(''), 4000);
+      setDeleteModal(null);
+    } catch (err) {
+      setDeleteError(err?.message || 'Failed to delete timetable');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const generateTimetableNow = async () => {
     try {
