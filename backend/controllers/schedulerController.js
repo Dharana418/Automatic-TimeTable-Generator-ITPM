@@ -1192,24 +1192,31 @@ export const listItems = async (req, res) => {
       const requestedSemester = Number(req.query?.semester || 0);
       const requestedSpecialization = normalizeSpecializationCode(req.query?.specialization || '');
 
-      let rows = [];
-      if (isFacultyCoordinator(req.user)) {
-        const listResult = await pool.query(
-          `SELECT m.*, u.name AS created_by_name, u.role AS created_by_role
-           FROM modules m
-           LEFT JOIN users u ON u.id = m.created_by
-           ORDER BY m.created_at DESC`
-        );
-        rows = listResult.rows;
-      } else {
-        const listResult = await pool.query(
-          `SELECT m.*, u.name AS created_by_name, u.role AS created_by_role
-           FROM modules m
-           LEFT JOIN users u ON u.id = m.created_by
-           ORDER BY m.created_at DESC`
-        );
-        rows = listResult.rows;
-      }
+        let rows = [];
+        // Faculty Coordinators should only *view* modules managed/published by Academic Coordinators
+        // (or unassigned/catalog replacement modules). Other users can view all modules.
+        if (isFacultyCoordinator(req.user)) {
+          const listResult = await pool.query(
+            `SELECT m.*, u.name AS created_by_name, u.role AS created_by_role
+             FROM modules m
+             LEFT JOIN users u ON u.id = m.created_by
+             WHERE (
+               regexp_replace(lower(COALESCE(u.role, '')), '[^a-z0-9]', '', 'g') = 'academiccoordinator'
+               OR m.created_by IS NULL
+               OR lower(COALESCE(m.details::jsonb ->> 'source', '')) = 'catalog-replacement'
+             )
+             ORDER BY m.created_at DESC`
+          );
+          rows = listResult.rows;
+        } else {
+          const listResult = await pool.query(
+            `SELECT m.*, u.name AS created_by_name, u.role AS created_by_role
+             FROM modules m
+             LEFT JOIN users u ON u.id = m.created_by
+             ORDER BY m.created_at DESC`
+          );
+          rows = listResult.rows;
+        }
 
       const filtered = rows.filter((module) => {
         const moduleYear = inferModuleYear(module);
@@ -2288,14 +2295,25 @@ export const runSchedulerForYearSemester = async (req, res) => {
     // Fetch data with year/semester filters
     const [hallsRes, modulesRes, licsRes, instructorsRes, batchesRes] = await Promise.all([
       pool.query('SELECT * FROM halls WHERE status IN ($1, $2)', ['available', 'occupied']),
+      // Fetch modules for the year/semester while tolerating different storage formats
+      // (some modules store year/semester in the JSON details or as text). Use
+      // flexible text comparisons so older records are included.
       pool.query(
         `SELECT m.*
          FROM modules m
-         JOIN users u ON u.id = m.created_by
-         WHERE m.academic_year = $1
-           AND m.semester = $2
-           AND regexp_replace(lower(COALESCE(u.role, '')), '[^a-z0-9]', '', 'g') = 'academiccoordinator'`,
-        [academicYear, semester]
+         LEFT JOIN users u ON u.id = m.created_by
+         WHERE (
+           ($1::TEXT IS NULL) OR
+           (m.academic_year::TEXT = $1::TEXT) OR
+           (COALESCE(m.details->> 'academic_year','') = $1::TEXT)
+         )
+           AND (
+             ($2::TEXT IS NULL) OR
+             (m.semester::TEXT = $2::TEXT) OR
+             (COALESCE(m.details->> 'semester','') = $2::TEXT)
+           )
+         ORDER BY m.created_at DESC`,
+        [String(academicYear), String(semester)]
       ),
       pool.query('SELECT * FROM lics'),
       pool.query('SELECT * FROM instructors'),

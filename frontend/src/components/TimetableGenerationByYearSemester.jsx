@@ -327,9 +327,68 @@ const TimetableGenerationByYearSemester = () => {
     try {
       setLoadingModules(true);
 
-      const res = await getModulesByYear(selectedYear, selectedSemester, selectedSpecialization || null);
+      // Primary attempt: fetch from academic-coordinator endpoint
+      let res;
+      try {
+        res = await getModulesByYear(selectedYear, selectedSemester, selectedSpecialization || null);
+      } catch (err) {
+        console.warn('getModulesByYear failed, falling back to scheduler modules', err);
+        res = { data: [] };
+      }
 
-      const mapped = (res.data || []).map((m) => ({
+      let modulesData = Array.isArray(res?.data) ? res.data : [];
+      let usedFallback = false;
+
+      // Fallback: if academic-coordinator endpoint returned no modules,
+      // try the scheduler `modules` list and filter locally.
+      if (modulesData.length === 0) {
+        try {
+          const schedRes = await listItems('modules', {
+            year: selectedYear,
+            semester: selectedSemester,
+            specialization: selectedSpecialization,
+          });
+          const rawModules = Array.isArray(schedRes?.items)
+            ? schedRes.items
+            : Array.isArray(schedRes?.data)
+            ? schedRes.data
+            : [];
+
+          const yearMatches = (selYear, modYear) => {
+            const sel = String(selYear || '').trim();
+            const mod = String(modYear || '').trim();
+            if (!sel || !mod) return false;
+            const selToken = normalizeYearToken(sel);
+            const modToken = normalizeYearToken(mod);
+            if (selToken && modToken) return selToken === modToken;
+            const fmt = (s) => String(s).toLowerCase().replace(/\s+/g, '').replace(/-/g, '');
+            return fmt(sel) === fmt(mod) || fmt(mod).includes(fmt(sel));
+          };
+
+          modulesData = rawModules.filter((m) => {
+            const details = parseJsonSafe(m.details, {});
+            const moduleYearRaw = m.academic_year || details.academic_year || m.academicYear || '';
+            const moduleSemesterRaw = String(m.semester || details.semester || '').trim();
+
+            if (!yearMatches(selectedYear, moduleYearRaw)) return false;
+            if (selectedSemester && String(selectedSemester).trim() !== String(moduleSemesterRaw).trim()) return false;
+
+            if (selectedSpecialization) {
+              const selSpec = normalizeSpecialization(selectedSpecialization);
+              const modSpec = normalizeSpecialization(inferSpecializationFromModule(m) || m.department || m.department_id || details.specialization || '');
+              if (selSpec !== 'ALL' && selSpec && modSpec && selSpec !== modSpec) return false;
+            }
+
+            return true;
+          });
+
+          if (modulesData.length > 0) usedFallback = true;
+        } catch (err) {
+          console.warn('Fallback scheduler modules fetch failed', err);
+        }
+      }
+
+      const mapped = (modulesData || []).map((m) => ({
         ...m,
         specialization: inferSpecializationFromModule(m),
       }));
@@ -339,8 +398,9 @@ const TimetableGenerationByYearSemester = () => {
         const details = parseJsonSafe(module.details, {});
         const dayType = String(module.day_type || details.day_type || 'weekday').trim().toLowerCase();
 
+        // Weekend batches should use the same modules as weekday students
         if (selectedBatchMode === 'WE') {
-          return ['weekend', 'any', 'both'].includes(dayType);
+          return ['weekday', 'any', 'both', ''].includes(dayType);
         }
 
         return ['weekday', 'any', 'both', ''].includes(dayType);
@@ -348,10 +408,11 @@ const TimetableGenerationByYearSemester = () => {
 
       const limitedModules = filteredByMode.slice(0, MODULE_LIMIT_PER_SPECIALIZATION);
       setModules(limitedModules);
-      const message = `${limitedModules.length} modules has been fetched successfully`;
+      const message = `${limitedModules.length} modules has been fetched successfully${usedFallback ? ' (using fallback list)' : ''}`;
       setSuccess(message);
       toast.success(message);
-    } catch {
+    } catch (err) {
+      console.error('fetchModules error:', err);
       setError('Failed to fetch modules');
     } finally {
       setLoadingModules(false);
@@ -569,6 +630,13 @@ const TimetableGenerationByYearSemester = () => {
     setSelectedGroup('');
     setSelectedSubGroup('');
     setSelectedBatch('');
+    // Weekend batches do not have a weekday free day
+    if (autoMode === 'WE') {
+      setWeekdayFreeDay('');
+    } else {
+      // ensure a sensible default for weekday batches
+      if (!weekdayFreeDay) setWeekdayFreeDay('Fri');
+    }
   };
 
   const handleBatchModeChange = (mode) => {
@@ -576,6 +644,12 @@ const TimetableGenerationByYearSemester = () => {
     setSelectedGroup('');
     setSelectedSubGroup('');
     setSelectedBatch('');
+    // Clear free day for weekend mode; restore default for weekday
+    if (mode === 'WE') {
+      setWeekdayFreeDay('');
+    } else {
+      if (!weekdayFreeDay) setWeekdayFreeDay('Fri');
+    }
   };
 
   useEffect(() => {
@@ -605,6 +679,9 @@ const TimetableGenerationByYearSemester = () => {
 
     const validation = (() => {
       try {
+        // Weekend batches do not have a weekday free day — validate without it
+        const freeDayToValidate = selectedBatchMode === 'WE' ? '' : weekdayFreeDay;
+
         return validateCoordinatorTimetableRequest({
           academicYear: selectedYear,
           semester: selectedSemester,
@@ -614,7 +691,7 @@ const TimetableGenerationByYearSemester = () => {
           subgroup: selectedSubGroup,
           batchId,
           timetableName: resolvedTimetableName,
-          weekdayFreeDay,
+          weekdayFreeDay: freeDayToValidate,
         });
       } catch (validationError) {
         setError(validationError.message || 'Fill all required fields');
@@ -629,19 +706,25 @@ const TimetableGenerationByYearSemester = () => {
     try {
       setLoading(true);
 
+      const optionsPayload = {
+        algorithms,
+        timetableName: validation.timetableName,
+        batchMode: validation.batchMode,
+        specialization: validation.specialization,
+        group: validation.group,
+        subgroup: validation.subgroup,
+        batchId: validation.batchId,
+      };
+
+      // Only include weekdayFreeDay for non-weekend batches
+      if (validation.batchMode !== 'WE' && validation.weekdayFreeDay) {
+        optionsPayload.weekdayFreeDay = validation.weekdayFreeDay;
+      }
+
       const res = await generateTimetableForYearSemester(
         validation.academicYear,
         validation.semester,
-        {
-          algorithms,
-          timetableName: validation.timetableName,
-          weekdayFreeDay: validation.weekdayFreeDay,
-          batchMode: validation.batchMode,
-          specialization: validation.specialization,
-          group: validation.group,
-          subgroup: validation.subgroup,
-          batchId: validation.batchId,
-        }
+        optionsPayload
       );
 
       setGeneratedTimetable(res);
@@ -873,15 +956,21 @@ const TimetableGenerationByYearSemester = () => {
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">
                 <Wand2 size={16} className="inline mr-2" /> Free Day
               </label>
-              <select
-                value={weekdayFreeDay}
-                onChange={(e) => setWeekdayFreeDay(e.target.value)}
-                className="w-full rounded-xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 px-4 py-3 font-semibold text-slate-900 shadow-md transition-all duration-200 hover:border-amber-300 hover:shadow-lg focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-300/50"
-              >
-                {WEEKDAY_FREE_DAY_OPTIONS.map((d) => (
-                  <option key={d} value={d}>{d}day</option>
-                ))}
-              </select>
+              {selectedBatchMode === 'WE' ? (
+                <div className="rounded-xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 px-4 py-3 font-semibold text-slate-900 shadow-md">
+                  Not applicable for weekend batches
+                </div>
+              ) : (
+                <select
+                  value={weekdayFreeDay}
+                  onChange={(e) => setWeekdayFreeDay(e.target.value)}
+                  className="w-full rounded-xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 px-4 py-3 font-semibold text-slate-900 shadow-md transition-all duration-200 hover:border-amber-300 hover:shadow-lg focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-300/50"
+                >
+                  {WEEKDAY_FREE_DAY_OPTIONS.map((d) => (
+                    <option key={d} value={d}>{d}day</option>
+                  ))}
+                </select>
+              )}
             </div>
 
             {/* GENERATE BUTTON */}
