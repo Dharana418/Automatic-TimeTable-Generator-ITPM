@@ -551,10 +551,10 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
         semester: Number(generateSemester),
         algorithms: ['hybrid'],
         options: {
-          moduleLimitPerSpecialization: 5,
+          // Do not force a module limit here — allow scheduler to use all available modules for the scope
           specialization: filterSpecialization !== 'ALL' ? filterSpecialization : undefined,
         },
-        timetableName: name,
+        timetableName: he,
       });
 
       const listResponse = await schedulerApi.getAcademicCoordinatorTimetables();
