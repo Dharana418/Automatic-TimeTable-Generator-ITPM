@@ -1,8 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/scheduler.js';
+import { getSchedulingConflicts, resolveSchedulingConflict } from '../api/timetableGeneration.js';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 import facultyDashboardBg from '../assets/Gemini_Generated_Image_hqfdrqhqfdrqhqfd.png';
+import '../styles/enhanced-faculty-theme.css';
+import {
+  EnhancedStatCard,
+  TimetableUtilizationChart,
+  SchedulingConflictsChart,
+  ModuleDistributionChart,
+  ScheduleComplianceChart,
+  EnhancedTable,
+  AdvancedFilterPanel,
+} from '../components/EnhancedFacultyComponents.jsx';
+import { Users, Calendar, Book, Zap, TrendingUp, RefreshCw } from 'lucide-react';
 
 const dayOptions = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -64,6 +76,18 @@ const Icon = {
   check: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{width:14,height:14}}>
       <polyline points="20 6 9 17 4 12"/>
+    </svg>
+  ),
+  alert: (c='currentColor') => (
+    <svg viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:20,height:20}}>
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+      <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
+  ),
+  refresh: (c='currentColor') => (
+    <svg viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:18,height:18}}>
+      <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+      <path d="M3.51 9a9 9 0 0 1 14.13-3.36L23 10M1 14l5.36 4.36A9 9 0 0 0 20.49 15"/>
     </svg>
   ),
 };
@@ -217,8 +241,14 @@ const FacultyCoordinatorDashboard = ({ user }) => {
   const navigate = useNavigate();
 
   const [resources, setResources] = useState([]);
+  const [modulesCatalog, setModulesCatalog] = useState([]);
+  const [batchesCatalog, setBatchesCatalog] = useState([]);
+  const [lastWorkspaceSync, setLastWorkspaceSync] = useState(null);
   const [savedTimetables, setSavedTimetables] = useState([]);
+  const [conflicts, setConflicts] = useState([]);
   const [loadingTimetables, setLoadingTimetables] = useState(false);
+  const [loadingConflicts, setLoadingConflicts] = useState(false);
+  const [resolvingConflictId, setResolvingConflictId] = useState('');
   const [_loadingResources, setLoadingResources] = useState(false);
   const [savingSoftConstraints, setSavingSoftConstraints] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -235,17 +265,26 @@ const FacultyCoordinatorDashboard = ({ user }) => {
       try {
         setLoadingResources(true);
         setLoadingTimetables(true);
-        const [resourceResponse, timetableResponse] = await Promise.all([
+        setLoadingConflicts(true);
+        const [resourceResponse, timetableResponse, conflictResponse, moduleResponse, batchResponse] = await Promise.all([
           api.getLicsWithInstructors(),
           api.getAcademicCoordinatorTimetables().catch(() => ({ data: [] })),
+          getSchedulingConflicts(false).catch(() => ({ data: [] })),
+          api.listItems('modules').catch(() => ({ items: [] })),
+          api.listItems('batches').catch(() => ({ items: [] })),
         ]);
         if (mounted && resourceResponse?.items) setResources(resourceResponse.items);
         if (mounted) setSavedTimetables(Array.isArray(timetableResponse?.data) ? timetableResponse.data : []);
+        if (mounted) setConflicts(Array.isArray(conflictResponse?.data) ? conflictResponse.data : []);
+        if (mounted) setModulesCatalog(Array.isArray(moduleResponse?.items) ? moduleResponse.items : []);
+        if (mounted) setBatchesCatalog(Array.isArray(batchResponse?.items) ? batchResponse.items : []);
+        if (mounted) setLastWorkspaceSync(new Date());
       } catch (err) {
         console.error('Resource load failed', err);
       } finally {
         if (mounted) setLoadingResources(false);
         if (mounted) setLoadingTimetables(false);
+        if (mounted) setLoadingConflicts(false);
       }
     };
     loadData();
@@ -261,6 +300,79 @@ const FacultyCoordinatorDashboard = ({ user }) => {
     () => resources.reduce((s, l) => s + (l.instructors?.length || 0), 0),
     [resources],
   );
+
+  const specializationCoverage = useMemo(() => {
+    const bag = new Set();
+    batchesCatalog.forEach((batch) => {
+      const tag = String(batch?.specialization || batch?.department || batch?.stream || '').trim().toUpperCase();
+      if (tag) bag.add(tag);
+    });
+    return bag;
+  }, [batchesCatalog]);
+
+  const conflictPressureScore = useMemo(() => {
+    const unresolved = conflicts.length;
+    const rawScore = unresolved * 18 + Math.max(0, 4 - specializationCoverage.size) * 12;
+    return Math.min(100, rawScore);
+  }, [conflicts.length, specializationCoverage.size]);
+
+  const operationsHealth = useMemo(() => {
+    const hasResources = resources.length > 0;
+    const hasModules = modulesCatalog.length > 0;
+    const hasBatches = batchesCatalog.length > 0;
+    const healthySignals = [hasResources, hasModules, hasBatches, conflicts.length < 3].filter(Boolean).length;
+    return Math.round((healthySignals / 4) * 100);
+  }, [resources.length, modulesCatalog.length, batchesCatalog.length, conflicts.length]);
+
+  const coordinatorRecommendations = useMemo(() => {
+    const items = [];
+
+    if (conflicts.length >= 3) {
+      items.push({
+        id: 'high-conflicts',
+        tone: '#b91c1c',
+        title: 'Conflict load is high',
+        detail: `${conflicts.length} unresolved conflicts detected. Prioritize conflict queue triage before next generation run.`,
+        cta: 'Open Conflicts',
+        onClick: () => document.getElementById('fcConflicts')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      });
+    }
+
+    if (specializationCoverage.size < 3) {
+      items.push({
+        id: 'coverage-gap',
+        tone: '#b45309',
+        title: 'Specialization coverage gap',
+        detail: `Only ${specializationCoverage.size || 0} specializations found in batches. Validate batch setup to avoid generation blind spots.`,
+        cta: 'Open Batches',
+        onClick: () => navigate('/faculty/batches'),
+      });
+    }
+
+    if (savedTimetables.length === 0) {
+      items.push({
+        id: 'no-archives',
+        tone: '#1d4ed8',
+        title: 'No timetable baseline found',
+        detail: 'Create at least one timetable archive for rollback and comparative quality checks.',
+        cta: 'Open Scheduler',
+        onClick: () => navigate('/scheduler/by-year'),
+      });
+    }
+
+    if (items.length === 0) {
+      items.push({
+        id: 'healthy',
+        tone: '#15803d',
+        title: 'Workspace looks healthy',
+        detail: 'Operations are balanced. Continue with optimization cycles and keep constraints updated.',
+        cta: 'Tune Constraints',
+        onClick: () => document.getElementById('fcSoftConstraints')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      });
+    }
+
+    return items;
+  }, [conflicts.length, specializationCoverage.size, savedTimetables.length, navigate]);
 
   const syncHealth = resources.length > 0 ? 'Synced' : 'Pending';
 
@@ -370,6 +482,65 @@ const FacultyCoordinatorDashboard = ({ user }) => {
     }
   };
 
+  const refreshConflicts = async () => {
+    try {
+      setLoadingConflicts(true);
+      const response = await getSchedulingConflicts(false);
+      setConflicts(Array.isArray(response?.data) ? response.data : []);
+      setLastWorkspaceSync(new Date());
+    } catch (error) {
+      window.alert(error.message || 'Failed to load conflicts');
+    } finally {
+      setLoadingConflicts(false);
+    }
+  };
+
+  const refreshWorkspaceSnapshot = async () => {
+    try {
+      setLoadingResources(true);
+      setLoadingTimetables(true);
+      setLoadingConflicts(true);
+      const [resourceResponse, timetableResponse, conflictResponse, moduleResponse, batchResponse] = await Promise.all([
+        api.getLicsWithInstructors(),
+        api.getAcademicCoordinatorTimetables().catch(() => ({ data: [] })),
+        getSchedulingConflicts(false).catch(() => ({ data: [] })),
+        api.listItems('modules').catch(() => ({ items: [] })),
+        api.listItems('batches').catch(() => ({ items: [] })),
+      ]);
+
+      setResources(Array.isArray(resourceResponse?.items) ? resourceResponse.items : []);
+      setSavedTimetables(Array.isArray(timetableResponse?.data) ? timetableResponse.data : []);
+      setConflicts(Array.isArray(conflictResponse?.data) ? conflictResponse.data : []);
+      setModulesCatalog(Array.isArray(moduleResponse?.items) ? moduleResponse.items : []);
+      setBatchesCatalog(Array.isArray(batchResponse?.items) ? batchResponse.items : []);
+      setLastWorkspaceSync(new Date());
+    } catch (error) {
+      window.alert(error.message || 'Failed to refresh workspace data');
+    } finally {
+      setLoadingResources(false);
+      setLoadingTimetables(false);
+      setLoadingConflicts(false);
+    }
+  };
+
+  const markConflictResolved = async (conflictId) => {
+    if (!conflictId) return;
+    const accepted = window.confirm('Mark this conflict as resolved?');
+    if (!accepted) return;
+
+    const resolutionNotes = window.prompt('Resolution note (optional):', '') || '';
+
+    try {
+      setResolvingConflictId(String(conflictId));
+      await resolveSchedulingConflict(conflictId, resolutionNotes);
+      await refreshConflicts();
+    } catch (error) {
+      window.alert(error.message || 'Failed to resolve conflict');
+    } finally {
+      setResolvingConflictId('');
+    }
+  };
+
   return (
     <FacultyCoordinatorShell
       user={user}
@@ -379,8 +550,10 @@ const FacultyCoordinatorDashboard = ({ user }) => {
       backgroundImage={facultyDashboardBg}
       sidebarSections={[
         { id: 'fcOverview', label: 'Overview' },
+        { id: 'fcCommandCenter', label: 'Command Center' },
         { id: 'fcOperations', label: 'Operations Center' },
         { id: 'fcActivity', label: 'Recent Activity' },
+        { id: 'fcConflicts', label: 'Conflict Center' },
         { id: 'fcTimetables', label: 'Saved Timetables' },
         { id: 'fcSoftConstraints', label: 'Soft Constraints' },
       ]}
@@ -423,6 +596,12 @@ const FacultyCoordinatorDashboard = ({ user }) => {
         .fc-signal-label { font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #5f7389; }
         .fc-signal-value { margin-top: 6px; font-size: 20px; line-height: 1.15; font-weight: 800; color: #14314b; }
         .fc-signal-hint { margin-top: 4px; font-size: 12px; color: #6b8198; }
+        .fc-command-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 14px; margin: 0 0 24px; }
+        .fc-micro-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+        .fc-micro-card { border-radius: 12px; border: 1px solid rgba(191,219,254,0.8); background: #ffffff; padding: 10px 12px; }
+        .fc-micro-label { margin: 0; font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #64748b; }
+        .fc-micro-value { margin: 6px 0 0; font-size: 20px; font-weight: 800; color: #0f2940; }
+        .fc-reco-item { border-radius: 12px; border: 1px solid #d8e3ee; background: #ffffff; padding: 10px 12px; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
         .fc-pulse-dot { animation: fcPulse 1.6s ease-in-out infinite; }
         @keyframes fcPulse {
           0% { transform: scale(0.85); opacity: 0.65; }
@@ -437,10 +616,13 @@ const FacultyCoordinatorDashboard = ({ user }) => {
           .fc-main-grid { grid-template-columns: 1fr !important; }
           .fc-soft-panel { position: relative !important; top: 0 !important; }
           .fc-signal-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .fc-command-grid { grid-template-columns: 1fr !important; }
+          .fc-micro-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 640px) {
           .fc-hero-wrap { padding: 22px 20px !important; }
           .fc-signal-grid { grid-template-columns: 1fr; }
+          .fc-micro-grid { grid-template-columns: 1fr; }
         }
         @media (max-width: 768px) { .fc-actions-grid { grid-template-columns: 1fr !important; } }
       `}</style>
@@ -505,6 +687,123 @@ const FacultyCoordinatorDashboard = ({ user }) => {
             <p className="fc-signal-hint" style={{ marginBottom: 0 }}>{item.hint}</p>
           </article>
         ))}
+      </section>
+
+      <section id="fcCommandCenter" className="fc-command-grid" aria-label="Coordinator Command Center">
+        <article style={{
+          borderRadius: 16, padding: '18px',
+          background: 'linear-gradient(145deg, rgba(255,255,255,0.9), rgba(239,246,255,0.76))',
+          border: '1px solid rgba(191,219,254,0.75)',
+          boxShadow: '0 14px 28px rgba(14,116,144,0.12)',
+          backdropFilter: 'blur(10px)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
+            <div>
+              <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#1f6fa8' }}>Role Intelligence</p>
+              <h3 className="fc-section-title" style={{ margin: '8px 0 0', fontWeight: 800, color: '#14314b' }}>Coordinator Command Center</h3>
+            </div>
+            <button
+              type="button"
+              onClick={refreshWorkspaceSnapshot}
+              className="fc-btn fc-btn-sm"
+              style={{ cursor: 'pointer', background: 'rgba(15,93,153,0.12)', border: '1px solid rgba(15,93,153,0.3)', color: '#0f5d99', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              {Icon.refresh('#0f5d99')} Refresh Snapshot
+            </button>
+          </div>
+
+          <div className="fc-micro-grid">
+            <div className="fc-micro-card">
+              <p className="fc-micro-label">Modules</p>
+              <p className="fc-micro-value">{modulesCatalog.length}</p>
+            </div>
+            <div className="fc-micro-card">
+              <p className="fc-micro-label">Batches</p>
+              <p className="fc-micro-value">{batchesCatalog.length}</p>
+            </div>
+            <div className="fc-micro-card">
+              <p className="fc-micro-label">Conflicts</p>
+              <p className="fc-micro-value" style={{ color: conflicts.length > 0 ? '#991b1b' : '#166534' }}>{conflicts.length}</p>
+            </div>
+            <div className="fc-micro-card">
+              <p className="fc-micro-label">Coverage</p>
+              <p className="fc-micro-value">{specializationCoverage.size}</p>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <p style={{ margin: '0 0 8px', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#64748b' }}>
+              Operational Health {operationsHealth}%
+            </p>
+            <div style={{ height: 8, borderRadius: 99, background: '#dbeafe', overflow: 'hidden' }}>
+              <div style={{ width: `${operationsHealth}%`, height: '100%', background: operationsHealth >= 75 ? 'linear-gradient(90deg,#22c55e,#16a34a)' : operationsHealth >= 50 ? 'linear-gradient(90deg,#f59e0b,#d97706)' : 'linear-gradient(90deg,#ef4444,#b91c1c)' }} />
+            </div>
+            <p style={{ margin: '8px 0 0', fontSize: 12, color: '#5f7389' }}>
+              Conflict pressure score: <strong style={{ color: '#14314b' }}>{conflictPressureScore}</strong>/100
+            </p>
+          </div>
+
+          <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => navigate('/scheduler/by-year')}
+              className="fc-btn fc-btn-sm"
+              style={{ cursor: 'pointer', background: 'rgba(14,165,233,0.16)', border: '1px solid rgba(14,165,233,0.35)', color: '#0369a1' }}
+            >
+              Run Scheduler
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/faculty/batches')}
+              className="fc-btn fc-btn-sm"
+              style={{ cursor: 'pointer', background: 'rgba(99,102,241,0.16)', border: '1px solid rgba(99,102,241,0.35)', color: '#4338ca' }}
+            >
+              Validate Batches
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/faculty/modules')}
+              className="fc-btn fc-btn-sm"
+              style={{ cursor: 'pointer', background: 'rgba(16,185,129,0.16)', border: '1px solid rgba(16,185,129,0.35)', color: '#047857' }}
+            >
+              Review Modules
+            </button>
+          </div>
+        </article>
+
+        <article style={{
+          borderRadius: 16, padding: '18px',
+          background: 'linear-gradient(145deg, rgba(255,255,255,0.9), rgba(239,246,255,0.76))',
+          border: '1px solid rgba(191,219,254,0.75)',
+          boxShadow: '0 14px 28px rgba(14,116,144,0.12)',
+          backdropFilter: 'blur(10px)',
+        }}>
+          <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#1f6fa8' }}>Recommended Actions</p>
+          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {coordinatorRecommendations.map((item) => (
+              <div key={item.id} className="fc-reco-item">
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                  <span style={{ marginTop: 1 }}>{Icon.alert(item.tone)}</span>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: '#14314b' }}>{item.title}</p>
+                    <p style={{ margin: '4px 0 0', fontSize: 12, color: '#5f7389', lineHeight: 1.5 }}>{item.detail}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={item.onClick}
+                  className="fc-btn fc-btn-sm"
+                  style={{ cursor: 'pointer', background: `${item.tone}1a`, border: `1px solid ${item.tone}55`, color: item.tone, whiteSpace: 'nowrap' }}
+                >
+                  {item.cta}
+                </button>
+              </div>
+            ))}
+          </div>
+          <p style={{ margin: '10px 0 0', fontSize: 11, color: '#64748b' }}>
+            Last sync: {lastWorkspaceSync ? lastWorkspaceSync.toLocaleTimeString() : 'Not synced yet'}
+          </p>
+        </article>
       </section>
 
       {/* ── Main 2-col layout ── */}
@@ -590,6 +889,84 @@ const FacultyCoordinatorDashboard = ({ user }) => {
                 </div>
               ))}
             </div>
+          </section>
+
+          <section id="fcConflicts" style={{
+            borderRadius: 16, padding: '24px',
+            background: 'linear-gradient(145deg, rgba(255,255,255,0.9), rgba(239,246,255,0.76))',
+            border: '1px solid rgba(191,219,254,0.75)',
+            boxShadow: '0 14px 28px rgba(14,116,144,0.12)',
+            backdropFilter: 'blur(10px)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#b91c1c' }}>Conflict Command Center</p>
+                <h3 className="fc-section-title" style={{ margin: '8px 0 0', fontWeight: 800, color: '#14314b' }}>Unresolved Conflict Queue</h3>
+              </div>
+              <button
+                type="button"
+                onClick={refreshConflicts}
+                className="fc-btn fc-btn-md"
+                style={{
+                  cursor: 'pointer',
+                  background: 'linear-gradient(90deg, #991b1b, #dc2626)', border: 'none', color: '#fff',
+                }}
+              >
+                {loadingConflicts ? 'Refreshing...' : 'Refresh Queue'}
+              </button>
+            </div>
+
+            {loadingConflicts ? (
+              <p style={{ margin: 0, fontSize: 13, color: '#5f7389' }}>Loading conflict queue...</p>
+            ) : conflicts.length === 0 ? (
+              <p style={{ margin: 0, fontSize: 13, color: '#166534' }}>No unresolved conflicts at the moment.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {conflicts.slice(0, 10).map((conflict) => {
+                  const conflictId = String(conflict?.id || '');
+                  return (
+                    <div
+                      key={conflictId}
+                      className="fc-card-hover"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 10,
+                        padding: '10px 12px',
+                        borderRadius: 12,
+                        border: '1px solid #fecaca',
+                        background: '#fff1f2',
+                      }}
+                    >
+                      <div>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#7f1d1d' }}>
+                          {conflict.conflict_type || conflict.type || 'Scheduling conflict'}
+                        </p>
+                        <p style={{ margin: '4px 0 0', fontSize: 12, color: '#881337' }}>
+                          {conflict.description || conflict.message || conflict.conflict_description || 'Conflict details unavailable'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => markConflictResolved(conflictId)}
+                        disabled={resolvingConflictId === conflictId}
+                        className="fc-btn fc-btn-sm"
+                        style={{
+                          cursor: resolvingConflictId === conflictId ? 'not-allowed' : 'pointer',
+                          background: 'rgba(127,29,29,0.12)',
+                          border: '1px solid rgba(127,29,29,0.3)',
+                          color: '#7f1d1d',
+                          opacity: resolvingConflictId === conflictId ? 0.6 : 1,
+                        }}
+                      >
+                        {resolvingConflictId === conflictId ? 'Resolving...' : 'Resolve'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
           <section id="fcTimetables" style={{

@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell';
 import api from '../api/scheduler';
+import HallAllocation from '../components/HallAllocation.jsx';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 /* ── Icons ────────────────────────────────────────────────────────── */
 const IconBook = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="24" height="24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>;
@@ -87,6 +90,11 @@ export default function AcademicCoordinatorDashboard({ user }) {
       brandCode="AC"
       brandTitle="Academic Coordinator"
       brandSubtitle="Operations Console"
+      themeVariant="academic"
+      topOffsetClass="pt-[28px]"
+      mainTopMarginClass="mt-20"
+      contentSectionWidthClass="max-w-none"
+      contentSectionClassName="lg:w-[calc(100%+21.5rem)] lg:ml-[-21.5rem]"
     >
       <style>{`
         .ac-action-tile { display: block; border-radius: 20px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -156,6 +164,27 @@ export default function AcademicCoordinatorDashboard({ user }) {
               icon={<IconCalendar />} 
               color="#f472b6" 
             />
+            <ActionTile 
+              to="/faculty/hall-allocations" 
+              title="Hall Allocations" 
+              desc="Review SLIIT campus hall allocations that feed the scheduler engine." 
+              icon={<IconCalendar />} 
+              color="#0f766e" 
+            />
+          </div>
+        </div>
+
+        <div>
+          <h3 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'rgba(148,163,184,0.6)' }}>
+            Hall Allocations
+          </h3>
+          <div style={{
+            border: '1px solid rgba(148,163,184,0.15)',
+            borderRadius: 24,
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.96), rgba(248,250,252,0.98))',
+            padding: 16,
+          }}>
+            <HallAllocation apiBase={API_BASE} />
           </div>
         </div>
 

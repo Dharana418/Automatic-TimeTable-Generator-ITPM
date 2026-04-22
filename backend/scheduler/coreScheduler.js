@@ -5,18 +5,21 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const WEEKEND = ['Sat', 'Sun'];
 const DAYS = [...WEEKDAYS, ...WEEKEND];
 const WEEKDAY_SLOTS = [
+  '08:00-09:00',
   '09:00-10:00',
   '10:00-11:00',
   '11:00-12:00',
-  '13:30-14:30',
-  '14:30-15:30',
-  '15:30-16:30',
-  '16:30-17:30',
+  '12:00-13:00',
+  '13:00-14:00',
+  '14:00-15:00',
+  '15:00-16:00',
+  '16:00-17:00',
 ];
 const WEEKEND_SLOTS = [
   ...WEEKDAY_SLOTS,
-  '17:30-18:30',
-  '18:30-19:30',
+  '17:00-18:00',
+  '18:00-19:00',
+  '19:00-20:00',
   '19:30-20:30',
 ];
 const SLOTS = [...WEEKEND_SLOTS];
@@ -124,21 +127,21 @@ export function scheduleGreedy(constraints = {}, options = {}) {
     for (let s = 0; s < lectures; s++) {
       let placed = false;
       // try allowed day-slot combos
+      // CONSTRAINT: Lectures and labs can ONLY be on weekdays (Mon-Fri)
       let allowedDays = WEEKDAYS;
       let allowedSlots = WEEKDAY_SLOTS;
-      if (mod.day_type === 'weekend') allowedDays = WEEKEND;
-      else if (mod.day_type === 'any' || mod.day_type === 'both') {
-        allowedDays = WEEKDAYS.concat(WEEKEND);
+      
+      if (mod.day_type === 'weekend') {
+        // Only explicitly 'weekend' type modules can use weekend slots
+        allowedDays = WEEKEND;
+        allowedSlots = WEEKEND_SLOTS;
       } else {
+        // 'weekday' (default), 'any', 'both' all follow weekday constraint
+        // Lectures and labs must be Mon-Fri only
+        allowedDays = WEEKDAYS.filter((day) => day !== weekdayFreeDay);
+        if (!allowedDays.length) allowedDays = WEEKDAYS;
         allowedSlots = WEEKDAY_SLOTS;
       }
-
-      if (mod.day_type === 'weekend') {
-        allowedSlots = WEEKEND_SLOTS;
-      } else if (mod.day_type === 'any' || mod.day_type === 'both') {
-        allowedSlots = SLOTS;
-      }
-      else allowedDays = WEEKDAYS.filter((day) => day !== weekdayFreeDay);
 
       if (!allowedDays.length) {
         allowedDays = WEEKDAYS;

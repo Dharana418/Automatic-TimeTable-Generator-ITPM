@@ -2,6 +2,7 @@ import BatchList from '../components/BatchList.jsx';
 import BatchStatisticsPieCharts from '../components/BatchStatisticsPieCharts.jsx';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const specializationTags = [
   { label: 'IT',             color: '#38bdf8', bg: 'rgba(56,189,248,0.12)',  border: 'rgba(56,189,248,0.3)'  },
@@ -29,6 +30,7 @@ const InfoChip = ({ label, value, accent = '#38bdf8' }) => (
 const FacultyBatchesPage = ({ user }) => {
   const displayName = user?.name || user?.username || 'Faculty Coordinator';
   const [activeSpec, setActiveSpec] = useState(null);
+  const navigate = useNavigate();
 
   return (
     <FacultyCoordinatorShell
@@ -36,6 +38,21 @@ const FacultyBatchesPage = ({ user }) => {
       title="Batch & Specialization Control"
       subtitle="Institutional workspace for managing batch records and specialization structure"
       badge="Batch Management"
+      sidebarSections={[
+        { id: 'batchOverview', label: 'Overview' },
+        { id: 'batchAnalytics', label: 'Analytics' },
+        { id: 'batchSpecialization', label: 'Specializations' },
+        { id: 'batchRegistry', label: 'Batch Registry' },
+      ]}
+      headerActions={
+        <button
+          type="button"
+          onClick={() => navigate('/scheduler/by-year')}
+          className="rounded-xl border border-cyan-300/70 bg-cyan-50 px-3 py-2 text-xs font-bold uppercase tracking-[0.08em] text-cyan-700 transition hover:bg-cyan-100"
+        >
+          Open Scheduler
+        </button>
+      }
     >
       <style>{`
         .fc-spec-tag { transition: all 0.2s cubic-bezier(0.4,0,0.2,1); cursor: pointer; }
@@ -43,10 +60,10 @@ const FacultyBatchesPage = ({ user }) => {
         .fc-section-card { background: linear-gradient(135deg, rgba(15,23,42,0.92), rgba(7,20,43,0.96)); border: 1px solid rgba(148,163,184,0.1); border-radius: 22px; backdrop-filter: blur(20px); box-shadow: 0 8px 40px rgba(0,0,0,0.35); }
       `}</style>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+      <div className="fc-layout-stack fc-layout-stack-tight">
 
         {/* ── Hero header card ── */}
-        <section className="fc-section-card" style={{ padding: '32px', position: 'relative', overflow: 'hidden' }}>
+        <section id="batchOverview" className="fc-section-card" style={{ padding: '32px', position: 'relative', overflow: 'hidden' }}>
           {/* decorative glow */}
           <div style={{ position: 'absolute', top: -80, right: -80, width: 280, height: 280, borderRadius: '50%', background: 'radial-gradient(circle, rgba(56,189,248,0.12) 0%, transparent 70%)', pointerEvents: 'none' }} />
           <div style={{ position: 'absolute', bottom: -60, left: -60, width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(99,102,241,0.1) 0%, transparent 70%)', pointerEvents: 'none' }} />
@@ -94,7 +111,7 @@ const FacultyBatchesPage = ({ user }) => {
         </section>
 
         {/* ── Batch Statistics Pie Charts ── */}
-        <section className="fc-section-card" style={{ padding: '26px' }}>
+        <section id="batchAnalytics" className="fc-section-card" style={{ padding: '26px' }}>
           <div style={{ marginBottom: 18 }}>
             <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#38bdf8' }}>Analytics & Insights</p>
             <h3 style={{ margin: '6px 0 0', fontSize: 16, fontWeight: 800, color: '#f1f5f9' }}>Student Distribution by Batch Composition</h3>
@@ -104,7 +121,7 @@ const FacultyBatchesPage = ({ user }) => {
         </section>
 
         {/* ── Specialization cloud ── */}
-        <section className="fc-section-card" style={{ padding: '26px' }}>
+        <section id="batchSpecialization" className="fc-section-card" style={{ padding: '26px' }}>
           <div style={{ marginBottom: 18 }}>
             <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#a78bfa' }}>Specialization Cloud</p>
             <h3 style={{ margin: '6px 0 0', fontSize: 16, fontWeight: 800, color: '#f1f5f9' }}>Available Specializations</h3>
@@ -152,7 +169,7 @@ const FacultyBatchesPage = ({ user }) => {
         </section>
 
         {/* ── Batch list ── */}
-        <section className="fc-section-card" style={{ padding: '26px' }}>
+        <section id="batchRegistry" className="fc-section-card" style={{ padding: '26px' }}>
           <div style={{ marginBottom: 18 }}>
             <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#f59e0b' }}>Batch Registry</p>
             <h3 style={{ margin: '6px 0 0', fontSize: 16, fontWeight: 800, color: '#f1f5f9' }}>

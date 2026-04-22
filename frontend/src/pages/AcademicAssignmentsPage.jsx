@@ -55,6 +55,15 @@ const DarkSelect = ({ label, value, onChange, options, required = false }) => (
   </label>
 );
 
+const sectionPanelStyle = {
+  background: 'linear-gradient(145deg, rgba(2,6,23,0.9), rgba(15,23,42,0.82), rgba(7,89,133,0.35))',
+  padding: 24,
+  borderRadius: 20,
+  border: '1px solid rgba(34,211,238,0.2)',
+  boxShadow: '0 10px 30px rgba(2,6,23,0.28)',
+  backdropFilter: 'blur(16px)',
+};
+
 /* ── Main Page Component ────────────────────────────────────────── */
 export default function AcademicAssignmentsPage({ user }) {
   const [loading, setLoading] = useState(true);
@@ -169,6 +178,10 @@ export default function AcademicAssignmentsPage({ user }) {
       title="Module Assignments Matrix"
       subtitle="Map instructional staff to specific modules to ensure a complete teaching load."
       badge="Assignments"
+      themeVariant="academic"
+      mainTopMarginClass="mt-9"
+      contentSectionWidthClass="max-w-none"
+      contentSectionClassName="lg:w-[calc(100%+21.5rem)] lg:ml-[-21.5rem]"
     >
       <style>{`
         .ac-input-hover:focus { border-color: rgba(245,158,11,0.5) !important; box-shadow: 0 0 0 3px rgba(245,158,11,0.1) !important; }
@@ -179,11 +192,7 @@ export default function AcademicAssignmentsPage({ user }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         
         {/* Assignment Creation Form */}
-        <section style={{
-          background: 'linear-gradient(135deg, rgba(15,23,42,0.9), rgba(7,20,43,0.95))',
-          padding: 24, borderRadius: 20, border: '1px solid rgba(148,163,184,0.15)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.3)', backdropFilter: 'blur(20px)', position: 'relative', overflow: 'hidden'
-        }}>
+        <section style={{ ...sectionPanelStyle, position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: -100, right: -100, width: 300, height: 300, background: 'radial-gradient(circle, rgba(245,158,11,0.06) 0%, transparent 60%)', borderRadius: '50%', pointerEvents: 'none' }} />
           
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -244,10 +253,7 @@ export default function AcademicAssignmentsPage({ user }) {
         </section>
 
         {/* Existing Assignments Registry */}
-        <section style={{
-          background: 'rgba(15,23,42,0.6)', padding: 24, borderRadius: 20, 
-          border: '1px solid rgba(148,163,184,0.1)', backdropFilter: 'blur(10px)'
-        }}>
+        <section style={sectionPanelStyle}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
              <div>
                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#f8fafc' }}>Active Matrix</h3>

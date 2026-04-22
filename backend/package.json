@@ -8,7 +8,11 @@
     "dev": "nodemon app.js",
     "replace:modules": "node scripts/replaceModulesFromCatalog.js",
     "generate:logical": "node scripts/generateLogicalTimetables.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "seed:modules": "node scripts/seedDummyModules.js",
+    "seed:modules:ac": "node scripts/seedDummyModulesAsAC.js",
+    "test": "jest --detectOpenHandles",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "keywords": [],
   "author": "",
@@ -28,6 +32,9 @@
     "validator": "^13.11.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.11"
+    "nodemon": "^3.1.11",
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3",
+    "@babel/preset-env": "^7.23.0"
   }
 }

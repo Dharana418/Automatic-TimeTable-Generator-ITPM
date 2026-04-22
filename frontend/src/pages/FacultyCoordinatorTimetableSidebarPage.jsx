@@ -1,10 +1,27 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Radar, SlidersHorizontal, Search, Download, RefreshCcw, Sparkles, ChevronDown, ChevronRight, Filter, Sun, Moon } from 'lucide-react';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
-import schedulerApi from '../api/scheduler.js';
+import schedulerApi, { deleteTimetable as apiDeleteTimetable } from '../api/scheduler.js';
+import { downloadTimetableAsCSV } from '../api/timetableGeneration.js';
 import facultyDashboardBg from '../assets/Gemini_Generated_Image_hqfdrqhqfdrqhqfd.png';
 
 const DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const WEEKDAY_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+const WEEKEND_DAYS = ['Sat', 'Sun'];
 const INSTITUTION_NAME = 'Sri Lanka Institute of Information Technology';
+const FILTER_PRESET_STORAGE_KEY = 'faculty_timetable_filter_presets_v1';
+const FAVORITES_STORAGE_KEY = 'faculty_timetable_favorites_v1';
+const REPORT_THEME_STORAGE_KEY = 'faculty_timetable_report_theme_v1';
+const REPORT_SCROLL_SECTIONS = [
+  { id: 'report-hero', label: 'Overview' },
+  { id: 'report-summary', label: 'Summary' },
+  { id: 'report-signals', label: 'Signals' },
+  { id: 'report-risk', label: 'Risk' },
+  { id: 'report-operations', label: 'Operations' },
+  { id: 'report-explorer', label: 'Explorer' },
+  { id: 'report-render', label: 'Render' },
+];
 const WEEKDAY_CLASS_SLOTS = [
   '09:00-10:00',
   '10:00-11:00',
@@ -54,16 +71,21 @@ const normalizeDay = (value) => {
   return map[raw] || String(value);
 };
 
+const getAllowedDaysForMode = (mode = 'ALL') => {
+  if (mode === 'WD') return WEEKDAY_DAYS;
+  if (mode === 'WE') return WEEKEND_DAYS;
+  return DAY_ORDER;
+};
+
+const isDayAllowedForMode = (day, mode = 'ALL') => {
+  const normalizedDay = normalizeDay(day);
+  return getAllowedDaysForMode(mode).includes(normalizedDay);
+};
+
 const normalizeSlot = (row) => {
   const rawSlot = row?.slot || row?.timeSlot || (Array.isArray(row?.slots) ? row.slots.join(' | ') : '');
   const slotText = String(rawSlot || '').trim();
   if (!slotText) return 'TBA';
-
-  // Align stored scheduler slot labels to campus-facing timeline labels.
-  if (slotText === '13:00-14:00') return '13:30-14:30';
-  if (slotText === '14:00-15:00') return '14:30-15:30';
-  if (slotText === '12:00-13:00') return '12:30-13:30';
-  if (slotText === '12:30-13:30') return '12:30-13:30';
 
   if (/^\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}$/.test(slotText)) {
     return slotText.replace(/\s+/g, '');
@@ -116,6 +138,52 @@ const parseBatchMeta = (batchKey = '') => {
   };
 };
 
+const extractScheduleDayType = (row = {}) => {
+  const raw = String(
+    row?.day_type
+      || row?.dayType
+      || row?.module_day_type
+      || row?.moduleDayType
+      || row?.details?.day_type
+      || ''
+  ).trim().toLowerCase();
+
+  if (raw === 'weekday') return 'weekday';
+  if (raw === 'weekend') return 'weekend';
+  return '';
+};
+
+const extractRowBatchMode = (row = {}) => {
+  const keys = extractBatchKeys(row);
+  let hasWeekday = false;
+  let hasWeekend = false;
+
+  keys.forEach((key) => {
+    const mode = extractBatchMode(key);
+    if (mode === 'WD') hasWeekday = true;
+    if (mode === 'WE') hasWeekend = true;
+  });
+
+  if (hasWeekday && !hasWeekend) return 'weekday';
+  if (hasWeekend && !hasWeekday) return 'weekend';
+  return '';
+};
+
+const sanitizeScheduleRowsByDayType = (rows = []) => {
+  return (Array.isArray(rows) ? rows : []).filter((row) => {
+    const day = normalizeDay(row?.day);
+    if (day === 'TBA') return true;
+
+    const dayTypeFromBatch = extractRowBatchMode(row);
+    const dayTypeFromRow = extractScheduleDayType(row);
+    const effectiveDayType = dayTypeFromBatch || dayTypeFromRow;
+
+    if (effectiveDayType === 'weekday' && WEEKEND_DAYS.includes(day)) return false;
+    if (effectiveDayType === 'weekend' && WEEKDAY_DAYS.includes(day)) return false;
+    return true;
+  });
+};
+
 const parseSchedule = (timetable) => {
   const rawData = timetable?.data;
   if (!rawData) return [];
@@ -124,6 +192,14 @@ const parseSchedule = (timetable) => {
     if (!obj || typeof obj !== 'object') return [];
 
     if (Array.isArray(obj.schedule)) return obj.schedule;
+
+    if (Array.isArray(obj.groupedSchedules)) {
+      return obj.groupedSchedules.flatMap((group) => {
+        if (Array.isArray(group?.entries)) return group.entries;
+        if (Array.isArray(group?.schedule)) return group.schedule;
+        return [];
+      });
+    }
 
     const allResults = obj.allResults || obj.results || null;
     if (allResults && typeof allResults === 'object') {
@@ -147,14 +223,14 @@ const parseSchedule = (timetable) => {
   if (typeof rawData === 'string') {
     try {
       const parsed = JSON.parse(rawData);
-      return pickScheduleFromObject(parsed);
+      return sanitizeScheduleRowsByDayType(pickScheduleFromObject(parsed));
     } catch {
       return [];
     }
   }
 
   if (typeof rawData === 'object' && rawData !== null) {
-    return pickScheduleFromObject(rawData);
+    return sanitizeScheduleRowsByDayType(pickScheduleFromObject(rawData));
   }
 
   return [];
@@ -177,22 +253,41 @@ const parseTimetableData = (rawData) => {
 
 const extractTimetableMeta = (timetable = {}) => {
   const data = parseTimetableData(timetable.data);
-  const year = String(timetable.year || data.academicYear || data.year || '').trim();
-  const semester = String(timetable.semester || data.semester || '').trim();
-  const specialization = String(data.specialization || 'ALL').trim() || 'ALL';
+  const scope = data.scope || data.timetableScope || {};
+  const year = String(timetable.year || scope.year || data.academicYear || data.year || '').trim();
+  const semester = String(timetable.semester || scope.semester || data.semester || '').trim();
+  const specialization = String(scope.specialization || data.specialization || 'ALL').trim() || 'ALL';
+  const group = String(scope.group || data.group || '').trim();
+  const subgroup = String(scope.subgroup || data.subgroup || '').trim();
 
   return {
     year: year || 'ALL',
     semester: semester || 'ALL',
     specialization: specialization.toUpperCase(),
+    group: group || 'ALL',
+    subgroup: subgroup || 'ALL',
   };
 };
 
-const buildBatchTable = (scheduleRows = []) => {
+const safeReadStorageJson = (key, fallback) => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    return parsed ?? fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const buildBatchTable = (scheduleRows = [], dayModeFilter = 'ALL') => {
   const batchMap = new Map();
+  const allowedDays = getAllowedDaysForMode(dayModeFilter);
 
   scheduleRows.forEach((row) => {
     const day = normalizeDay(row.day);
+    if (!allowedDays.includes(day)) return;
+
     const slot = normalizeSlot(row);
 
     extractBatchKeys(row).forEach((batchKey) => {
@@ -215,7 +310,7 @@ const buildBatchTable = (scheduleRows = []) => {
   });
 
   const batches = Array.from(batchMap.values()).map((batch) => {
-    const days = [...DAY_ORDER];
+    const days = [...allowedDays];
 
     const slots = [...WEEKEND_CLASS_SLOTS];
 
@@ -245,9 +340,12 @@ const buildBatchTable = (scheduleRows = []) => {
 const buildUnifiedTable = (scheduleRows = [], dayModeFilter = 'WD') => {
   const cellMap = new Map();
   const dedupe = new Set();
+  const allowedDays = getAllowedDaysForMode(dayModeFilter);
 
   scheduleRows.forEach((row) => {
     const day = normalizeDay(row.day);
+    if (!allowedDays.includes(day)) return;
+
     const slot = normalizeSlot(row);
     const rawBatchKeys = extractBatchKeys(row);
 
@@ -282,14 +380,81 @@ const buildUnifiedTable = (scheduleRows = [], dayModeFilter = 'WD') => {
   });
 
   return {
-    days: [...DAY_ORDER],
+    days: [...allowedDays],
     // Use the complete campus timeline slot set for unified rendering.
     slots: [...WEEKEND_CLASS_SLOTS],
     cellMap,
   };
 };
 
+const rowMatchesModeFilter = (row, dayModeFilter = 'ALL') => {
+  if (!isDayAllowedForMode(row?.day, dayModeFilter)) return false;
+  if (dayModeFilter === 'ALL') return true;
+
+  const batchKeys = extractBatchKeys(row);
+  return batchKeys.some((key) => extractBatchMode(key) === dayModeFilter);
+};
+
+const buildRiskInsights = (scheduleRows = [], dayModeFilter = 'ALL') => {
+  const cellCountMap = new Map();
+  const hallConflictMap = new Map();
+  const instructorConflictMap = new Map();
+
+  scheduleRows.forEach((row) => {
+    if (!rowMatchesModeFilter(row, dayModeFilter)) return;
+
+    const day = normalizeDay(row.day);
+    const slot = normalizeSlot(row);
+    const hall = String(row.hallName || row.hallId || 'Hall TBA').trim();
+    const instructor = String(row.instructorName || row.instructorId || 'Instructor TBA').trim();
+
+    const cellKey = `${slot}::${day}`;
+    cellCountMap.set(cellKey, (cellCountMap.get(cellKey) || 0) + 1);
+
+    const hallKey = `${cellKey}::${hall}`;
+    hallConflictMap.set(hallKey, (hallConflictMap.get(hallKey) || 0) + 1);
+
+    const instructorKey = `${cellKey}::${instructor}`;
+    instructorConflictMap.set(instructorKey, (instructorConflictMap.get(instructorKey) || 0) + 1);
+  });
+
+  const riskyCells = new Set();
+  const hallConflicts = new Set();
+  const instructorConflicts = new Set();
+
+  cellCountMap.forEach((count, key) => {
+    if (count >= 4) riskyCells.add(key);
+  });
+
+  hallConflictMap.forEach((count, key) => {
+    if (count > 1) {
+      hallConflicts.add(key);
+      riskyCells.add(key.split('::').slice(0, 2).join('::'));
+    }
+  });
+
+  instructorConflictMap.forEach((count, key) => {
+    if (count > 1) {
+      instructorConflicts.add(key);
+      riskyCells.add(key.split('::').slice(0, 2).join('::'));
+    }
+  });
+
+  return {
+    riskyCells,
+    hallConflicts,
+    instructorConflicts,
+    summary: {
+      riskyCellCount: riskyCells.size,
+      hallConflictCount: hallConflicts.size,
+      instructorConflictCount: instructorConflicts.size,
+    },
+  };
+};
+
 const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [timetables, setTimetables] = useState([]);
@@ -303,6 +468,44 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
   const [filterSpecialization, setFilterSpecialization] = useState('ALL');
   const [dayModeFilter, setDayModeFilter] = useState('ALL');
   const [layoutMode, setLayoutMode] = useState('unified');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [presetName, setPresetName] = useState('');
+  const [filterPresets, setFilterPresets] = useState([]);
+  const [favoriteIds, setFavoriteIds] = useState([]);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [showRiskHighlights, setShowRiskHighlights] = useState(true);
+  const [reportViewMode, setReportViewMode] = useState('command');
+  const [expandedYears, setExpandedYears] = useState({});
+  const [expandedSpecializations, setExpandedSpecializations] = useState({});
+  const [pageAnimated, setPageAnimated] = useState(false);
+  const [animatedInsightMetrics, setAnimatedInsightMetrics] = useState({ timetables: 0, modules: 0, groups: 0, favorites: 0 });
+  const [reportTheme, setReportTheme] = useState(() => safeReadStorageJson(REPORT_THEME_STORAGE_KEY, 'light'));
+  const [activeReportSection, setActiveReportSection] = useState(REPORT_SCROLL_SECTIONS[0].id);
+  const [trendHoverIndex, setTrendHoverIndex] = useState(-1);
+  const animatedInsightRef = useRef({ timetables: 0, modules: 0, groups: 0, favorites: 0 });
+
+  // Delete confirmation modal state
+  const [deleteModal, setDeleteModal] = useState(null); // { id, name }
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleteSuccess, setDeleteSuccess] = useState('');
+
+  useEffect(() => {
+    setFilterPresets(safeReadStorageJson(FILTER_PRESET_STORAGE_KEY, []));
+    setFavoriteIds(safeReadStorageJson(FAVORITES_STORAGE_KEY, []));
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(FILTER_PRESET_STORAGE_KEY, JSON.stringify(filterPresets));
+  }, [filterPresets]);
+
+  useEffect(() => {
+    localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favoriteIds));
+  }, [favoriteIds]);
+
+  useEffect(() => {
+    localStorage.setItem(REPORT_THEME_STORAGE_KEY, JSON.stringify(reportTheme));
+  }, [reportTheme]);
 
   useEffect(() => {
     let mounted = true;
@@ -337,6 +540,24 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
     };
   }, []);
 
+  const handleDeleteTimetable = async () => {
+    if (!deleteModal) return;
+    setDeleteLoading(true);
+    setDeleteError('');
+    try {
+      await apiDeleteTimetable(deleteModal.id);
+      setTimetables((prev) => prev.filter((tt) => String(tt.id) !== String(deleteModal.id)));
+      if (String(selectedId) === String(deleteModal.id)) setSelectedId('');
+      setDeleteSuccess(`"${deleteModal.name}" was deleted successfully.`);
+      setTimeout(() => setDeleteSuccess(''), 4000);
+      setDeleteModal(null);
+    } catch (err) {
+      setDeleteError(err?.message || 'Failed to delete timetable');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   const generateTimetableNow = async () => {
     try {
       setGeneratePending(true);
@@ -348,7 +569,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
         semester: Number(generateSemester),
         algorithms: ['hybrid'],
         options: {
-          moduleLimitPerSpecialization: 5,
+          // Do not force a module limit here — allow scheduler to use all available modules for the scope
           specialization: filterSpecialization !== 'ALL' ? filterSpecialization : undefined,
         },
         timetableName: name,
@@ -399,14 +620,242 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
   }, [timetables, filterYear, filterSemester]);
 
   const filteredTimetables = useMemo(() => {
+    const query = String(searchQuery || '').trim().toLowerCase();
+
     return timetables.filter((tt) => {
       const meta = extractTimetableMeta(tt);
       if (filterYear !== 'ALL' && meta.year !== filterYear) return false;
       if (filterSemester !== 'ALL' && meta.semester !== filterSemester) return false;
       if (filterSpecialization !== 'ALL' && meta.specialization !== filterSpecialization) return false;
+      if (favoritesOnly && !favoriteIds.includes(String(tt.id))) return false;
+
+      if (query) {
+        const haystack = [
+          tt.name,
+          tt.status,
+          tt.id,
+          meta.year,
+          meta.semester,
+          meta.specialization,
+          meta.group,
+          meta.subgroup,
+        ]
+          .map((item) => String(item || '').toLowerCase())
+          .join(' ');
+
+        if (!haystack.includes(query)) return false;
+      }
+
       return true;
     });
-  }, [timetables, filterYear, filterSemester, filterSpecialization]);
+  }, [timetables, filterYear, filterSemester, filterSpecialization, favoritesOnly, favoriteIds, searchQuery]);
+
+  const groupedTimetableIndex = useMemo(() => {
+    const yearMap = new Map();
+
+    filteredTimetables.forEach((tt) => {
+      const meta = extractTimetableMeta(tt);
+      const year = String(meta.year || 'ALL').trim() || 'ALL';
+      const specialization = String(meta.specialization || 'ALL').trim() || 'ALL';
+      const semester = String(meta.semester || 'ALL').trim() || 'ALL';
+
+      if (!yearMap.has(year)) yearMap.set(year, new Map());
+      const specializationMap = yearMap.get(year);
+
+      if (!specializationMap.has(specialization)) specializationMap.set(specialization, new Map());
+      const semesterMap = specializationMap.get(specialization);
+
+      if (!semesterMap.has(semester)) semesterMap.set(semester, []);
+      semesterMap.get(semester).push(tt);
+    });
+
+    const sortToken = (left, right) => {
+      const leftNumber = Number(left);
+      const rightNumber = Number(right);
+      const leftIsNumber = Number.isFinite(leftNumber) && String(leftNumber) === String(left);
+      const rightIsNumber = Number.isFinite(rightNumber) && String(rightNumber) === String(right);
+
+      if (leftIsNumber && rightIsNumber) return leftNumber - rightNumber;
+      if (leftIsNumber) return -1;
+      if (rightIsNumber) return 1;
+      return String(left).localeCompare(String(right));
+    };
+
+    return Array.from(yearMap.entries())
+      .map(([year, specializationMap]) => {
+        const specializations = Array.from(specializationMap.entries())
+          .map(([specialization, semesterMap]) => {
+            const semesters = Array.from(semesterMap.entries())
+              .map(([semester, items]) => ({
+                semester,
+                items: [...items].sort(
+                  (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+                ),
+              }))
+              .sort((a, b) => sortToken(a.semester, b.semester));
+
+            return {
+              specialization,
+              semesters,
+              count: semesters.reduce((sum, semesterGroup) => sum + semesterGroup.items.length, 0),
+            };
+          })
+          .sort((a, b) => String(a.specialization).localeCompare(String(b.specialization)));
+
+        return {
+          year,
+          specializations,
+          count: specializations.reduce((sum, specializationGroup) => sum + specializationGroup.count, 0),
+        };
+      })
+      .sort((a, b) => sortToken(a.year, b.year));
+  }, [filteredTimetables]);
+
+  const semesterSpotlightCards = useMemo(() => {
+    const cards = [];
+
+    groupedTimetableIndex.forEach((yearGroup) => {
+      yearGroup.specializations.forEach((specializationGroup) => {
+        specializationGroup.semesters.forEach((semesterGroup) => {
+          const latest = semesterGroup.items[0] || null;
+          cards.push({
+            year: yearGroup.year,
+            specialization: specializationGroup.specialization,
+            semester: semesterGroup.semester,
+            count: semesterGroup.items.length,
+            latestId: latest?.id ? String(latest.id) : '',
+            latestName: latest?.name || '',
+            latestCreatedAt: latest?.created_at || null,
+          });
+        });
+      });
+    });
+
+    return cards
+      .sort((left, right) => {
+        const leftTime = new Date(left.latestCreatedAt || 0).getTime();
+        const rightTime = new Date(right.latestCreatedAt || 0).getTime();
+        return rightTime - leftTime;
+      })
+      .slice(0, 12);
+  }, [groupedTimetableIndex]);
+
+  useEffect(() => {
+    if (!groupedTimetableIndex.length) {
+      setExpandedYears({});
+      setExpandedSpecializations({});
+      return;
+    }
+
+    setExpandedYears((previous) => {
+      const next = { ...previous };
+      groupedTimetableIndex.slice(0, 2).forEach((yearGroup) => {
+        if (next[yearGroup.year] === undefined) next[yearGroup.year] = true;
+      });
+      return next;
+    });
+
+    setExpandedSpecializations((previous) => {
+      const next = { ...previous };
+      groupedTimetableIndex.slice(0, 2).forEach((yearGroup) => {
+        yearGroup.specializations.slice(0, 1).forEach((specializationGroup) => {
+          const key = `${yearGroup.year}::${specializationGroup.specialization}`;
+          if (next[key] === undefined) next[key] = true;
+        });
+      });
+      return next;
+    });
+  }, [groupedTimetableIndex]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setPageAnimated(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  const semesterTrend = useMemo(() => {
+    const periodMap = new Map();
+
+    filteredTimetables.forEach((tt) => {
+      const meta = extractTimetableMeta(tt);
+      const year = String(meta.year || '').trim();
+      const semester = String(meta.semester || '').trim();
+      if (!year || !semester) return;
+
+      const key = `${year}-${semester}`;
+      const label = `Y${year} S${semester}`;
+      const current = periodMap.get(key) || {
+        key,
+        year,
+        semester,
+        label,
+        value: 0,
+      };
+      current.value += 1;
+      periodMap.set(key, current);
+    });
+
+    const sorted = Array.from(periodMap.values()).sort((left, right) => {
+      const leftYear = Number(left.year);
+      const rightYear = Number(right.year);
+      if (Number.isFinite(leftYear) && Number.isFinite(rightYear) && leftYear !== rightYear) {
+        return leftYear - rightYear;
+      }
+
+      const leftSemester = Number(left.semester);
+      const rightSemester = Number(right.semester);
+      if (Number.isFinite(leftSemester) && Number.isFinite(rightSemester) && leftSemester !== rightSemester) {
+        return leftSemester - rightSemester;
+      }
+
+      return left.key.localeCompare(right.key);
+    });
+
+    const maxValue = Math.max(1, ...sorted.map((item) => item.value));
+    const chartHeight = 72;
+    const chartWidth = Math.max(240, sorted.length > 1 ? (sorted.length - 1) * 56 : 240);
+
+    const points = sorted.map((item, index) => {
+      const x = sorted.length <= 1 ? chartWidth / 2 : (index * chartWidth) / (sorted.length - 1);
+      const y = chartHeight - (item.value / maxValue) * chartHeight;
+      return {
+        ...item,
+        x,
+        y,
+      };
+    });
+
+    const linePath = points
+      .map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x},${point.y}`)
+      .join(' ');
+
+    const areaPath = points.length
+      ? `${linePath} L${points[points.length - 1].x},${chartHeight} L${points[0].x},${chartHeight} Z`
+      : '';
+
+    return {
+      points,
+      linePath,
+      areaPath,
+      chartWidth,
+      chartHeight,
+      maxValue,
+    };
+  }, [filteredTimetables]);
+
+  const toggleYearExpansion = (year) => {
+    setExpandedYears((previous) => ({
+      ...previous,
+      [year]: !previous[year],
+    }));
+  };
+
+  const toggleSpecializationExpansion = (year, specialization) => {
+    const key = `${year}::${specialization}`;
+    setExpandedSpecializations((previous) => ({
+      ...previous,
+      [key]: !previous[key],
+    }));
+  };
 
   useEffect(() => {
     if (!yearOptions.includes(filterYear)) {
@@ -431,9 +880,18 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
     return filteredTimetables.find((tt) => String(tt.id) === String(selectedId)) || null;
   }, [selectedId, filteredTimetables]);
 
-  const schedule = useMemo(() => parseSchedule(selectedTimetable), [selectedTimetable]);
+  const selectedTimetableMeta = useMemo(
+    () => (selectedTimetable ? extractTimetableMeta(selectedTimetable) : null),
+    [selectedTimetable]
+  );
 
-  const batchTables = useMemo(() => buildBatchTable(schedule), [schedule]);
+  const schedule = useMemo(() => parseSchedule(selectedTimetable), [selectedTimetable]);
+  const scopedSchedule = useMemo(
+    () => (Array.isArray(schedule) ? schedule.filter((row) => rowMatchesModeFilter(row, dayModeFilter)) : []),
+    [schedule, dayModeFilter]
+  );
+
+  const batchTables = useMemo(() => buildBatchTable(schedule, dayModeFilter), [schedule, dayModeFilter]);
   const unifiedTable = useMemo(() => buildUnifiedTable(schedule, dayModeFilter), [schedule, dayModeFilter]);
 
   const filteredBatchTables = useMemo(() => {
@@ -456,7 +914,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
   const activeTimeline = useMemo(() => buildCampusTimeline(dayModeFilter), [dayModeFilter]);
 
   const insightMetrics = useMemo(() => {
-    const uniqueModules = new Set(schedule.map((row) => row.moduleName || row.moduleId || 'Module')).size;
+    const uniqueModules = new Set(scopedSchedule.map((row) => row.moduleName || row.moduleId || 'Module')).size;
     const uniqueGroups = new Set(filteredBatchTables.map((batch) => batch.batchKey)).size;
     const generatedAt = selectedTimetable?.created_at
       ? new Date(selectedTimetable.created_at).toLocaleString()
@@ -468,7 +926,172 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
       groups: uniqueGroups,
       generatedAt,
     };
-  }, [filteredTimetables.length, filteredBatchTables, schedule, selectedTimetable]);
+  }, [filteredTimetables.length, filteredBatchTables, scopedSchedule, selectedTimetable]);
+
+  useEffect(() => {
+    const targets = {
+      timetables: insightMetrics.timetables,
+      modules: insightMetrics.modules,
+      groups: insightMetrics.groups,
+      favorites: favoriteIds.length,
+    };
+
+    const startValues = { ...animatedInsightRef.current };
+    const startTime = performance.now();
+    const duration = 460;
+
+    let rafId = 0;
+    const tick = (now) => {
+      const progress = Math.min(1, (now - startTime) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+
+      setAnimatedInsightMetrics({
+        timetables: Math.round(startValues.timetables + (targets.timetables - startValues.timetables) * eased),
+        modules: Math.round(startValues.modules + (targets.modules - startValues.modules) * eased),
+        groups: Math.round(startValues.groups + (targets.groups - startValues.groups) * eased),
+        favorites: Math.round(startValues.favorites + (targets.favorites - startValues.favorites) * eased),
+      });
+
+      animatedInsightRef.current = {
+        timetables: Math.round(startValues.timetables + (targets.timetables - startValues.timetables) * eased),
+        modules: Math.round(startValues.modules + (targets.modules - startValues.modules) * eased),
+        groups: Math.round(startValues.groups + (targets.groups - startValues.groups) * eased),
+        favorites: Math.round(startValues.favorites + (targets.favorites - startValues.favorites) * eased),
+      };
+
+      if (progress < 1) {
+        rafId = window.requestAnimationFrame(tick);
+      }
+    };
+
+    rafId = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(rafId);
+  }, [insightMetrics.timetables, insightMetrics.modules, insightMetrics.groups, favoriteIds.length]);
+
+  const planningInsights = useMemo(() => {
+    const scopedRows = Array.isArray(schedule)
+      ? schedule.filter((row) => rowMatchesModeFilter(row, dayModeFilter))
+      : [];
+
+    if (!scopedRows.length) {
+      return {
+        busiestDay: 'N/A',
+        peakSlot: 'N/A',
+        busiestHall: 'N/A',
+        overlapCells: 0,
+      };
+    }
+
+    const dayMap = new Map();
+    const slotMap = new Map();
+    const hallMap = new Map();
+    const cellMap = new Map();
+
+    scopedRows.forEach((row) => {
+      const day = normalizeDay(row.day);
+      const slot = normalizeSlot(row);
+      const hall = String(row.hallName || row.hallId || 'Hall TBA').trim();
+
+      dayMap.set(day, (dayMap.get(day) || 0) + 1);
+      slotMap.set(slot, (slotMap.get(slot) || 0) + 1);
+      hallMap.set(hall, (hallMap.get(hall) || 0) + 1);
+
+      const cellKey = `${slot}::${day}`;
+      cellMap.set(cellKey, (cellMap.get(cellKey) || 0) + 1);
+    });
+
+    const pickTop = (sourceMap) => {
+      let label = 'N/A';
+      let count = 0;
+      sourceMap.forEach((value, key) => {
+        if (value > count) {
+          label = key;
+          count = value;
+        }
+      });
+      return `${label} (${count})`;
+    };
+
+    const overlapCells = Array.from(cellMap.values()).filter((count) => count > 1).length;
+
+    return {
+      busiestDay: pickTop(dayMap),
+      peakSlot: pickTop(slotMap),
+      busiestHall: pickTop(hallMap),
+      overlapCells,
+    };
+  }, [schedule, dayModeFilter]);
+
+  const riskInsights = useMemo(() => buildRiskInsights(schedule, dayModeFilter), [schedule, dayModeFilter]);
+
+  const reportHealthScore = useMemo(() => {
+    const penalty = (planningInsights.overlapCells * 8) + (riskInsights.summary.hallConflictCount * 14) + (riskInsights.summary.instructorConflictCount * 14);
+    return Math.max(48, Math.min(100, 100 - penalty));
+  }, [planningInsights.overlapCells, riskInsights.summary.hallConflictCount, riskInsights.summary.instructorConflictCount]);
+
+  const dayLoadDistribution = useMemo(() => {
+    const counts = getAllowedDaysForMode(dayModeFilter).map((day) => ({ day, count: 0 }));
+    const indexMap = new Map(counts.map((item, idx) => [item.day, idx]));
+
+    schedule.forEach((row) => {
+      if (!rowMatchesModeFilter(row, dayModeFilter)) return;
+      const normalizedDay = normalizeDay(row.day);
+      const idx = indexMap.get(normalizedDay);
+      if (idx === undefined) return;
+      counts[idx].count += 1;
+    });
+
+    const maxCount = Math.max(1, ...counts.map((item) => item.count));
+    return counts.map((item) => ({
+      ...item,
+      widthPercent: Math.max(8, Math.round((item.count / maxCount) * 100)),
+    }));
+  }, [schedule, dayModeFilter]);
+
+  const applyFilterPreset = (preset) => {
+    const filters = preset?.filters || {};
+    setFilterYear(filters.filterYear || 'ALL');
+    setFilterSemester(filters.filterSemester || 'ALL');
+    setFilterSpecialization(filters.filterSpecialization || 'ALL');
+    setDayModeFilter(filters.dayModeFilter || 'ALL');
+    setLayoutMode(filters.layoutMode || 'unified');
+    setFavoritesOnly(Boolean(filters.favoritesOnly));
+    setSearchQuery(filters.searchQuery || '');
+  };
+
+  const saveFilterPreset = () => {
+    const name = String(presetName || '').trim();
+    if (!name) return;
+
+    const newPreset = {
+      id: `${Date.now()}`,
+      name,
+      filters: {
+        filterYear,
+        filterSemester,
+        filterSpecialization,
+        dayModeFilter,
+        layoutMode,
+        favoritesOnly,
+        searchQuery,
+      },
+    };
+
+    setFilterPresets((prev) => [newPreset, ...prev].slice(0, 10));
+    setPresetName('');
+  };
+
+  const removeFilterPreset = (presetId) => {
+    setFilterPresets((prev) => prev.filter((item) => item.id !== presetId));
+  };
+
+  const toggleFavorite = (timetableId) => {
+    const key = String(timetableId);
+    setFavoriteIds((prev) => {
+      if (prev.includes(key)) return prev.filter((item) => item !== key);
+      return [key, ...prev];
+    });
+  };
 
   useEffect(() => {
     if (!filteredTimetables.length) {
@@ -483,57 +1106,508 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
   }, [filteredTimetables, selectedId]);
 
   useEffect(() => {
+    const requestedTimetableId = String(searchParams.get('timetableId') || '').trim();
+    if (!requestedTimetableId || !filteredTimetables.length) return;
+
+    const found = filteredTimetables.some((tt) => String(tt.id) === requestedTimetableId);
+    if (found && String(selectedId) !== requestedTimetableId) {
+      setSelectedId(requestedTimetableId);
+    }
+  }, [searchParams, filteredTimetables, selectedId]);
+
+  useEffect(() => {
     if (!schedule.length) return;
     if (!filteredBatchTables.length && dayModeFilter !== 'ALL') {
       setDayModeFilter('ALL');
     }
   }, [dayModeFilter, filteredBatchTables.length, schedule.length]);
 
+  useEffect(() => {
+    const elements = REPORT_SCROLL_SECTIONS
+      .map((section) => document.getElementById(section.id))
+      .filter(Boolean);
+
+    if (!elements.length) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (!visible?.target?.id) return;
+        setActiveReportSection(visible.target.id);
+      },
+      { threshold: [0.25, 0.45, 0.65], rootMargin: '-30% 0px -35% 0px' }
+    );
+
+    elements.forEach((element) => observer.observe(element));
+    return () => observer.disconnect();
+  }, [loading, selectedTimetable, layoutMode, reportViewMode]);
+
+  const activeSectionIndex = Math.max(0, REPORT_SCROLL_SECTIONS.findIndex((item) => item.id === activeReportSection));
+  const sectionProgress = Math.max(10, Math.round(((activeSectionIndex + 1) / REPORT_SCROLL_SECTIONS.length) * 100));
+
+  const jumpToSection = (sectionId) => {
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
     <FacultyCoordinatorShell
       user={user}
-      title="Timetable Sidebar View"
-      subtitle="FET-style student timetable view by year, semester, and batch"
-      badge="Timetable Report"
+      title="Faculty Timetable Workspace"
+      subtitle="Review, filter, and export timetable layouts in a structured academic workflow."
+      badge="Timetable Planning"
       backgroundImage={facultyDashboardBg}
-      footerNote="Faculty Coordinator timetable report view"
+      footerNote="Faculty Coordinator timetable planning workspace"
       sidebarTheme="timetable"
     >
-      <div id="top" className="flex flex-col gap-6">
-        <section className="relative overflow-hidden rounded-3xl border border-sky-200/80 bg-gradient-to-br from-sky-50 via-white to-cyan-50 p-6 shadow-[0_20px_45px_rgba(14,116,144,0.12)]">
-          <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.25),transparent_70%)]" />
-          <div className="pointer-events-none absolute -bottom-24 -left-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(14,165,233,0.16),transparent_70%)]" />
-          <div className="relative grid grid-cols-1 gap-4 lg:grid-cols-[1.35fr_1fr]">
+      <div id="top" className={`fc-layout-stack fc-layout-stack-tight ${reportTheme === 'dark' ? 'report-theme-dark' : 'report-theme-light'}`}>
+
+        {/* SUCCESS TOAST */}
+        {deleteSuccess && (
+          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl border border-emerald-300 bg-gradient-to-br from-emerald-50 to-green-50 px-5 py-4 shadow-2xl" style={{animation:'timetableFadeIn 350ms ease-out both'}}>
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500 text-white">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-5 w-5"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Creative Timetable Studio</p>
-              <h2 className="mt-2 text-2xl font-extrabold text-slate-900">Timetable View Intelligence Panel</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-700">
-                Explore generated timetables by year, semester, and specialization with a dynamic master grid and grouped academic layouts.
+              <p className="text-sm font-bold text-emerald-900">Deleted Successfully</p>
+              <p className="text-xs text-emerald-700">{deleteSuccess}</p>
+            </div>
+            <button type="button" onClick={() => setDeleteSuccess('')} className="ml-2 rounded-full p-1 text-emerald-600 hover:bg-emerald-100">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        )}
+
+        {/* DELETE CONFIRMATION MODAL */}
+        {deleteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(2,6,23,0.68)',backdropFilter:'blur(6px)'}}>
+            <div className="w-full max-w-md rounded-3xl border-2 border-rose-200 bg-gradient-to-br from-white via-rose-50 to-pink-50 p-8 shadow-[0_32px_64px_rgba(244,63,94,0.22)]" style={{animation:'timetableEnterUp 380ms cubic-bezier(0.2,0.8,0.2,1) both'}}>
+              {/* Icon */}
+              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-rose-400 to-pink-600 shadow-lg shadow-rose-200">
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" className="h-8 w-8">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                  <path d="M10 11v6M14 11v6"/>
+                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                </svg>
+              </div>
+              {/* Title */}
+              <h2 className="text-center text-2xl font-extrabold text-slate-900">Delete Timetable?</h2>
+              <p className="mt-2 text-center text-sm leading-6 text-slate-600">
+                This action is <strong className="text-rose-700">permanent and cannot be undone</strong>. The timetable and all its generated schedule data will be removed from the database.
               </p>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <span className="rounded-full border border-sky-300 bg-white px-3 py-1 text-xs font-semibold text-sky-700">{insightMetrics.timetables} filtered timetable(s)</span>
-                <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700">{dayModeFilter === 'WD' ? 'Weekday Mode' : dayModeFilter === 'WE' ? 'Weekend Mode' : 'All Batch Modes'}</span>
-                <span className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs text-emerald-700">Layout: {layoutMode === 'unified' ? 'Master View' : 'Grouped View'}</span>
+              {/* Timetable name box */}
+              <div className="mt-4 rounded-xl border border-rose-200 bg-white px-4 py-3 text-center shadow-sm">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-rose-500 mb-1">Timetable to be deleted</p>
+                <p className="text-base font-bold text-slate-900">{deleteModal.name}</p>
+                <p className="text-xs text-slate-500 mt-0.5">ID #{deleteModal.id}</p>
+              </div>
+              {/* Error */}
+              {deleteError && (
+                <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">{deleteError}</p>
+              )}
+              {/* Buttons */}
+              <div className="mt-6 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setDeleteModal(null); setDeleteError(''); }}
+                  disabled={deleteLoading}
+                  className="flex-1 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteTimetable}
+                  disabled={deleteLoading}
+                  className="flex-1 rounded-xl bg-gradient-to-br from-rose-500 to-pink-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-rose-200 transition hover:from-rose-600 hover:to-pink-700 hover:shadow-rose-300 disabled:opacity-60 flex items-center justify-center gap-2"
+                >
+                  {deleteLoading ? (
+                    <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Deleting...</>
+                  ) : (
+                    <><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-4 w-4"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg> Yes, Delete It</>
+                  )}
+                </button>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-2xl border border-sky-200 bg-white/95 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Modules</p>
-                <p className="mt-1 text-2xl font-extrabold text-slate-900">{insightMetrics.modules}</p>
+          </div>
+        )}
+
+        <style>{`
+          @keyframes timetableEnterUp {
+            0% { opacity: 0; transform: translateY(14px) scale(0.985); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+          }
+
+          @keyframes timetableFadeIn {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+          }
+
+          .timetable-enter {
+            animation: timetableEnterUp 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+          }
+
+          .timetable-fade {
+            animation: timetableFadeIn 420ms ease-out both;
+          }
+
+          .report-theme-dark {
+            color: #e2e8f0;
+          }
+
+          .report-theme-dark .theme-shell {
+            border-color: #334155;
+            background: linear-gradient(138deg, #0f172a 0%, #111827 45%, #082f49 100%);
+            box-shadow: 0 20px 42px rgba(2, 6, 23, 0.5);
+          }
+
+          .report-theme-dark .theme-panel {
+            border-color: #334155;
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.82), rgba(30, 41, 59, 0.72));
+            box-shadow: 0 12px 30px rgba(2, 6, 23, 0.45);
+          }
+
+          .report-theme-dark .theme-soft {
+            border-color: #475569;
+            background: rgba(15, 23, 42, 0.78);
+          }
+
+          .report-theme-dark .theme-soft-plain {
+            border-color: #475569;
+            background: rgba(30, 41, 59, 0.62);
+          }
+
+          .report-theme-dark .theme-text-strong {
+            color: #f8fafc;
+          }
+
+          .report-theme-dark .theme-text-medium {
+            color: #cbd5e1;
+          }
+
+          .report-theme-dark .theme-text-soft {
+            color: #94a3b8;
+          }
+
+          .report-theme-dark .theme-chip {
+            border-color: #475569;
+            background: rgba(15, 23, 42, 0.86);
+            color: #dbeafe;
+          }
+        `}</style>
+        <section className="theme-panel rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-[0_10px_26px_rgba(15,23,42,0.08)]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 theme-text-soft">Workspace Navigator</p>
+              <p className="text-[11px] text-slate-600 theme-text-medium">Move through the timetable summary, filters, insights, and layout preview in order.</p>
+            </div>
+            <div className="w-full max-w-[300px] rounded-full bg-slate-200 theme-soft-plain">
+              <div className="h-2 rounded-full bg-gradient-to-r from-sky-500 to-cyan-500 transition-all duration-500" style={{ width: `${sectionProgress}%` }} />
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {REPORT_SCROLL_SECTIONS.map((section) => {
+              const isActive = section.id === activeReportSection;
+              return (
+                <button
+                  key={section.id}
+                  type="button"
+                  onClick={() => jumpToSection(section.id)}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${isActive ? 'border-sky-600 bg-sky-600 text-white shadow-[0_4px_14px_rgba(2,132,199,0.35)]' : 'border-slate-300 bg-white text-slate-700 hover:border-sky-300 hover:bg-sky-50'} ${pageAnimated ? 'timetable-enter' : 'opacity-0'}`}
+                >
+                  {section.label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section id="report-hero" className="theme-shell relative overflow-hidden rounded-3xl border border-sky-200/80 bg-gradient-to-br from-sky-50 via-white to-cyan-50 p-6 shadow-[0_20px_45px_rgba(14,116,144,0.12)]">
+          <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.25),transparent_70%)]" />
+          <div className="pointer-events-none absolute -bottom-24 -left-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(14,165,233,0.16),transparent_70%)]" />
+          <div className="relative grid grid-cols-1 gap-4 xl:grid-cols-[1.25fr_0.75fr]">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700 theme-text-medium">Academic Timetable Overview</p>
+              <h2 className="theme-text-strong mt-2 text-2xl font-extrabold text-slate-900">Timetable planning and review panel</h2>
+              <p className="theme-text-medium mt-2 max-w-2xl text-sm leading-6 text-slate-700">
+                Review generated timetables by year, semester, and specialization with a clear master view, batch-based layouts, and conflict-aware checks.
+              </p>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="theme-chip rounded-full border border-sky-300 bg-white px-3 py-1 text-xs font-semibold text-sky-700">{animatedInsightMetrics.timetables} timetable(s)</span>
+                <span className="theme-chip rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700">{dayModeFilter === 'WD' ? 'Weekday scope' : dayModeFilter === 'WE' ? 'Weekend scope' : 'All batches'}</span>
+                <span className="theme-chip rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs text-emerald-700">Layout: {layoutMode === 'unified' ? 'Master view' : 'Batch view'}</span>
+                <button
+                  type="button"
+                  onClick={() => setReportTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+                  className="theme-chip inline-flex items-center gap-1 rounded-full border border-indigo-300 bg-white px-3 py-1 text-xs font-semibold text-indigo-700"
+                >
+                  {reportTheme === 'dark' ? <Sun size={12} /> : <Moon size={12} />}
+                  {reportTheme === 'dark' ? 'Light Canvas' : 'Dark Canvas'}
+                </button>
               </div>
-              <div className="rounded-2xl border border-sky-200 bg-white/95 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Groups</p>
-                <p className="mt-1 text-2xl font-extrabold text-slate-900">{insightMetrics.groups}</p>
+              <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded-2xl border border-sky-200 bg-white/90 p-3 shadow-[0_10px_24px_rgba(14,116,144,0.08)]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Entries</p>
+                  <p className="mt-1 text-2xl font-black text-slate-900">{scopedSchedule.length}</p>
+                </div>
+                <div className="rounded-2xl border border-sky-200 bg-white/90 p-3 shadow-[0_10px_24px_rgba(14,116,144,0.08)]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Days</p>
+                  <p className="mt-1 text-2xl font-black text-slate-900">{unifiedTable.days.length}</p>
+                </div>
+                <div className="rounded-2xl border border-sky-200 bg-white/90 p-3 shadow-[0_10px_24px_rgba(14,116,144,0.08)]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Groups</p>
+                  <p className="mt-1 text-2xl font-black text-slate-900">{animatedInsightMetrics.groups}</p>
+                </div>
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50/90 p-3 shadow-[0_10px_24px_rgba(16,185,129,0.08)]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700">Health</p>
+                  <p className="mt-1 text-2xl font-black text-emerald-800">{reportHealthScore}%</p>
+                </div>
               </div>
-              <div className="col-span-2 rounded-2xl border border-sky-200 bg-white/95 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Last Generated</p>
-                <p className="mt-1 text-sm font-semibold text-slate-800">{insightMetrics.generatedAt}</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <div className="theme-soft rounded-3xl border border-sky-200 bg-white/95 p-4 shadow-[0_10px_24px_rgba(14,116,144,0.08)] xl:p-5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Selected timetable</p>
+                <p className="mt-2 text-lg font-bold text-slate-900">
+                  {selectedTimetable?.name || 'No timetable selected'}
+                </p>
+                <p className="mt-2 text-xs leading-6 text-slate-600">
+                  {selectedTimetableMeta
+                    ? `Year ${selectedTimetableMeta.year} · Semester ${selectedTimetableMeta.semester} · ${selectedTimetableMeta.specialization} · Group ${selectedTimetableMeta.group} · Subgroup ${selectedTimetableMeta.subgroup}`
+                    : 'Choose a timetable to see its academic scope.'}
+                </p>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <div className="rounded-2xl bg-slate-50 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Last generated</p>
+                    <p className="mt-1 text-xs font-semibold text-slate-800">{insightMetrics.generatedAt}</p>
+                  </div>
+                  <div className="rounded-2xl bg-amber-50 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-600">Alerts</p>
+                    <p className="mt-1 text-xs font-semibold text-amber-800">{planningInsights.overlapCells} overlaps</p>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-3xl border border-slate-200 bg-slate-950/5 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Canvas snapshot</p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className="rounded-2xl border border-white/70 bg-white px-3 py-3 shadow-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Modules</p>
+                    <p className="mt-1 text-xl font-black text-slate-900">{animatedInsightMetrics.modules}</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/70 bg-white px-3 py-3 shadow-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Risk cells</p>
+                    <p className="mt-1 text-xl font-black text-slate-900">{riskInsights.summary.riskyCellCount}</p>
+                  </div>
+                  <div className="col-span-2 rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-500 to-cyan-500 px-3 py-3 text-white shadow-[0_14px_28px_rgba(2,132,199,0.24)]">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/80">Report health</p>
+                    <div className="mt-2 flex items-end justify-between gap-3">
+                      <p className="text-3xl font-black leading-none">{reportHealthScore}%</p>
+                      <p className="max-w-[160px] text-right text-xs leading-5 text-white/85">Balanced layout, selected scope, and conflict visibility</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_35px_rgba(15,23,42,0.06)]">
+        <section id="report-summary" className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+          <div className="rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-[0_14px_35px_rgba(15,23,42,0.07)]">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Selected scope</p>
+                <h3 className="mt-2 text-xl font-bold text-slate-900">Timetable context at a glance</h3>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                  Use the current selection as the working context for downloads, layout switching, and risk review.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-right">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700">Selected timetable</p>
+                <p className="mt-1 text-sm font-bold text-emerald-900">{selectedTimetable?.status || 'Pending'}</p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Filtered timetables</p>
+                <p className="mt-1 text-2xl font-black text-slate-900">{filteredTimetables.length}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Schedule rows</p>
+                <p className="mt-1 text-2xl font-black text-slate-900">{schedule.length}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Layouts</p>
+                <p className="mt-1 text-2xl font-black text-slate-900">2</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Active view</p>
+                <p className="mt-1 text-sm font-bold text-slate-900">{layoutMode === 'unified' ? 'Master' : 'Grouped'}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.96),rgba(255,255,255,0.94))] p-5 shadow-[0_14px_35px_rgba(15,23,42,0.07)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Quick actions</p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setReportTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-sky-300 hover:bg-sky-50"
+              >
+                <p className="text-sm font-semibold text-slate-900">Switch canvas</p>
+                <p className="mt-1 text-xs text-slate-500">Toggle light and dark report modes</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/scheduler/by-year')}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-sky-300 hover:bg-sky-50"
+              >
+                <p className="text-sm font-semibold text-slate-900">Open generator</p>
+                <p className="mt-1 text-xs text-slate-500">Jump back to timetable creation</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setLayoutMode('unified')}
+                className={`rounded-2xl border px-4 py-3 text-left transition ${layoutMode === 'unified' ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50'}`}
+              >
+                <p className="text-sm font-semibold">Master view</p>
+                <p className={`mt-1 text-xs ${layoutMode === 'unified' ? 'text-sky-100' : 'text-slate-500'}`}>Single campus timetable grid</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setLayoutMode('grouped')}
+                className={`rounded-2xl border px-4 py-3 text-left transition ${layoutMode === 'grouped' ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50'}`}
+              >
+                <p className="text-sm font-semibold">Grouped view</p>
+                <p className={`mt-1 text-xs ${layoutMode === 'grouped' ? 'text-sky-100' : 'text-slate-500'}`}>Batch-by-batch breakdown</p>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section id="report-signals" className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+          <div className="theme-panel rounded-3xl border border-slate-200 bg-white p-4 shadow-[0_12px_28px_rgba(15,23,42,0.07)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Busiest Day</p>
+            <p className="theme-text-strong mt-3 text-lg font-bold text-slate-900">{planningInsights.busiestDay}</p>
+          </div>
+          <div className="theme-panel rounded-3xl border border-slate-200 bg-white p-4 shadow-[0_12px_28px_rgba(15,23,42,0.07)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Peak Slot</p>
+            <p className="theme-text-strong mt-3 text-lg font-bold text-slate-900">{planningInsights.peakSlot}</p>
+          </div>
+          <div className="theme-panel rounded-3xl border border-slate-200 bg-white p-4 shadow-[0_12px_28px_rgba(15,23,42,0.07)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Most Used Hall</p>
+            <p className="theme-text-strong mt-3 text-lg font-bold text-slate-900">{planningInsights.busiestHall}</p>
+          </div>
+          <div className="theme-panel rounded-3xl border border-slate-200 bg-white p-4 shadow-[0_12px_28px_rgba(15,23,42,0.07)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Favorite Timetables</p>
+            <p className="theme-text-strong mt-3 text-lg font-bold text-slate-900">{animatedInsightMetrics.favorites}</p>
+          </div>
+        </section>
+
+        <section id="report-risk" className="theme-panel rounded-2xl border border-rose-200 bg-rose-50/60 p-4 shadow-[0_8px_24px_rgba(244,63,94,0.12)]">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-rose-700">High-Risk Conflict Detection</p>
+              <p className="mt-1 text-sm text-rose-900">
+                Hall conflicts: {riskInsights.summary.hallConflictCount} • Instructor conflicts: {riskInsights.summary.instructorConflictCount}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowRiskHighlights((prev) => !prev)}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${showRiskHighlights ? 'border-rose-600 bg-rose-600 text-white' : 'border-slate-300 bg-white text-slate-700'}`}
+            >
+              {showRiskHighlights ? 'Risk Highlight ON' : 'Risk Highlight OFF'}
+            </button>
+          </div>
+        </section>
+
+        <section id="report-operations" className="theme-shell rounded-3xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-sky-50 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.4fr_1fr]">
+            <div className="rounded-2xl border border-slate-200 bg-white/90 p-4">
+              <div className="flex items-center justify-between gap-2">
+                <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
+                  <Radar size={14} className="text-sky-600" /> Operations Deck
+                </p>
+                <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-sky-700">
+                  Faculty Control Center
+                </span>
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!selectedTimetable) return;
+                    downloadTimetableAsCSV(
+                      scopedSchedule,
+                      extractTimetableMeta(selectedTimetable).year,
+                      extractTimetableMeta(selectedTimetable).semester,
+                      extractTimetableMeta(selectedTimetable).group,
+                      extractTimetableMeta(selectedTimetable).subgroup
+                    );
+                  }}
+                  disabled={!selectedTimetable || !scopedSchedule.length}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Download size={14} /> Quick Download CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                >
+                  <RefreshCcw size={14} /> Refresh Dataset
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLayoutMode('unified')}
+                  className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${layoutMode === 'unified' ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
+                >
+                  Unified Master View
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLayoutMode('grouped')}
+                  className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${layoutMode === 'grouped' ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
+                >
+                  Group-by-Batch View
+                </button>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-700">
+                  <Search size={12} /> Search-ready
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-700">
+                  <SlidersHorizontal size={12} /> Preset-enabled
+                </span>
+                <span className="rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-700">
+                  Live Risk Overlay
+                </span>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white/95 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Week Load Strip</p>
+              <div className="mt-3 space-y-2">
+                {dayLoadDistribution.map((item) => (
+                  <div key={item.day} className="grid grid-cols-[34px_1fr_36px] items-center gap-2">
+                    <span className="text-xs font-semibold text-slate-600">{item.day}</span>
+                    <div className="h-2.5 rounded-full bg-slate-200">
+                      <div className="h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-500" style={{ width: `${item.widthPercent}%` }} />
+                    </div>
+                    <span className="text-right text-xs font-semibold text-slate-700">{item.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="report-explorer" className="theme-panel rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_35px_rgba(15,23,42,0.06)]">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">Institution Name</h2>
@@ -562,13 +1636,39 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                 ))}
               </select>
             </div>
-            <button
-              type="button"
-              onClick={() => window.location.reload()}
-              className="rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:from-slate-200 hover:to-slate-50"
-            >
-              Refresh
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!selectedTimetable) return;
+                  downloadTimetableAsCSV(
+                      scopedSchedule,
+                    extractTimetableMeta(selectedTimetable).year,
+                    extractTimetableMeta(selectedTimetable).semester,
+                    extractTimetableMeta(selectedTimetable).group,
+                    extractTimetableMeta(selectedTimetable).subgroup
+                  );
+                }}
+                disabled={!selectedTimetable || !scopedSchedule.length}
+                className="rounded-xl border border-emerald-500 bg-gradient-to-r from-emerald-500 to-green-600 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:border-slate-300 disabled:from-slate-300 disabled:to-slate-400"
+              >
+                Download CSV
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/scheduler/by-year')}
+                className="rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:from-slate-200 hover:to-slate-50"
+              >
+                View Generator
+              </button>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:from-slate-200 hover:to-slate-50"
+              >
+                Refresh
+              </button>
+            </div>
           </div>
 
           <div className="mt-4 rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 via-white to-slate-200 p-3">
@@ -609,69 +1709,484 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
             </div>
           </div>
 
-          <div className="mt-4 rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 via-white to-slate-200 p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Display Generated Timetables</p>
-            <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
-              <select
-                className="rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-2 text-sm text-slate-900"
-                value={filterYear}
-                onChange={(e) => setFilterYear(e.target.value)}
-              >
-                {yearOptions.map((year) => (
-                  <option key={year} value={year}>{year === 'ALL' ? 'All Years' : `Year ${year}`}</option>
-                ))}
-              </select>
-              <select
-                className="rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-2 text-sm text-slate-900"
-                value={filterSemester}
-                onChange={(e) => setFilterSemester(e.target.value)}
-              >
-                {semesterOptions.map((semester) => (
-                  <option key={semester} value={semester}>{semester === 'ALL' ? 'All Semesters' : `Semester ${semester}`}</option>
-                ))}
-              </select>
-              <select
-                className="rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-2 text-sm text-slate-900"
-                value={filterSpecialization}
-                onChange={(e) => setFilterSpecialization(e.target.value)}
-              >
-                {specializationOptions.map((spec) => (
-                  <option key={spec} value={spec}>{spec === 'ALL' ? 'All Specializations' : spec}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-sky-300 bg-white px-3 py-1 text-xs font-semibold text-sky-700">
-                {filteredTimetables.length} timetable(s)
-              </span>
-              {filterYear !== 'ALL' && <span className="rounded-full border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-1 text-xs text-slate-700">Year {filterYear}</span>}
-              {filterSemester !== 'ALL' && <span className="rounded-full border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-1 text-xs text-slate-700">Semester {filterSemester}</span>}
-              {filterSpecialization !== 'ALL' && <span className="rounded-full border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-1 text-xs text-slate-700">{filterSpecialization}</span>}
-            </div>
-
-            <div className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-3">
-              {filteredTimetables.slice(0, 9).map((tt) => {
-                const meta = extractTimetableMeta(tt);
-                const active = String(selectedId) === String(tt.id);
-                return (
+          <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[360px_1fr]">
+            <aside className={`h-fit rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 via-white to-slate-200 p-4 shadow-sm xl:sticky xl:top-24 ${pageAnimated ? 'timetable-enter' : 'opacity-0'}`} style={{ animationDelay: '60ms' }}>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Display Generated Timetables</p>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-sky-200 bg-sky-50/70 p-2">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-sky-700">
+                  <Sparkles size={14} /> Advanced View Modes
+                </div>
+                <div className="flex items-center gap-2">
                   <button
-                    key={tt.id}
                     type="button"
-                    onClick={() => setSelectedId(String(tt.id))}
-                    className={`rounded-xl border px-3 py-3 text-left transition ${active ? 'border-sky-500 bg-sky-100/70 shadow-sm' : 'border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50'}`}
+                    onClick={() => setReportViewMode('command')}
+                    className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${reportViewMode === 'command' ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-300 bg-white text-slate-700'}`}
                   >
-                    <p className="truncate text-sm font-semibold text-slate-900">{tt.name || `Timetable #${tt.id}`}</p>
-                    <p className="mt-1 text-xs text-slate-600">Y{meta.year} • S{meta.semester} • {meta.specialization}</p>
-                    <p className="mt-1 text-[11px] uppercase tracking-[0.08em] text-slate-500">{tt.status || 'pending'}</p>
+                    Command Center
                   </button>
-                );
-              })}
-              {!filteredTimetables.length && (
-                <div className="rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-4 text-sm text-slate-600">
-                  No generated timetables match this filter.
+                  <button
+                    type="button"
+                    onClick={() => setReportViewMode('compact')}
+                    className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${reportViewMode === 'compact' ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-300 bg-white text-slate-700'}`}
+                  >
+                    Compact Focus
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 gap-2">
+                <input
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500"
+                  placeholder="Search by name, ID, specialization, status"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFavoritesOnly((prev) => !prev)}
+                    className={`rounded-lg border px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] ${favoritesOnly ? 'border-amber-600 bg-amber-600 text-white' : 'border-slate-300 bg-white text-slate-700'}`}
+                  >
+                    {favoritesOnly ? 'Showing Favorites' : 'Show Favorites Only'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setFavoritesOnly(false);
+                    }}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-700"
+                  >
+                    Clear Search
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 gap-2">
+                <select
+                  className="rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-2 text-sm text-slate-900"
+                  value={filterYear}
+                  onChange={(e) => setFilterYear(e.target.value)}
+                >
+                  {yearOptions.map((year) => (
+                    <option key={year} value={year}>{year === 'ALL' ? 'All Years' : `Year ${year}`}</option>
+                  ))}
+                </select>
+                <select
+                  className="rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-2 text-sm text-slate-900"
+                  value={filterSemester}
+                  onChange={(e) => setFilterSemester(e.target.value)}
+                >
+                  {semesterOptions.map((semester) => (
+                    <option key={semester} value={semester}>{semester === 'ALL' ? 'All Semesters' : `Semester ${semester}`}</option>
+                  ))}
+                </select>
+                <select
+                  className="rounded-lg border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-2 text-sm text-slate-900"
+                  value={filterSpecialization}
+                  onChange={(e) => setFilterSpecialization(e.target.value)}
+                >
+                  {specializationOptions.map((spec) => (
+                    <option key={spec} value={spec}>{spec === 'ALL' ? 'All Specializations' : spec}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-sky-300 bg-white px-3 py-1 text-xs font-semibold text-sky-700">
+                  {filteredTimetables.length} timetable(s)
+                </span>
+                {filterYear !== 'ALL' && <span className="rounded-full border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-1 text-xs text-slate-700">Year {filterYear}</span>}
+                {filterSemester !== 'ALL' && <span className="rounded-full border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-1 text-xs text-slate-700">Semester {filterSemester}</span>}
+                {filterSpecialization !== 'ALL' && <span className="rounded-full border border-slate-300 bg-gradient-to-r from-slate-100 to-white px-3 py-1 text-xs text-slate-700">{filterSpecialization}</span>}
+              </div>
+
+              <div className="mt-3 rounded-xl border border-slate-300 bg-white p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Saved Filter Presets</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <input
+                    className="min-w-[220px] rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500"
+                    placeholder="Preset name"
+                    value={presetName}
+                    onChange={(e) => setPresetName(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={saveFilterPreset}
+                    className="rounded-lg border border-blue-600 bg-blue-600 px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-white"
+                  >
+                    Save Preset
+                  </button>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {!filterPresets.length && (
+                    <span className="text-xs text-slate-500">No presets saved yet.</span>
+                  )}
+                  {filterPresets.map((preset) => (
+                    <div key={preset.id} className="flex items-center gap-1 rounded-full border border-slate-300 bg-slate-50 px-2 py-1">
+                      <button
+                        type="button"
+                        onClick={() => applyFilterPreset(preset)}
+                        className="text-xs font-semibold text-slate-700"
+                      >
+                        {preset.name}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeFilterPreset(preset.id)}
+                        className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700"
+                      >
+                        X
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="theme-soft mt-3 rounded-xl border border-slate-300 bg-white p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Generated Timetable Trend</p>
+                  <span className="text-[11px] font-semibold text-slate-500">Per semester</span>
+                </div>
+
+                {!semesterTrend.points.length ? (
+                  <p className="text-xs text-slate-500">Trend appears once timetables exist for filtered periods.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <svg
+                      onMouseLeave={() => setTrendHoverIndex(-1)}
+                      width={semesterTrend.chartWidth + 16}
+                      height={semesterTrend.chartHeight + 28}
+                      viewBox={`0 0 ${semesterTrend.chartWidth + 16} ${semesterTrend.chartHeight + 28}`}
+                      className="block"
+                    >
+                      <defs>
+                        <linearGradient id="semesterTrendFill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.35" />
+                          <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0.02" />
+                        </linearGradient>
+                      </defs>
+                      <g transform="translate(8 6)">
+                        <line x1="0" y1={semesterTrend.chartHeight} x2={semesterTrend.chartWidth} y2={semesterTrend.chartHeight} stroke="#cbd5e1" strokeWidth="1" />
+                        {semesterTrend.areaPath && <path d={semesterTrend.areaPath} fill="url(#semesterTrendFill)" />}
+                        {semesterTrend.linePath && <path d={semesterTrend.linePath} fill="none" stroke="#0284c7" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />}
+                        {trendHoverIndex >= 0 && semesterTrend.points[trendHoverIndex] && (
+                          <g>
+                            <line
+                              x1={semesterTrend.points[trendHoverIndex].x}
+                              y1="0"
+                              x2={semesterTrend.points[trendHoverIndex].x}
+                              y2={semesterTrend.chartHeight}
+                              stroke="#0284c7"
+                              strokeWidth="1.1"
+                              strokeDasharray="4 4"
+                              opacity="0.7"
+                            />
+                            <line
+                              x1="0"
+                              y1={semesterTrend.points[trendHoverIndex].y}
+                              x2={semesterTrend.chartWidth}
+                              y2={semesterTrend.points[trendHoverIndex].y}
+                              stroke="#0f172a"
+                              strokeWidth="0.8"
+                              strokeDasharray="3 3"
+                              opacity="0.38"
+                            />
+                            {(() => {
+                              const point = semesterTrend.points[trendHoverIndex];
+                              const tooltipX = Math.min(Math.max(point.x + 8, 4), Math.max(4, semesterTrend.chartWidth - 104));
+                              const tooltipY = Math.max(point.y - 34, 4);
+                              return (
+                                <g transform={`translate(${tooltipX} ${tooltipY})`}>
+                                  <rect width="102" height="26" rx="6" ry="6" fill="#0f172a" opacity="0.92" />
+                                  <text x="8" y="16" fontSize="9" fill="#f8fafc" fontWeight="600">
+                                    {`${point.label}: ${point.value}`}
+                                  </text>
+                                </g>
+                              );
+                            })()}
+                          </g>
+                        )}
+                        {semesterTrend.points.map((point, pointIndex) => (
+                          <g key={`point-${point.key}`}>
+                            <title>{`${point.label}: ${point.value} timetable(s)`}</title>
+                            <circle
+                              cx={point.x}
+                              cy={point.y}
+                              r={trendHoverIndex === pointIndex ? '5.2' : '3.5'}
+                              fill={trendHoverIndex === pointIndex ? '#0284c7' : '#0ea5e9'}
+                              stroke="#ffffff"
+                              strokeWidth="1.5"
+                              onMouseEnter={() => setTrendHoverIndex(pointIndex)}
+                              className="cursor-pointer transition-all"
+                            />
+                            <text x={point.x} y={semesterTrend.chartHeight + 14} textAnchor="middle" fontSize="9" fill="#475569">{point.label}</text>
+                          </g>
+                        ))}
+                      </g>
+                    </svg>
+                  </div>
+                )}
+              </div>
+            </aside>
+
+            <div className={`rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 via-white to-slate-200 p-4 shadow-sm ${pageAnimated ? 'timetable-fade' : 'opacity-0'}`} style={{ animationDelay: '120ms' }}>
+              {reportViewMode === 'command' && (
+                <div className="mt-1 rounded-xl border border-indigo-200 bg-indigo-50/60 p-3">
+                  <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-indigo-700">
+                    <Filter size={13} /> Semester Spotlight
+                  </div>
+                  {!semesterSpotlightCards.length ? (
+                    <p className="text-xs text-slate-500">No semester spotlight cards for the current filters.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                      {semesterSpotlightCards.map((card, index) => (
+                        <button
+                          key={`spotlight-${card.year}-${card.specialization}-${card.semester}`}
+                          type="button"
+                          onClick={() => {
+                            setFilterYear(card.year);
+                            setFilterSpecialization(card.specialization);
+                            setFilterSemester(card.semester);
+                            if (card.latestId) setSelectedId(card.latestId);
+                          }}
+                          className={`rounded-lg border border-indigo-200 bg-white p-2 text-left transition hover:border-indigo-300 hover:bg-indigo-50 ${pageAnimated ? 'timetable-enter' : 'opacity-0'}`}
+                          style={{ animationDelay: `${140 + index * 35}ms` }}
+                        >
+                          <p className="text-xs font-semibold text-slate-900">Year {card.year} • {card.specialization}</p>
+                          <p className="text-[11px] text-slate-600">Semester {card.semester} • {card.count} timetable(s)</p>
+                          <p className="mt-1 truncate text-[11px] text-indigo-700">{card.latestName || 'Latest timetable selected'}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
+
+              <div className="mt-3 rounded-xl border border-slate-300 bg-white p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Quick Jump</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {groupedTimetableIndex.slice(0, 8).map((yearGroup) =>
+                    yearGroup.specializations.slice(0, 2).map((specializationGroup) => (
+                      <button
+                        key={`jump-${yearGroup.year}-${specializationGroup.specialization}`}
+                        type="button"
+                        onClick={() => {
+                          setFilterYear(yearGroup.year);
+                          setFilterSpecialization(specializationGroup.specialization);
+                          setFilterSemester('ALL');
+                        }}
+                        className="rounded-full border border-cyan-300 bg-cyan-50 px-2 py-1 text-[11px] font-semibold text-cyan-700"
+                      >
+                        Y{yearGroup.year} • {specializationGroup.specialization}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* ADVANCED TIMETABLE TABLE */}
+              <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
+                {/* Table header */}
+                <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-gradient-to-r from-slate-800 to-slate-700 px-4 py-3">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-200">Generated Timetables</p>
+                  <span className="rounded-full bg-sky-600 px-2.5 py-0.5 text-[10px] font-bold text-white">{filteredTimetables.length}</span>
+                </div>
+                {!filteredTimetables.length ? (
+                  <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-6 w-6"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    </div>
+                    <p className="text-sm font-semibold text-slate-500">No timetables match this filter.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full border-collapse text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-100 bg-slate-50">
+                          <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-slate-500">Name</th>
+                          <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest text-slate-500">Year</th>
+                          <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest text-slate-500">Sem</th>
+                          <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest text-slate-500">Spec</th>
+                          <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest text-slate-500">Status</th>
+                          <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest text-slate-500">Created</th>
+                          <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest text-slate-500">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredTimetables.map((tt, rowIdx) => {
+                          const meta = extractTimetableMeta(tt);
+                          const isActive = String(selectedId) === String(tt.id);
+                          const isFav = favoriteIds.includes(String(tt.id));
+                          const statusColors = {
+                            approved: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+                            rejected: 'bg-rose-100 text-rose-800 border-rose-200',
+                            pending: 'bg-amber-100 text-amber-800 border-amber-200',
+                          };
+                          const statusClass = statusColors[String(tt.status || 'pending').toLowerCase()] || statusColors.pending;
+                          return (
+                            <tr
+                              key={tt.id}
+                              className={`border-b border-slate-100 transition-colors ${
+                                isActive ? 'bg-sky-50' : rowIdx % 2 === 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/60 hover:bg-sky-50/50'
+                              }`}
+                            >
+                              {/* Name */}
+                              <td className="px-4 py-3 max-w-[160px]">
+                                <button type="button" onClick={() => setSelectedId(String(tt.id))}
+                                  className="flex items-center gap-2 text-left group w-full">
+                                  {isActive && <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-sky-500" />}
+                                  <span className={`truncate text-xs font-bold ${isActive ? 'text-sky-700' : 'text-slate-800 group-hover:text-sky-700'} transition-colors`}>
+                                    {tt.name || `Timetable #${tt.id}`}
+                                  </span>
+                                  {isFav && <span className="flex-shrink-0 text-amber-400" title="Favourite">★</span>}
+                                </button>
+                              </td>
+                              {/* Year */}
+                              <td className="px-3 py-3 text-center">
+                                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-800">{meta.year}</span>
+                              </td>
+                              {/* Semester */}
+                              <td className="px-3 py-3 text-center">
+                                <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-800">S{meta.semester}</span>
+                              </td>
+                              {/* Specialization */}
+                              <td className="px-3 py-3 text-center">
+                                <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-800">{meta.specialization}</span>
+                              </td>
+                              {/* Status */}
+                              <td className="px-3 py-3 text-center">
+                                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${statusClass}`}>
+                                  {tt.status || 'pending'}
+                                </span>
+                              </td>
+                              {/* Created */}
+                              <td className="px-3 py-3 text-center">
+                                <span className="text-[10px] text-slate-500">
+                                  {tt.created_at ? new Date(tt.created_at).toLocaleDateString() : 'N/A'}
+                                </span>
+                              </td>
+                              {/* Actions */}
+                              <td className="px-3 py-3">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  {/* View */}
+                                  <button type="button"
+                                    onClick={() => setSelectedId(String(tt.id))}
+                                    title="View in timetable grid"
+                                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-700 transition hover:bg-sky-100"
+                                  >
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                  </button>
+                                  {/* Download CSV */}
+                                  <button type="button"
+                                    onClick={() => downloadTimetableAsCSV(parseSchedule(tt), meta.year, meta.semester, meta.group, meta.subgroup)}
+                                    title="Download CSV"
+                                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 transition hover:bg-emerald-100"
+                                  >
+                                    <Download size={12} />
+                                  </button>
+                                  {/* Delete */}
+                                  <button type="button"
+                                    onClick={() => setDeleteModal({ id: tt.id, name: tt.name || `Timetable #${tt.id}` })}
+                                    title="Delete timetable"
+                                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 transition hover:bg-rose-100 hover:text-rose-700"
+                                  >
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+
+
+              <div className="mt-4 rounded-xl border border-slate-300 bg-white p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                Year / Specialization / Semester Browser
+              </p>
+
+              {!groupedTimetableIndex.length ? (
+                <p className="mt-2 text-xs text-slate-500">No timetable groups available for the current filters.</p>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  {groupedTimetableIndex.map((yearGroup, yearIndex) => (
+                    <div key={`year-${yearGroup.year}`} className={`rounded-lg border border-slate-200 bg-slate-50 p-2 ${pageAnimated ? 'timetable-enter' : 'opacity-0'}`} style={{ animationDelay: `${260 + yearIndex * 45}ms` }}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFilterYear(yearGroup.year);
+                            toggleYearExpansion(yearGroup.year);
+                          }}
+                          className="rounded-full border border-sky-300 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700"
+                        >
+                          {expandedYears[yearGroup.year] ? <ChevronDown size={12} className="inline mr-1" /> : <ChevronRight size={12} className="inline mr-1" />}
+                          Year {yearGroup.year}
+                        </button>
+                        <span className="text-[11px] font-semibold text-slate-600">{yearGroup.count} timetable(s)</span>
+                      </div>
+
+                      {expandedYears[yearGroup.year] && (
+                        <div className="mt-2 space-y-2">
+                          {yearGroup.specializations.map((specializationGroup, specializationIndex) => {
+                            const specKey = `${yearGroup.year}::${specializationGroup.specialization}`;
+                            const isSpecExpanded = Boolean(expandedSpecializations[specKey]);
+                            return (
+                              <div key={`spec-${yearGroup.year}-${specializationGroup.specialization}`} className={`rounded-md border border-slate-200 bg-white p-2 ${pageAnimated ? 'timetable-fade' : 'opacity-0'}`} style={{ animationDelay: `${320 + specializationIndex * 40}ms` }}>
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setFilterYear(yearGroup.year);
+                                      setFilterSpecialization(specializationGroup.specialization);
+                                      toggleSpecializationExpansion(yearGroup.year, specializationGroup.specialization);
+                                    }}
+                                    className="rounded-full border border-indigo-300 bg-indigo-50 px-2 py-1 text-[11px] font-semibold text-indigo-700"
+                                  >
+                                    {isSpecExpanded ? <ChevronDown size={12} className="inline mr-1" /> : <ChevronRight size={12} className="inline mr-1" />}
+                                    {specializationGroup.specialization}
+                                  </button>
+                                  <span className="text-[11px] font-semibold text-slate-600">{specializationGroup.count} timetable(s)</span>
+                                </div>
+
+                                {isSpecExpanded && (
+                                  <div className="mt-2 flex flex-wrap gap-2">
+                                    {specializationGroup.semesters.map((semesterGroup, semesterIndex) => (
+                                      <button
+                                        key={`sem-${yearGroup.year}-${specializationGroup.specialization}-${semesterGroup.semester}`}
+                                        type="button"
+                                        onClick={() => {
+                                          setFilterYear(yearGroup.year);
+                                          setFilterSpecialization(specializationGroup.specialization);
+                                          setFilterSemester(semesterGroup.semester);
+                                          if (semesterGroup.items[0]?.id) {
+                                            setSelectedId(String(semesterGroup.items[0].id));
+                                          }
+                                        }}
+                                        className={`rounded-full border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 ${pageAnimated ? 'timetable-fade' : 'opacity-0'}`}
+                                        style={{ animationDelay: `${360 + semesterIndex * 32}ms` }}
+                                      >
+                                        Semester {semesterGroup.semester} ({semesterGroup.items.length})
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              </div>
             </div>
           </div>
 
@@ -738,20 +2253,29 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
             <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">Active Timetable Context</p>
               <p className="mt-1 text-sm text-slate-800">
-                {selectedTimetable.name || `Timetable #${selectedTimetable.id}`} • Year {extractTimetableMeta(selectedTimetable).year} • Semester {extractTimetableMeta(selectedTimetable).semester} • {extractTimetableMeta(selectedTimetable).specialization}
+                  {selectedTimetable.name || `Timetable #${selectedTimetable.id}`} • Year {extractTimetableMeta(selectedTimetable).year} • Semester {extractTimetableMeta(selectedTimetable).semester} • {extractTimetableMeta(selectedTimetable).specialization} • Group {extractTimetableMeta(selectedTimetable).group} • Subgroup {extractTimetableMeta(selectedTimetable).subgroup}
               </p>
             </div>
           )}
         </section>
 
         {!loading && !!selectedTimetable && layoutMode === 'unified' && (
-          <section className="overflow-hidden rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50/80 via-white to-cyan-50/70 p-4 shadow-[0_16px_40px_rgba(5,150,105,0.14)]">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h4 className="text-base font-bold text-slate-900">Unified Timetable (All Modules)</h4>
-              <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
-                {dayModeFilter === 'WD' ? 'Weekday' : dayModeFilter === 'WE' ? 'Weekend' : 'All'}
+          <section id="report-render" className="theme-shell overflow-hidden rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50/80 via-white to-cyan-50/70 p-4 shadow-[0_16px_40px_rgba(5,150,105,0.14)]">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">Unified View</p>
+              <h4 className="mt-1 text-xl font-extrabold text-slate-900">Master Timetable — All Modules</h4>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                {dayModeFilter === 'WD' ? 'Weekday Scope' : dayModeFilter === 'WE' ? 'Weekend Scope' : 'All Batches'}
+              </span>
+              <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700">
+                {scopedSchedule.length} sessions
               </span>
             </div>
+          </div>
 
             <div className="overflow-x-auto">
               {!schedule.length ? (
@@ -763,21 +2287,26 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                 <caption className="caption-top border border-slate-300 border-b-0 bg-slate-100 px-3 py-2 text-left text-sm font-semibold text-slate-800">
                   {INSTITUTION_NAME}
                 </caption>
-                <thead>
-                  <tr>
-                    <td className="sticky left-0 z-10 border border-slate-300 bg-slate-100 px-3 py-2" rowSpan={2} />
-                    <th className="border border-slate-300 bg-slate-100 px-3 py-2 text-center font-semibold text-slate-800" colSpan={Math.max(unifiedTable.days.length, 1)}>
-                      Master Module Timetable
-                    </th>
-                  </tr>
-                  <tr>
-                    {unifiedTable.days.map((day) => (
-                      <th key={day} className="border border-slate-300 bg-slate-100 px-3 py-2 text-center font-semibold text-slate-700">
+              <thead>
+                <tr>
+                  <td className="sticky left-0 z-10 border border-slate-200 bg-gradient-to-br from-slate-800 to-slate-700 px-3 py-3" rowSpan={2}>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Slot</span>
+                  </td>
+                  <th className="border border-slate-200 bg-gradient-to-r from-sky-700 via-blue-700 to-indigo-700 px-3 py-3 text-center text-sm font-bold tracking-wide text-white shadow-inner" colSpan={Math.max(unifiedTable.days.length, 1)}>
+                    {INSTITUTION_NAME} — Master Module Timetable
+                  </th>
+                </tr>
+                <tr>
+                  {unifiedTable.days.map((day, di) => {
+                    const dayColors = ['from-sky-600 to-blue-700','from-blue-600 to-indigo-700','from-indigo-600 to-violet-700','from-violet-600 to-purple-700','from-emerald-600 to-teal-700','from-amber-600 to-orange-700','from-rose-600 to-pink-700'];
+                    return (
+                      <th key={day} className={`border border-slate-200 bg-gradient-to-b ${dayColors[di % dayColors.length]} px-3 py-2.5 text-center text-xs font-bold uppercase tracking-widest text-white`}>
                         {day}
                       </th>
-                    ))}
-                  </tr>
-                </thead>
+                    );
+                  })}
+                </tr>
+              </thead>
                 <tbody>
                   {activeTimeline.map((timelineRow) => {
                     if (timelineRow.type === 'break') {
@@ -801,20 +2330,49 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                         {unifiedTable.days.map((day) => {
                           const key = `${timelineRow.slot}::${day}`;
                           const entries = unifiedTable.cellMap.get(key) || [];
+                          const isRiskyCell = showRiskHighlights && riskInsights.riskyCells.has(key);
                           return (
-                            <td key={key} className="border border-slate-300 bg-white px-2 py-2 align-top">
+                          <td key={key} className={`border px-2 py-2 align-top min-w-[130px] ${
+                              isRiskyCell ? 'border-rose-300 bg-rose-50/80' : 'border-slate-200 bg-white hover:bg-sky-50/40 transition-colors'
+                            }`}>
                               {!entries.length ? (
-                                <span className="text-[11px] text-slate-400">-</span>
+                                <span className="text-[11px] text-slate-300">—</span>
                               ) : (
                                 <div className="space-y-2">
-                                  {entries.map((entry, idx) => (
-                                    <div key={`${entry.module}-${entry.group}-${idx}`} className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1">
-                                      <p className="text-xs font-semibold text-slate-900">{entry.module}</p>
-                                      <p className="text-[11px] text-slate-600">{entry.yearSemester} • {entry.specialization} • G{entry.group}</p>
-                                      <p className="text-[11px] text-slate-600">{entry.hall}</p>
-                                      <p className="text-[11px] text-slate-500">{entry.instructor}</p>
-                                    </div>
-                                  ))}
+                                  {entries.map((entry, idx) => {
+                                    const isLab = String(entry.module || '').toLowerCase().includes('lab') || String(entry.sessionType || '').toLowerCase() === 'lab';
+                                    const isTut = String(entry.sessionType || '').toLowerCase() === 'tutorial';
+                                    const hasHallConflict = showRiskHighlights && riskInsights.hallConflicts.has(`${timelineRow.slot}::${day}::${entry.hall}`);
+                                    const hasInstrConflict = showRiskHighlights && riskInsights.instructorConflicts.has(`${timelineRow.slot}::${day}::${entry.instructor}`);
+                                    const hasConflict = hasHallConflict || hasInstrConflict;
+                                    return (
+                                      <div key={`${entry.module}-${entry.group}-${idx}`}
+                                        className={`rounded-lg border px-2.5 py-2 shadow-sm ${
+                                          hasConflict ? 'border-rose-300 bg-gradient-to-br from-rose-50 to-pink-50'
+                                          : isLab ? 'border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50'
+                                          : isTut ? 'border-amber-200 bg-gradient-to-br from-amber-50 to-yellow-50'
+                                          : 'border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50'
+                                        }`}>
+                                        <div className="flex items-start justify-between gap-1 mb-1">
+                                          <p className="text-xs font-bold leading-tight text-slate-900">{entry.module}</p>
+                                          <span className={`flex-shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                                            isLab ? 'bg-violet-200 text-violet-800'
+                                            : isTut ? 'bg-amber-200 text-amber-800'
+                                            : 'bg-emerald-200 text-emerald-800'
+                                          }`}>{isLab ? 'LAB' : isTut ? 'TUT' : 'LEC'}</span>
+                                        </div>
+                                        <p className="text-[10px] text-slate-600 font-medium">{entry.yearSemester} · {entry.specialization} · G{entry.group}</p>
+                                        <p className="text-[10px] text-indigo-700 font-semibold mt-0.5">{entry.hall}</p>
+                                        <p className="text-[10px] text-slate-500 truncate">{entry.instructor}</p>
+                                        {hasConflict && (
+                                          <div className="mt-1 flex flex-wrap gap-1">
+                                            {hasHallConflict && <span className="rounded bg-rose-200 px-1.5 py-0.5 text-[9px] font-bold text-rose-800">⚠ Hall</span>}
+                                            {hasInstrConflict && <span className="rounded bg-rose-200 px-1.5 py-0.5 text-[9px] font-bold text-rose-800">⚠ Instructor</span>}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               )}
                             </td>
@@ -831,7 +2389,7 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
         )}
 
         {!loading && !!selectedTimetable && layoutMode === 'grouped' && (
-          <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_35px_rgba(15,23,42,0.06)]">
+          <section id="report-render" className="theme-panel rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_35px_rgba(15,23,42,0.06)]">
             <h3 className="text-lg font-bold text-slate-900">Table of Contents</h3>
             {!groupedByYearSemester.length ? (
               <p className="mt-3 text-sm text-slate-600">
@@ -871,36 +2429,45 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
               key={batch.batchKey}
               className={`overflow-hidden rounded-3xl border ${isOdd ? 'border-blue-200 bg-gradient-to-br from-blue-50/70 via-white to-sky-50/60' : 'border-slate-200 bg-gradient-to-br from-slate-50/80 via-white to-cyan-50/50'} p-4 shadow-[0_12px_30px_rgba(15,23,42,0.08)]`}
             >
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <h4 className="text-base font-bold text-slate-900">{batch.batchKey}</h4>
-                <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
-                  {batch.yearSemester}
-                </span>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <span className="inline-block rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white shadow-sm mb-2">
+                    Batch Group {index + 1}
+                  </span>
+                  <h4 className="text-lg font-extrabold text-slate-900">{batch.batchKey}</h4>
+                  <p className="mt-0.5 text-xs text-slate-500">Subgroups: <span className="font-semibold text-slate-700">{batch.subgroupLabel}</span></p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">{batch.yearSemester}</span>
+                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">{batch.entries?.length ?? ''} sessions</span>
+                </div>
               </div>
-              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
-                Subgroups in this shared timetable: {batch.subgroupLabel}
-              </p>
 
               <div className="overflow-x-auto">
                 <table id={tableVisualId} className="min-w-full border-collapse text-sm" border="1">
                   <caption className="caption-top border border-slate-300 border-b-0 bg-slate-100 px-3 py-2 text-left text-sm font-semibold text-slate-800">
                     {INSTITUTION_NAME}
                   </caption>
-                  <thead>
-                    <tr>
-                      <td className="sticky left-0 z-10 border border-slate-300 bg-slate-100 px-3 py-2" rowSpan={2} />
-                      <th className="border border-slate-300 bg-slate-100 px-3 py-2 text-center font-semibold text-slate-800" colSpan={Math.max(batch.days.length, 1)}>
-                        {batch.batchKey}
-                      </th>
-                    </tr>
-                    <tr>
-                      {batch.days.map((day) => (
-                        <th key={day} className="border border-slate-300 bg-slate-100 px-3 py-2 text-center font-semibold text-slate-700">
-                          {day}
+                    <thead>
+                      <tr>
+                        <td className="sticky left-0 z-10 border border-slate-200 bg-gradient-to-br from-slate-800 to-slate-700 px-3 py-3" rowSpan={2}>
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Slot</span>
+                        </td>
+                        <th className="border border-slate-200 bg-gradient-to-r from-blue-700 via-indigo-700 to-violet-700 px-3 py-3 text-center text-sm font-bold tracking-wide text-white" colSpan={Math.max(batch.days.length, 1)}>
+                          {batch.batchKey}
                         </th>
-                      ))}
-                    </tr>
-                  </thead>
+                      </tr>
+                      <tr>
+                        {batch.days.map((day, di) => {
+                          const dc = ['from-sky-600 to-blue-700','from-blue-600 to-indigo-700','from-indigo-600 to-violet-700','from-violet-600 to-purple-700','from-emerald-600 to-teal-700','from-amber-600 to-orange-700','from-rose-600 to-pink-700'];
+                          return (
+                            <th key={day} className={`border border-slate-200 bg-gradient-to-b ${dc[di % dc.length]} px-3 py-2.5 text-center text-xs font-bold uppercase tracking-widest text-white`}>
+                              {day}
+                            </th>
+                          );
+                        })}
+                      </tr>
+                    </thead>
                   <tbody>
                     {activeTimeline.map((timelineRow) => {
                       if (timelineRow.type === 'break') {
@@ -927,19 +2494,48 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                           {batch.days.map((day) => {
                             const key = `${timelineRow.slot}::${day}`;
                             const entries = batch.cellMap.get(key) || [];
+                            const isRiskyCell = showRiskHighlights && riskInsights.riskyCells.has(key);
                             return (
-                              <td key={key} className="border border-slate-300 bg-white px-2 py-2 align-top">
+                                <td key={key} className={`border px-2 py-2 align-top min-w-[120px] ${
+                                    isRiskyCell ? 'border-rose-300 bg-rose-50/80' : 'border-slate-200 bg-white hover:bg-blue-50/30 transition-colors'
+                                  }`}>
                                 {!entries.length ? (
-                                  <span className="text-[11px] text-slate-400">-</span>
+                                  <span className="text-[11px] text-slate-300">—</span>
                                 ) : (
                                   <div className="space-y-2">
-                                    {entries.map((entry, idx) => (
-                                      <div key={`${entry.module}-${entry.hall}-${idx}`} className="rounded border border-slate-200 bg-slate-50 px-2 py-1">
-                                        <p className="text-xs font-semibold text-slate-900">{entry.module}</p>
-                                        <p className="text-[11px] text-slate-600">{entry.hall}</p>
-                                        <p className="text-[11px] text-slate-500">{entry.instructor}</p>
-                                      </div>
-                                    ))}
+                                    {entries.map((entry, idx) => {
+                                      const isLab = String(entry.module || '').toLowerCase().includes('lab') || String(entry.sessionType || '').toLowerCase() === 'lab';
+                                      const isTut = String(entry.sessionType || '').toLowerCase() === 'tutorial';
+                                      const hasHallConflict = showRiskHighlights && riskInsights.hallConflicts.has(`${timelineRow.slot}::${day}::${entry.hall}`);
+                                      const hasInstrConflict = showRiskHighlights && riskInsights.instructorConflicts.has(`${timelineRow.slot}::${day}::${entry.instructor}`);
+                                      const hasConflict = hasHallConflict || hasInstrConflict;
+                                      return (
+                                        <div key={`${entry.module}-${entry.hall}-${idx}`}
+                                          className={`rounded-lg border px-2.5 py-2 shadow-sm ${
+                                            hasConflict ? 'border-rose-300 bg-gradient-to-br from-rose-50 to-pink-50'
+                                            : isLab ? 'border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50'
+                                            : isTut ? 'border-amber-200 bg-gradient-to-br from-amber-50 to-yellow-50'
+                                            : 'border-blue-200 bg-gradient-to-br from-blue-50 to-sky-50'
+                                          }`}>
+                                          <div className="flex items-start justify-between gap-1 mb-1">
+                                            <p className="text-xs font-bold leading-tight text-slate-900">{entry.module}</p>
+                                            <span className={`flex-shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase ${
+                                              isLab ? 'bg-violet-200 text-violet-800'
+                                              : isTut ? 'bg-amber-200 text-amber-800'
+                                              : 'bg-blue-200 text-blue-800'
+                                            }`}>{isLab ? 'LAB' : isTut ? 'TUT' : 'LEC'}</span>
+                                          </div>
+                                          <p className="text-[10px] text-indigo-700 font-semibold mt-0.5">{entry.hall}</p>
+                                          <p className="text-[10px] text-slate-500 truncate">{entry.instructor}</p>
+                                          {hasConflict && (
+                                            <div className="mt-1 flex flex-wrap gap-1">
+                                              {hasHallConflict && <span className="rounded bg-rose-200 px-1.5 py-0.5 text-[9px] font-bold text-rose-800">⚠ Hall</span>}
+                                              {hasInstrConflict && <span className="rounded bg-rose-200 px-1.5 py-0.5 text-[9px] font-bold text-rose-800">⚠ Instructor</span>}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 )}
                               </td>
@@ -949,9 +2545,9 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                       );
                     })}
                     <tr className="foot">
-                      <td className="border border-slate-300 bg-slate-100 px-3 py-2" />
-                      <td className="border border-slate-300 bg-slate-100 px-3 py-2 text-xs text-slate-700" colSpan={Math.max(batch.days.length, 1)}>
-                        Timetable generated with SLIIT Scheduler on {generatedStamp}
+                      <td className="border border-slate-200 bg-gradient-to-r from-slate-800 to-slate-700 px-3 py-2" />
+                      <td className="border border-slate-200 bg-gradient-to-r from-slate-800 to-slate-700 px-3 py-2 text-[10px] text-slate-300 font-medium" colSpan={Math.max(batch.days.length, 1)}>
+                        Generated by SLIIT Scheduler · {generatedStamp} · Batch: {batch.batchKey}
                       </td>
                     </tr>
                   </tbody>

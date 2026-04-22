@@ -13,6 +13,7 @@ const normalizeAlgorithmKey = (value) => String(value || '').trim().toLowerCase(
 const normalizeRole = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const MAX_SUBGROUP_CAPACITY = 60;
 const MAX_GROUP_CAPACITY = 120;
+const MAX_MODULES_PER_SPECIALIZATION_SCOPE = 5;
 
 const HALL_ID_REGEX = /^[A-Za-z0-9][A-Za-z0-9_-]{1,39}$/;
 const HALL_TEXT_REGEX = /^[A-Za-z0-9][A-Za-z0-9 .,&()\/-]{1,79}$/;
@@ -474,6 +475,126 @@ const saveGeneratedTimetable = async ({
   return rows[0] || null;
 };
 
+const extractScheduleEntryBatchKeys = (entry = {}) => {
+  const rawKeys = [];
+
+  if (Array.isArray(entry.batchKeys) && entry.batchKeys.length) {
+    rawKeys.push(...entry.batchKeys);
+  } else if (entry.batchKey) {
+    rawKeys.push(entry.batchKey);
+  } else if (entry.batch) {
+    rawKeys.push(entry.batch);
+  }
+
+  return [...new Set(rawKeys.map((key) => String(key || '').trim()).filter(Boolean))];
+};
+
+const parseScheduleBatchScope = (batchKey = '') => {
+  const [yearToken = '', semesterToken = '', modeToken = '', specializationToken = '', groupToken = '', subgroupToken = ''] = String(batchKey || '')
+    .trim()
+    .split('.');
+
+  if (!yearToken || !semesterToken || !modeToken || !specializationToken || !groupToken || !subgroupToken) {
+    return null;
+  }
+
+  const year = Number(String(yearToken).replace(/[^0-9]/g, ''));
+  const semester = Number(String(semesterToken).replace(/[^0-9]/g, ''));
+  if (!Number.isInteger(year) || year < 1 || !Number.isInteger(semester) || semester < 1) {
+    return null;
+  }
+
+  const group = String(groupToken).trim();
+  const subgroup = String(subgroupToken).trim();
+  if (!group || !subgroup) {
+    return null;
+  }
+
+  return {
+    year,
+    semester,
+    mode: String(modeToken).trim().toUpperCase(),
+    specialization: normalizeSpecializationCode(specializationToken),
+    group,
+    subgroup,
+    scopeKey: [
+      String(yearToken).toUpperCase(),
+      String(semesterToken).toUpperCase(),
+      String(modeToken).toUpperCase(),
+      String(specializationToken).toUpperCase(),
+      group,
+      subgroup,
+    ].join('.'),
+  };
+};
+
+const buildTimetableScope = ({ year = null, semester = null, specialization = null, group = null, subgroup = null } = {}) => ({
+  year: year != null && year !== '' ? String(year) : 'ALL',
+  semester: semester != null && semester !== '' ? String(semester) : 'ALL',
+  specialization: specialization ? String(specialization).toUpperCase() : null,
+  group: group != null && group !== '' ? String(group) : null,
+  subgroup: subgroup != null && subgroup !== '' ? String(subgroup) : null,
+});
+
+const buildGroupedSchedulePayload = (schedule = [], fallbackScope = {}) => {
+  const grouped = new Map();
+  const fallbackScopeKey = [
+    fallbackScope.year || 'ALL',
+    fallbackScope.semester || 'ALL',
+    fallbackScope.specialization || 'ALL',
+    fallbackScope.group || 'ALL',
+    fallbackScope.subgroup || 'ALL',
+  ].join('.');
+
+  const addEntryToGroup = (scope, entry, batchKeys = []) => {
+    const scopeKey = scope?.scopeKey || fallbackScopeKey;
+    if (!grouped.has(scopeKey)) {
+      grouped.set(scopeKey, {
+        scope: {
+          year: scope?.year != null ? String(scope.year) : fallbackScope.year || 'ALL',
+          semester: scope?.semester != null ? String(scope.semester) : fallbackScope.semester || 'ALL',
+          specialization: scope?.specialization || fallbackScope.specialization || null,
+          group: scope?.group || fallbackScope.group || null,
+          subgroup: scope?.subgroup || fallbackScope.subgroup || null,
+        },
+        scopeKey,
+        batchKeys: new Set(),
+        subgroupSet: new Set(),
+        entries: [],
+      });
+    }
+
+    const bucket = grouped.get(scopeKey);
+    batchKeys.forEach((batchKey) => bucket.batchKeys.add(batchKey));
+    if (scope?.subgroup) {
+      bucket.subgroupSet.add(scope.subgroup);
+    }
+    bucket.entries.push(entry);
+  };
+
+  schedule.forEach((entry) => {
+    const batchKeys = extractScheduleEntryBatchKeys(entry);
+    const scopes = batchKeys.map(parseScheduleBatchScope).filter(Boolean);
+
+    if (!scopes.length) {
+      addEntryToGroup({ ...fallbackScope, scopeKey: fallbackScopeKey }, entry, batchKeys);
+      return;
+    }
+
+    scopes.forEach((scope) => {
+      addEntryToGroup(scope, entry, batchKeys);
+    });
+  });
+
+  return Array.from(grouped.values()).map((bucket) => ({
+    scope: bucket.scope,
+    scopeKey: bucket.scopeKey,
+    batchKeys: Array.from(bucket.batchKeys).sort((left, right) => left.localeCompare(right)),
+    subgroups: Array.from(bucket.subgroupSet).sort((left, right) => left.localeCompare(right)),
+    entries: bucket.entries,
+  }));
+};
+
 const buildSemesterSpecializationSegments = ({ batches = [], modules = [], lics = [], instructors = [] }) => {
   const segmentMap = new Map();
 
@@ -710,6 +831,59 @@ const inferAcademicYearFromModuleCode = (code = '') => {
   return String(year);
 };
 
+const enforceAcademicCoordinatorScopeModuleLimit = async ({
+  specialization = '',
+  academicYear = null,
+  semester = null,
+  excludeModuleId = null,
+} = {}) => {
+  const normalizedSpecialization = normalizeSpecializationCode(specialization);
+  const normalizedYear = Number(academicYear || 0);
+  const normalizedSemester = Number(semester || 0);
+
+  if (!normalizedSpecialization || ![1, 2, 3, 4].includes(normalizedYear) || ![1, 2].includes(normalizedSemester)) {
+    return null;
+  }
+
+  const { rows } = await pool.query('SELECT id, code, details, academic_year, semester FROM modules');
+
+  const currentCount = rows.reduce((count, module) => {
+    if (excludeModuleId && String(module.id) === String(excludeModuleId)) {
+      return count;
+    }
+
+    const moduleSpecialization = normalizeSpecializationCode(inferModuleSpecialization(module));
+    const moduleYear = inferModuleYear(module);
+    const moduleSemester = inferModuleSemester(module);
+
+    if (
+      moduleSpecialization === normalizedSpecialization
+      && moduleYear === normalizedYear
+      && moduleSemester === normalizedSemester
+    ) {
+      return count + 1;
+    }
+
+    return count;
+  }, 0);
+
+  if (currentCount >= MAX_MODULES_PER_SPECIALIZATION_SCOPE) {
+    return {
+      error: `Maximum ${MAX_MODULES_PER_SPECIALIZATION_SCOPE} modules are allowed for specialization ${normalizedSpecialization} in Year ${normalizedYear}, Semester ${normalizedSemester}. Update an existing module or move one to another scope.`,
+      code: 'MODULE_SCOPE_LIMIT_REACHED',
+      scope: {
+        specialization: normalizedSpecialization,
+        academicYear: normalizedYear,
+        semester: normalizedSemester,
+        maxAllowed: MAX_MODULES_PER_SPECIALIZATION_SCOPE,
+        currentCount,
+      },
+    };
+  }
+
+  return null;
+};
+
 export const addItem = async (req, res) => {
   try {
     const { type } = req.params;
@@ -834,6 +1008,20 @@ export const addItem = async (req, res) => {
         ...(effectiveAcademicYear ? { academic_year: Number(effectiveAcademicYear) } : {}),
         ...(semester ? { semester: Number(semester) } : {}),
       };
+
+      if (isAcademicCoordinator(req.user)) {
+        const targetSpecialization = normalizeSpecializationCode(
+          specialization || mergedDetails.specialization || inferModuleSpecialization({ code, details: mergedDetails })
+        );
+        const limitError = await enforceAcademicCoordinatorScopeModuleLimit({
+          specialization: targetSpecialization,
+          academicYear: effectiveAcademicYear,
+          semester,
+        });
+        if (limitError) {
+          return res.status(409).json(limitError);
+        }
+      }
 
       const { rows } = await pool.query(
         `INSERT INTO modules(id, code, name, batch_size, day_type, credits, lectures_per_week, details, lic_id, academic_year, semester, created_by)
@@ -1004,20 +1192,31 @@ export const listItems = async (req, res) => {
       const requestedSemester = Number(req.query?.semester || 0);
       const requestedSpecialization = normalizeSpecializationCode(req.query?.specialization || '');
 
-      let rows = [];
-      if (isFacultyCoordinator(req.user)) {
-        const listResult = await pool.query(
-          `SELECT m.*
-           FROM modules m
-           JOIN users u ON u.id = m.created_by
-           WHERE regexp_replace(lower(COALESCE(u.role, '')), '[^a-z0-9]', '', 'g') = 'academiccoordinator'
-           ORDER BY m.created_at DESC`
-        );
-        rows = listResult.rows;
-      } else {
-        const listResult = await pool.query(`SELECT * FROM modules ORDER BY created_at DESC`);
-        rows = listResult.rows;
-      }
+        let rows = [];
+        // Faculty Coordinators should only *view* modules managed/published by Academic Coordinators
+        // (or unassigned/catalog replacement modules). Other users can view all modules.
+        if (isFacultyCoordinator(req.user)) {
+          const listResult = await pool.query(
+            `SELECT m.*, u.name AS created_by_name, u.role AS created_by_role
+             FROM modules m
+             LEFT JOIN users u ON u.id = m.created_by
+             WHERE (
+               regexp_replace(lower(COALESCE(u.role, '')), '[^a-z0-9]', '', 'g') = 'academiccoordinator'
+               OR m.created_by IS NULL
+               OR lower(COALESCE(m.details::jsonb ->> 'source', '')) = 'catalog-replacement'
+             )
+             ORDER BY m.created_at DESC`
+          );
+          rows = listResult.rows;
+        } else {
+          const listResult = await pool.query(
+            `SELECT m.*, u.name AS created_by_name, u.role AS created_by_role
+             FROM modules m
+             LEFT JOIN users u ON u.id = m.created_by
+             ORDER BY m.created_at DESC`
+          );
+          rows = listResult.rows;
+        }
 
       const filtered = rows.filter((module) => {
         const moduleYear = inferModuleYear(module);
@@ -1166,7 +1365,7 @@ export const updateItem = async (req, res) => {
         semester = null,
       } = payload;
 
-      const existingModuleResult = await pool.query('SELECT details, academic_year, semester FROM modules WHERE id = $1', [id]);
+      const existingModuleResult = await pool.query('SELECT id, code, details, academic_year, semester FROM modules WHERE id = $1', [id]);
       if (!existingModuleResult.rowCount) return res.status(404).json({ error: 'Item not found' });
 
       const existingModule = existingModuleResult.rows[0];
@@ -1184,6 +1383,23 @@ export const updateItem = async (req, res) => {
       const nextSemester = semester || existingModule.semester || null;
       if (nextAcademicYear) mergedDetails.academic_year = Number(nextAcademicYear);
       if (nextSemester) mergedDetails.semester = Number(nextSemester);
+
+      if (isAcademicCoordinator(req.user)) {
+        const targetSpecialization = normalizeSpecializationCode(
+          specialization
+          || mergedDetails.specialization
+          || inferModuleSpecialization({ ...existingModule, code: code || existingModule.code, details: mergedDetails })
+        );
+        const limitError = await enforceAcademicCoordinatorScopeModuleLimit({
+          specialization: targetSpecialization,
+          academicYear: nextAcademicYear,
+          semester: nextSemester,
+          excludeModuleId: id,
+        });
+        if (limitError) {
+          return res.status(409).json(limitError);
+        }
+      }
 
       const { rows, rowCount } = await pool.query(
         `UPDATE modules
@@ -1787,10 +2003,13 @@ export const runScheduler = async (req, res) => {
 
     const mergedOptions = await withFacultySoftConstraints(req.user, {
       logicalScheduling: true,
-      enforceWeeklyLabAndTutorial: true,
+      fixedSessionBlueprint: true,
+      lectureSessionsPerWeek: 1,
+      labSessionsPerWeek: 1,
       lectureDurationHours: 3,
       labDurationHours: 2,
-      tutorialDurationHours: 1,
+      tutorialSessionsPerWeek: 0,
+      tutorialDurationHours: 0,
       ...options,
     });
     const constraints = { halls, modules, lics, instructors, batches, options: mergedOptions };
@@ -1804,6 +2023,14 @@ export const runScheduler = async (req, res) => {
     if (shouldPersist) {
       const { algorithm, schedule } = pickPrimaryScheduleFromResults(results, algorithms);
       const nowIso = new Date().toISOString();
+      const timetableScope = buildTimetableScope({
+        year: mergedOptions.academicYear || mergedOptions.year || 'ALL',
+        semester: mergedOptions.semester || 'ALL',
+        specialization: mergedOptions.specialization || null,
+        group: mergedOptions.group || null,
+        subgroup: mergedOptions.subgroup || null,
+      });
+      const groupedSchedules = buildGroupedSchedulePayload(schedule, timetableScope);
 
       savedTimetable = await saveGeneratedTimetable({
         name: timetableName || `Timetable_All_${nowIso.slice(0, 10)}`,
@@ -1812,12 +2039,15 @@ export const runScheduler = async (req, res) => {
         generatedBy: req.user?.id || null,
         data: {
           generatedAt: nowIso,
-          scope: 'all',
+          scope: timetableScope,
+          generationScope: 'all',
+          timetableScope,
           algorithms: Array.isArray(algorithms) ? algorithms : [algorithms],
           primaryAlgorithm: algorithm,
           modulesCount: modules.length,
           hallsCount: halls.length,
           schedule,
+          groupedSchedules,
           allResults: results,
         },
       });
@@ -1867,6 +2097,11 @@ export const runSchedulerBySegments = async (req, res) => {
     const instructors = instructorsRes.rows;
     const batches = batchesRes.rows;
 
+    // Fetch all modules once and apply JS-side filtering per segment. This is
+    // more tolerant of different storage formats (details JSON, code tokens).
+    const allModulesRes = await pool.query('SELECT * FROM modules ORDER BY created_at DESC');
+    const allModules = allModulesRes.rows;
+
     if (!halls.length) {
       return res.status(400).json({ error: 'No halls available. Please add halls before running the scheduler engine.' });
     }
@@ -1877,10 +2112,13 @@ export const runSchedulerBySegments = async (req, res) => {
 
     const mergedOptions = await withFacultySoftConstraints(req.user, {
       logicalScheduling: true,
-      enforceWeeklyLabAndTutorial: true,
+      fixedSessionBlueprint: true,
+      lectureSessionsPerWeek: 1,
+      labSessionsPerWeek: 1,
       lectureDurationHours: 3,
       labDurationHours: 2,
-      tutorialDurationHours: 1,
+      tutorialSessionsPerWeek: 0,
+      tutorialDurationHours: 0,
       ...options,
     });
     const segments = buildSemesterSpecializationSegments({ batches, modules: [], lics, instructors });
@@ -1901,16 +2139,15 @@ export const runSchedulerBySegments = async (req, res) => {
     let skippedEmptySegments = 0;
 
     for (const segment of filteredSegments) {
-      const modulesRes = await pool.query(
-        `SELECT *
-         FROM modules
-         WHERE ($1::TEXT IS NULL OR academic_year = $1::TEXT)
-           AND ($2::TEXT IS NULL OR semester = $2::TEXT)
-         ORDER BY created_at DESC`,
-        [String(segment.year), String(segment.semester)]
-      );
+      const modulesForSegment = allModules.filter((m) => {
+        const moduleYear = inferModuleYear(m);
+        const moduleSemester = inferModuleSemester(m);
+        if (Number.isInteger(segment.year) && segment.year > 0 && Number.isInteger(moduleYear) && moduleYear > 0 && moduleYear !== segment.year) return false;
+        if (Number.isInteger(segment.semester) && segment.semester > 0 && Number.isInteger(moduleSemester) && moduleSemester > 0 && moduleSemester !== segment.semester) return false;
+        return true;
+      });
 
-      const segmentModules = applyCoordinatorHallAllocations(modulesRes.rows, hallAllocationMap)
+      const segmentModules = applyCoordinatorHallAllocations(modulesForSegment, hallAllocationMap)
         .filter((module) => {
           const moduleSpecialization = inferModuleSpecialization(module);
           const specializationMatches =
@@ -1984,6 +2221,12 @@ export const runSchedulerBySegments = async (req, res) => {
         const { schedule } = pickPrimaryScheduleFromResults(entry.results, algorithms);
         return schedule;
       });
+      const timetableScope = buildTimetableScope({
+        year: requestedYear || 'MULTI',
+        semester: requestedSemester || 'MULTI',
+        specialization: requestedSpecialization || null,
+      });
+      const groupedSchedules = buildGroupedSchedulePayload(mergedSchedule, timetableScope);
 
       savedTimetable = await saveGeneratedTimetable({
         name: timetableName || `Timetable_Segments_${nowIso.slice(0, 10)}`,
@@ -1992,15 +2235,18 @@ export const runSchedulerBySegments = async (req, res) => {
         generatedBy: req.user?.id || null,
         data: {
           generatedAt: nowIso,
-          scope: 'segmented',
+          scope: timetableScope,
+          generationScope: 'segmented',
           filters: {
             year: requestedYear || null,
             semester: requestedSemester || null,
             specialization: requestedSpecialization || null,
           },
+          timetableScope,
           algorithms: Array.isArray(algorithms) ? algorithms : [algorithms],
           totalSegments: segmentedResults.length,
           mergedSchedule,
+          groupedSchedules,
           segmentedResults,
         },
       });
@@ -2050,35 +2296,70 @@ export const runSchedulerForYearSemester = async (req, res) => {
       return res.status(400).json({ error: 'Semester is required' });
     }
 
-    // Fetch data with year/semester filters
-    const [hallsRes, modulesRes, licsRes, instructorsRes, batchesRes] = await Promise.all([
+    // Fetch data; retrieve all modules and filter in JS so we handle different
+    // storage formats (details JSON, code-derived year tokens, etc.).
+    const [hallsRes, allModulesRes, licsRes, instructorsRes, batchesRes] = await Promise.all([
       pool.query('SELECT * FROM halls WHERE status IN ($1, $2)', ['available', 'occupied']),
-      pool.query(
-        'SELECT * FROM modules WHERE academic_year = $1 AND semester = $2',
-        [academicYear, semester]
-      ),
+      pool.query('SELECT m.* FROM modules m LEFT JOIN users u ON u.id = m.created_by ORDER BY m.created_at DESC'),
       pool.query('SELECT * FROM lics'),
       pool.query('SELECT * FROM instructors'),
       pool.query('SELECT * FROM batches'),
     ]);
 
     const halls = sortHallsByStructure(hallsRes.rows);
-    const modules = modulesRes.rows;
+    const allModules = allModulesRes.rows;
     const lics = licsRes.rows;
     const instructors = instructorsRes.rows;
     const batches = batchesRes.rows;
 
+    // JS-side year/semester inference to include modules stored in various formats
+    const yearNumber = Number(academicYear);
+    const semesterNumber = Number(semester);
+    const modules = allModules.filter((module) => {
+      const moduleYear = inferModuleYear(module);
+      const moduleSemester = inferModuleSemester(module);
+
+      if (Number.isInteger(yearNumber) && yearNumber > 0 && Number.isInteger(moduleYear) && moduleYear > 0 && moduleYear !== yearNumber) return false;
+      if (Number.isInteger(semesterNumber) && semesterNumber > 0 && Number.isInteger(moduleSemester) && moduleSemester > 0 && moduleSemester !== semesterNumber) return false;
+
+      // Keep modules that don't have explicit year/semester info so optimizer can consider flexible entries
+      return true;
+    });
+
     const requestedSpecialization = normalizeSpecializationCode(options.specialization || '');
     const requestedGroup = String(options.group || '').trim();
     const requestedSubgroup = String(options.subgroup || '').trim();
+    const requestedBatchMode = ['WD', 'WE'].includes(String(options.batchMode || options.mode || '').trim().toUpperCase())
+      ? String(options.batchMode || options.mode || '').trim().toUpperCase()
+      : '';
+    const normalizedYear = String(academicYear).trim();
+    const normalizedSemester = String(semester).trim();
+    const normalizedScope = {
+      year: normalizedYear,
+      semester: normalizedSemester,
+      mode: requestedBatchMode || null,
+      specialization: requestedSpecialization || null,
+      group: requestedGroup || null,
+      subgroup: requestedSubgroup || null,
+    };
+    const scopeKey = [
+      normalizedYear,
+      normalizedSemester,
+      requestedBatchMode || 'ALL',
+      requestedSpecialization || 'ALL',
+      requestedGroup || 'ALL',
+      requestedSubgroup || 'ALL',
+    ].join('.');
+    const scopeSuffix = [requestedSpecialization, requestedGroup, requestedSubgroup].filter(Boolean).join('_');
+    const defaultTimetableName = scopeSuffix
+      ? `Timetable_${academicYear}_S${semester}_${scopeSuffix}`
+      : `Timetable_${academicYear}_S${semester}`;
     const rawModuleLimitPerSpecialization = Number(options.moduleLimitPerSpecialization || 0);
     const moduleLimitPerSpecialization = Number.isFinite(rawModuleLimitPerSpecialization) && rawModuleLimitPerSpecialization > 0
       ? Math.floor(rawModuleLimitPerSpecialization)
       : 5;
 
-    const yearNumber = Number(academicYear);
-    const semesterNumber = Number(semester);
-
+    // yearNumber and semesterNumber are already declared above (used for module filtering)
     const filteredBatches = batches.filter((batch) => {
       const scope = parseBatchSchedulingScope(batch);
 
@@ -2091,6 +2372,10 @@ export const runSchedulerForYearSemester = async (req, res) => {
       }
 
       if (requestedSpecialization && (!scope.specialization || scope.specialization !== requestedSpecialization)) {
+        return false;
+      }
+
+      if (requestedBatchMode && (!scope.mode || scope.mode !== requestedBatchMode)) {
         return false;
       }
 
@@ -2133,6 +2418,22 @@ export const runSchedulerForYearSemester = async (req, res) => {
       }
     });
 
+    const dayTypeFilteredModules = filteredModules.filter((module) => {
+      if (!requestedBatchMode) return true;
+
+      const details = parseJsonSafe(module?.details, {});
+      const moduleDayType = String(module?.day_type || details?.day_type || 'weekday').trim().toLowerCase();
+
+      // Keep explicit weekday/weekend modules isolated by batch mode.
+      // Flexible modules are allowed in either batch type and are constrained later by the optimizer.
+      if (requestedBatchMode === 'WE') {
+        return ['weekend', 'any', 'both', ''].includes(moduleDayType);
+      }
+
+      // For weekday batch, include weekday and flexible modules.
+      return ['weekday', 'any', 'both', ''].includes(moduleDayType);
+    });
+
     // Validation
     if (!halls.length) {
       return res.status(400).json({
@@ -2140,11 +2441,11 @@ export const runSchedulerForYearSemester = async (req, res) => {
       });
     }
 
-    if (!filteredModules.length) {
+    if (!dayTypeFilteredModules.length) {
       return res.status(400).json({
         error: requestedSpecialization
-          ? `No modules found for academic year ${academicYear}, semester ${semester}, specialization ${requestedSpecialization}. Please add modules first.`
-          : `No modules found for academic year ${academicYear}, semester ${semester}. Please add modules first.`,
+          ? `No modules found for academic year ${academicYear}, semester ${semester}, specialization ${requestedSpecialization}${requestedBatchMode ? `, mode ${requestedBatchMode}` : ''}. Please add modules first.`
+          : `No modules found for academic year ${academicYear}, semester ${semester}${requestedBatchMode ? `, mode ${requestedBatchMode}` : ''}. Please add modules first.`,
       });
     }
 
@@ -2158,7 +2459,7 @@ export const runSchedulerForYearSemester = async (req, res) => {
 
     // Load and apply hall allocations
     const hallAllocationMap = await loadCoordinatorHallAllocationMap();
-    const modulesWithAllocations = applyCoordinatorHallAllocations(filteredModules, hallAllocationMap);
+    const modulesWithAllocations = applyCoordinatorHallAllocations(dayTypeFilteredModules, hallAllocationMap);
 
     // Load faculty soft constraints if user is faculty coordinator
     const mergedOptions = await withFacultySoftConstraints(req.user, {
@@ -2189,27 +2490,42 @@ export const runSchedulerForYearSemester = async (req, res) => {
 
     // Prepare timetable metadata
     const generatedTimetable = {
-      name: timetableName || `Timetable_${academicYear}_S${semester}`,
+      name: timetableName || defaultTimetableName,
       semester: String(semester),
       year: String(academicYear),
       status: 'pending',
       generated_by: req.user?.id || null,
       data: {
-        academicYear: String(academicYear),
-        semester: String(semester),
-        specialization: requestedSpecialization || null,
-        group: requestedGroup || null,
-        subgroup: requestedSubgroup || null,
+        academicYear: normalizedYear,
+        semester: normalizedSemester,
+        specialization: normalizedScope.specialization,
+        group: normalizedScope.group,
+        subgroup: normalizedScope.subgroup,
+        scope: normalizedScope,
+        scopeKey,
         generatedAt: new Date().toISOString(),
         algorithms: Array.isArray(algorithms) ? algorithms : [algorithms],
         hallAllocations: Object.fromEntries(hallAllocationMap),
-        modulesCount: filteredModules.length,
+        modulesCount: dayTypeFilteredModules.length,
         hallsCount: halls.length,
         batchesCount: filteredBatches.length,
         schedule: results.hybrid?.schedule || results.pso?.schedule || results.genetic?.schedule || results.ant?.schedule || results.tabu?.schedule || [],
         allResults: results,
       },
     };
+
+    generatedTimetable.data.timetableScope = buildTimetableScope({
+      year: academicYear,
+      semester,
+      specialization: normalizedScope.specialization,
+      group: normalizedScope.group,
+      subgroup: normalizedScope.subgroup,
+    });
+    generatedTimetable.data.generationScope = 'year-semester';
+    generatedTimetable.data.groupedSchedules = buildGroupedSchedulePayload(
+      generatedTimetable.data.schedule,
+      generatedTimetable.data.timetableScope
+    );
 
     // Save timetable to database
     const { rows } = await pool.query(
@@ -2240,11 +2556,12 @@ export const runSchedulerForYearSemester = async (req, res) => {
         created_at: savedTimetable.created_at,
       },
       summary: {
-        modulesScheduled: filteredModules.length,
+        modulesScheduled: dayTypeFilteredModules.length,
         hallsUsed: halls.length,
         batchesUsed: filteredBatches.length,
         academicYear,
         semester,
+        mode: requestedBatchMode || null,
         specialization: requestedSpecialization || null,
         group: requestedGroup || null,
         subgroup: requestedSubgroup || null,
