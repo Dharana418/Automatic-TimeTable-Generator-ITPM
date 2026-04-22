@@ -1222,27 +1222,31 @@ export const listItems = async (req, res) => {
       const requestedSemester = Number(req.query?.semester || 0);
       const requestedSpecialization = normalizeSpecializationCode(req.query?.specialization || '');
 
-      let rows = [];
-      if (isFacultyCoordinator(req.user)) {
-        const listResult = await pool.query(
-          `SELECT m.*, u.name AS created_by_name, u.role AS created_by_role
-           FROM modules m
-           LEFT JOIN users u ON u.id = m.created_by
-           WHERE regexp_replace(lower(COALESCE(u.role, '')), '[^a-z0-9]', '', 'g') = 'academiccoordinator'
-              OR m.created_by IS NULL
-              OR lower(COALESCE(m.details::jsonb ->> 'source', '')) = 'catalog-replacement'
-           ORDER BY m.created_at DESC`
-        );
-        rows = listResult.rows;
-      } else {
-        const listResult = await pool.query(
-          `SELECT m.*, u.name AS created_by_name, u.role AS created_by_role
-           FROM modules m
-           LEFT JOIN users u ON u.id = m.created_by
-           ORDER BY m.created_at DESC`
-        );
-        rows = listResult.rows;
-      }
+        let rows = [];
+        // Faculty Coordinators should only *view* modules managed/published by Academic Coordinators
+        // (or unassigned/catalog replacement modules). Other users can view all modules.
+        if (isFacultyCoordinator(req.user)) {
+          const listResult = await pool.query(
+            `SELECT m.*, u.name AS created_by_name, u.role AS created_by_role
+             FROM modules m
+             LEFT JOIN users u ON u.id = m.created_by
+             WHERE (
+               regexp_replace(lower(COALESCE(u.role, '')), '[^a-z0-9]', '', 'g') = 'academiccoordinator'
+               OR m.created_by IS NULL
+               OR lower(COALESCE(m.details::jsonb ->> 'source', '')) = 'catalog-replacement'
+             )
+             ORDER BY m.created_at DESC`
+          );
+          rows = listResult.rows;
+        } else {
+          const listResult = await pool.query(
+            `SELECT m.*, u.name AS created_by_name, u.role AS created_by_role
+             FROM modules m
+             LEFT JOIN users u ON u.id = m.created_by
+             ORDER BY m.created_at DESC`
+          );
+          rows = listResult.rows;
+        }
 
       const filtered = rows.filter((module) => {
         const moduleYear = inferModuleYear(module);
@@ -2264,6 +2268,11 @@ export const runSchedulerBySegments = async (req, res) => {
     const instructors = instructorsRes.rows;
     const batches = batchesRes.rows;
 
+    // Fetch all modules once and apply JS-side filtering per segment. This is
+    // more tolerant of different storage formats (details JSON, code tokens).
+    const allModulesRes = await pool.query('SELECT * FROM modules ORDER BY created_at DESC');
+    const allModules = allModulesRes.rows;
+
     if (!halls.length) {
       return res.status(400).json({ error: 'No halls available. Please add halls before running the scheduler engine.' });
     }
@@ -2301,16 +2310,15 @@ export const runSchedulerBySegments = async (req, res) => {
     let skippedEmptySegments = 0;
 
     for (const segment of filteredSegments) {
-      const modulesRes = await pool.query(
-        `SELECT *
-         FROM modules
-         WHERE ($1::TEXT IS NULL OR academic_year = $1::TEXT)
-           AND ($2::TEXT IS NULL OR semester = $2::TEXT)
-         ORDER BY created_at DESC`,
-        [String(segment.year), String(segment.semester)]
-      );
+      const modulesForSegment = allModules.filter((m) => {
+        const moduleYear = inferModuleYear(m);
+        const moduleSemester = inferModuleSemester(m);
+        if (Number.isInteger(segment.year) && segment.year > 0 && Number.isInteger(moduleYear) && moduleYear > 0 && moduleYear !== segment.year) return false;
+        if (Number.isInteger(segment.semester) && segment.semester > 0 && Number.isInteger(moduleSemester) && moduleSemester > 0 && moduleSemester !== segment.semester) return false;
+        return true;
+      });
 
-      const segmentModules = applyCoordinatorHallAllocations(modulesRes.rows, hallAllocationMap)
+      const segmentModules = applyCoordinatorHallAllocations(modulesForSegment, hallAllocationMap)
         .filter((module) => {
           const moduleSpecialization = inferModuleSpecialization(module);
           const specializationMatches =
@@ -2459,28 +2467,35 @@ export const runSchedulerForYearSemester = async (req, res) => {
       return res.status(400).json({ error: 'Semester is required' });
     }
 
-    // Fetch data with year/semester filters
-    const [hallsRes, modulesRes, licsRes, instructorsRes, batchesRes] = await Promise.all([
+    // Fetch data; retrieve all modules and filter in JS so we handle different
+    // storage formats (details JSON, code-derived year tokens, etc.).
+    const [hallsRes, allModulesRes, licsRes, instructorsRes, batchesRes] = await Promise.all([
       pool.query('SELECT * FROM halls WHERE status IN ($1, $2)', ['available', 'occupied']),
-      pool.query(
-        `SELECT m.*
-         FROM modules m
-         JOIN users u ON u.id = m.created_by
-         WHERE m.academic_year = $1
-           AND m.semester = $2
-           AND regexp_replace(lower(COALESCE(u.role, '')), '[^a-z0-9]', '', 'g') = 'academiccoordinator'`,
-        [academicYear, semester]
-      ),
+      pool.query('SELECT m.* FROM modules m LEFT JOIN users u ON u.id = m.created_by ORDER BY m.created_at DESC'),
       pool.query('SELECT * FROM lics'),
       pool.query('SELECT * FROM instructors'),
       pool.query('SELECT * FROM batches'),
     ]);
 
     const halls = sortHallsByStructure(hallsRes.rows);
-    const modules = modulesRes.rows;
+    const allModules = allModulesRes.rows;
     const lics = licsRes.rows;
     const instructors = instructorsRes.rows;
     const batches = batchesRes.rows;
+
+    // JS-side year/semester inference to include modules stored in various formats
+    const yearNumber = Number(academicYear);
+    const semesterNumber = Number(semester);
+    const modules = allModules.filter((module) => {
+      const moduleYear = inferModuleYear(module);
+      const moduleSemester = inferModuleSemester(module);
+
+      if (Number.isInteger(yearNumber) && yearNumber > 0 && Number.isInteger(moduleYear) && moduleYear > 0 && moduleYear !== yearNumber) return false;
+      if (Number.isInteger(semesterNumber) && semesterNumber > 0 && Number.isInteger(moduleSemester) && moduleSemester > 0 && moduleSemester !== semesterNumber) return false;
+
+      // Keep modules that don't have explicit year/semester info so optimizer can consider flexible entries
+      return true;
+    });
 
     const requestedSpecialization = normalizeSpecializationCode(options.specialization || '');
     const requestedGroup = String(options.group || '').trim();
@@ -2515,9 +2530,7 @@ export const runSchedulerForYearSemester = async (req, res) => {
       ? Math.floor(rawModuleLimitPerSpecialization)
       : 5;
 
-    const yearNumber = Number(academicYear);
-    const semesterNumber = Number(semester);
-
+    // yearNumber and semesterNumber are already declared above (used for module filtering)
     const filteredBatches = batches.filter((batch) => {
       const scope = parseBatchSchedulingScope(batch);
 

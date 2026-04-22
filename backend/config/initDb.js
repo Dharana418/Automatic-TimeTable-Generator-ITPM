@@ -661,6 +661,18 @@ export async function initDb() {
         `);
         console.log('✓ timetable_approvals table ready');
 
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS timetable_edit_history (
+                id SERIAL PRIMARY KEY,
+                timetable_id INTEGER NOT NULL REFERENCES timetables(id) ON DELETE CASCADE,
+                edited_by UUID REFERENCES users(id) ON DELETE SET NULL,
+                previous_schedule JSONB,
+                updated_schedule JSONB,
+                edited_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('✓ timetable_edit_history table ready');
+
         // Create scheduling_conflicts table
         await pool.query(`
             CREATE TABLE IF NOT EXISTS scheduling_conflicts (

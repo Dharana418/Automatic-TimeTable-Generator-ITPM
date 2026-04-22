@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { toast } from 'react-toastify';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell';
 import api from '../api/scheduler';
+import { persistAllModulesToDatabase } from '../api/moduleManagement';
 import {
   ResponsiveContainer,
   BarChart,
@@ -135,6 +136,15 @@ const DarkSelect = ({ label, value, onChange, options, required = false }) => (
   </label>
 );
 
+const sectionPanelStyle = {
+  background: 'linear-gradient(145deg, rgba(2,6,23,0.9), rgba(15,23,42,0.82), rgba(7,89,133,0.35))',
+  padding: 24,
+  borderRadius: 20,
+  border: '1px solid rgba(34,211,238,0.2)',
+  boxShadow: '0 10px 30px rgba(2,6,23,0.28)',
+  backdropFilter: 'blur(16px)',
+};
+
 /* ── Main Page Component ────────────────────────────────────────── */
 export default function AcademicModulesPage({ user }) {
   const [loading, setLoading] = useState(true);
@@ -165,6 +175,7 @@ export default function AcademicModulesPage({ user }) {
   const [deleteConfirmCode, setDeleteConfirmCode] = useState('');
   const [deleteReason, setDeleteReason] = useState('');
   const [saving, setSaving] = useState(false);
+  const [persistingAllModules, setPersistingAllModules] = useState(false);
 
   // Form State
   const [form, setForm] = useState({
@@ -183,7 +194,7 @@ export default function AcademicModulesPage({ user }) {
       const res = await api.listItems('modules');
       const normalized = Array.isArray(res.items) ? res.items.map((item) => normalizeModuleRecord(item)) : [];
       setModules(normalized);
-    } catch (err) {
+    } catch {
       toast.error('Failed to load module registry.');
     } finally {
       setLoading(false);
@@ -450,6 +461,43 @@ export default function AcademicModulesPage({ user }) {
     URL.revokeObjectURL(url);
   };
 
+  const handlePersistAllModules = async () => {
+    if (!modules.length) {
+      toast.info('No modules available to persist.');
+      return;
+    }
+
+    try {
+      setPersistingAllModules(true);
+      const payload = modules.map((m) => ({
+        id: m.id,
+        code: m.code,
+        name: m.name,
+        specialization: m.specialization || m.department || 'GENERAL',
+        academic_year: m.academic_year,
+        semester: m.semester,
+        credits: m.credits,
+        lectures_per_week: m.lectures_per_week,
+        batch_size: m.batch_size,
+        day_type: m.day_type,
+        details: m.details || {},
+      }));
+
+      const result = await persistAllModulesToDatabase(payload);
+      const skippedCount = Array.isArray(result?.skipped) ? result.skipped.length : 0;
+
+      toast.success(
+        `Module registry saved to database. Inserted: ${result.inserted}, Updated: ${result.updated}, Skipped: ${skippedCount}`
+      );
+
+      await fetchModules();
+    } catch (error) {
+      toast.error(error.message || 'Failed to persist modules to database.');
+    } finally {
+      setPersistingAllModules(false);
+    }
+  };
+
   const startEditModule = (module) => {
     if (!module) {
       toast.error('Unable to open editor for this module.');
@@ -674,8 +722,6 @@ export default function AcademicModulesPage({ user }) {
       }));
   }, [activeEditingSource, editingForm]);
 
-  const isActionLocked = isEditModalOpen || Boolean(deleteTarget) || Boolean(updatingModuleId) || Boolean(deletingModuleId);
-
   return (
     <FacultyCoordinatorShell
       user={user}
@@ -683,6 +729,9 @@ export default function AcademicModulesPage({ user }) {
       subtitle="Register, update, and manage degree modules across all specializations."
       badge="Modules"
       themeVariant="academic"
+      mainTopMarginClass="mt-9"
+      contentSectionWidthClass="max-w-none"
+      contentSectionClassName="lg:w-[calc(100%+21.5rem)] lg:ml-[-21.5rem]"
     >
       <style>{`
         .ac-input-hover:focus { border-color: rgba(56,189,248,0.5) !important; box-shadow: 0 0 0 3px rgba(56,189,248,0.1) !important; }
@@ -769,11 +818,7 @@ export default function AcademicModulesPage({ user }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         
         {/* Module Entry Form */}
-        <section style={{
-          background: 'linear-gradient(135deg, rgba(15,23,42,0.9), rgba(7,20,43,0.95))',
-          padding: 24, borderRadius: 20, border: '1px solid rgba(148,163,184,0.15)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.3)', backdropFilter: 'blur(20px)', position: 'relative', overflow: 'hidden'
-        }}>
+        <section style={{ ...sectionPanelStyle, position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: -100, right: -100, width: 300, height: 300, background: 'radial-gradient(circle, rgba(56,189,248,0.06) 0%, transparent 60%)', borderRadius: '50%', pointerEvents: 'none' }} />
           
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -835,10 +880,7 @@ export default function AcademicModulesPage({ user }) {
         </section>
 
         {/* Dynamic Ledger */}
-        <section style={{
-          background: 'rgba(15,23,42,0.6)', padding: 24, borderRadius: 20, 
-          border: '1px solid rgba(148,163,184,0.1)', backdropFilter: 'blur(10px)'
-        }}>
+        <section style={sectionPanelStyle}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
              <div>
                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#f8fafc' }}>Module Matrix</h3>
@@ -927,6 +969,21 @@ export default function AcademicModulesPage({ user }) {
               style={{ textAlign: 'center', cursor: 'pointer', color: '#86efac' }}
             >
               Export View (CSV)
+            </button>
+
+            <button
+              type="button"
+              className="ac-select-filter"
+              onClick={handlePersistAllModules}
+              disabled={persistingAllModules}
+              style={{
+                textAlign: 'center',
+                cursor: persistingAllModules ? 'not-allowed' : 'pointer',
+                color: '#67e8f9',
+                opacity: persistingAllModules ? 0.7 : 1,
+              }}
+            >
+              {persistingAllModules ? 'Saving All to DB...' : 'Save All Modules to Database'}
             </button>
           </div>
 

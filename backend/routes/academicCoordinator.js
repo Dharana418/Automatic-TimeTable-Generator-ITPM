@@ -108,6 +108,46 @@ const validateReviewComment = (fieldName) => (req, res, next) => {
   return next();
 };
 
+const validateTimetableEditPayload = (req, res, next) => {
+  const schedule = req.body?.schedule;
+
+  if (!Array.isArray(schedule)) {
+    return res.status(400).json({
+      success: false,
+      error: 'schedule must be an array',
+    });
+  }
+
+  if (schedule.length > 5000) {
+    return res.status(400).json({
+      success: false,
+      error: 'schedule contains too many rows',
+    });
+  }
+
+  for (let i = 0; i < schedule.length; i += 1) {
+    const row = schedule[i];
+    if (!row || typeof row !== 'object' || Array.isArray(row)) {
+      return res.status(400).json({
+        success: false,
+        error: `schedule[${i}] must be an object`,
+      });
+    }
+
+    const day = String(row.day || row.dayOfWeek || row.weekday || '').trim();
+    const time = String(row.timeSlot || row.slot || row.time || row.timeslot || '').trim();
+
+    if (!day || !time) {
+      return res.status(400).json({
+        success: false,
+        error: `schedule[${i}] must include valid day and time`,
+      });
+    }
+  }
+
+  return next();
+};
+
 const validateCalendarPayload = (req, res, next) => {
   const errors = [];
   const {
@@ -241,6 +281,39 @@ router.get('/timetables', validateTimetableQuery, async (req, res) => {
   }
 });
 
+router.get('/timetables/edit-history', async (req, res) => {
+  try {
+    const limitParam = Number(req.query.limit);
+    const limit = Number.isInteger(limitParam) && limitParam > 0
+      ? Math.min(limitParam, 200)
+      : 50;
+
+    const { rows } = await pool.query(
+      `SELECT
+         h.id,
+         h.timetable_id,
+         h.edited_by,
+         h.edited_at,
+         h.previous_schedule,
+         h.updated_schedule,
+         t.name AS timetable_name,
+         u.name AS editor_name,
+         COALESCE(jsonb_array_length(h.previous_schedule), 0) AS previous_count,
+         COALESCE(jsonb_array_length(h.updated_schedule), 0) AS updated_count
+       FROM timetable_edit_history h
+       LEFT JOIN timetables t ON t.id = h.timetable_id
+       LEFT JOIN users u ON u.id = h.edited_by
+       ORDER BY h.edited_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+
+    return res.json({ success: true, data: rows });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.put('/timetables/:id/approve', validatePositiveIntegerParam('id'), async (req, res) => {
   try {
     const { id } = req.params;
@@ -290,6 +363,48 @@ router.put('/timetables/:id/reject', validatePositiveIntegerParam('id'), validat
     }
 
     return res.json({ success: true, data: rows[0] });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.put('/timetables/:id/edit', validatePositiveIntegerParam('id'), validateTimetableEditPayload, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const schedule = req.body?.schedule || [];
+
+    const existingRes = await pool.query(
+      'SELECT * FROM timetables WHERE id = $1 LIMIT 1',
+      [id]
+    );
+
+    if (!existingRes.rowCount) {
+      return res.status(404).json({ success: false, error: 'Timetable not found' });
+    }
+
+    const existing = existingRes.rows[0];
+    const existingData = parseJsonSafe(existing.data, {});
+    const previousSchedule = Array.isArray(existingData?.schedule) ? existingData.schedule : [];
+    const mergedData = {
+      ...existingData,
+      schedule,
+    };
+
+    const updateRes = await pool.query(
+      `UPDATE timetables
+       SET data = $2::jsonb
+       WHERE id = $1
+       RETURNING *`,
+      [id, JSON.stringify(mergedData)]
+    );
+
+    await pool.query(
+      `INSERT INTO timetable_edit_history (timetable_id, edited_by, previous_schedule, updated_schedule)
+       VALUES ($1, $2, $3::jsonb, $4::jsonb)`,
+      [id, req.user?.id || null, JSON.stringify(previousSchedule), JSON.stringify(schedule)]
+    );
+
+    return res.json({ success: true, data: updateRes.rows[0] });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
@@ -535,6 +650,154 @@ router.get('/modules/year/:academicYear', async (req, res) => {
         specialization: specialization || null,
       },
     });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/modules/persist-all', async (req, res) => {
+  const roleKey = String(req.user?.role || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!['academiccoordinator', 'admin'].includes(roleKey)) {
+    return res.status(403).json({ success: false, error: 'Only Academic Coordinator or Admin can persist modules' });
+  }
+
+  const payloadModules = Array.isArray(req.body?.modules) ? req.body.modules : [];
+  if (!payloadModules.length) {
+    return res.status(400).json({ success: false, error: 'modules array is required' });
+  }
+
+  if (payloadModules.length > 5000) {
+    return res.status(400).json({ success: false, error: 'Too many modules in one request (max 5000)' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    let inserted = 0;
+    let updated = 0;
+    const skipped = [];
+
+    for (let index = 0; index < payloadModules.length; index += 1) {
+      const rawModule = payloadModules[index] || {};
+
+      const code = String(rawModule.code || '').trim().toUpperCase();
+      const name = String(rawModule.name || '').trim();
+      const specialization = normalizeSpecializationCode(rawModule.specialization || rawModule.department || 'GENERAL') || 'GENERAL';
+      const academicYear = Number(rawModule.academic_year || rawModule.academicYear || 0);
+      const semester = Number(rawModule.semester || 0);
+
+      const normalizedAcademicYear = [1, 2, 3, 4].includes(academicYear) ? academicYear : null;
+      const normalizedSemester = [1, 2].includes(semester) ? semester : null;
+      const credits = rawModule.credits === '' || rawModule.credits == null ? null : Number(rawModule.credits);
+      const lecturesPerWeek = rawModule.lectures_per_week === '' || rawModule.lectures_per_week == null
+        ? (rawModule.lecturesPerWeek === '' || rawModule.lecturesPerWeek == null ? null : Number(rawModule.lecturesPerWeek))
+        : Number(rawModule.lectures_per_week);
+      const batchSize = rawModule.batch_size === '' || rawModule.batch_size == null ? null : Number(rawModule.batch_size);
+      const dayType = rawModule.day_type || null;
+
+      if (!code || !name) {
+        skipped.push({ index, reason: 'Missing code or name', code: code || null });
+        continue;
+      }
+
+      const sourceDetails = parseJsonSafe(rawModule.details, {});
+      const details = {
+        ...sourceDetails,
+        specialization,
+        ...(normalizedAcademicYear ? { academic_year: normalizedAcademicYear } : {}),
+        ...(normalizedSemester ? { semester: normalizedSemester } : {}),
+        source: 'academic-registry-sync',
+      };
+
+      const existingResult = await client.query(
+        'SELECT id FROM modules WHERE upper(code) = upper($1) LIMIT 1',
+        [code]
+      );
+
+      if (existingResult.rowCount > 0) {
+        await client.query(
+          `UPDATE modules
+             SET code = $2,
+                 name = $3,
+                 batch_size = $4,
+                 day_type = $5,
+                 credits = $6,
+                 lectures_per_week = $7,
+                 details = $8,
+                 academic_year = $9,
+                 semester = $10,
+                 created_by = COALESCE(created_by, $11)
+           WHERE id = $1`,
+          [
+            existingResult.rows[0].id,
+            code,
+            name,
+            Number.isFinite(batchSize) ? batchSize : null,
+            dayType,
+            Number.isFinite(credits) ? credits : null,
+            Number.isFinite(lecturesPerWeek) ? lecturesPerWeek : null,
+            JSON.stringify(details),
+            normalizedAcademicYear,
+            normalizedSemester,
+            req.user?.id || null,
+          ]
+        );
+        updated += 1;
+      } else {
+        const generatedId = String(rawModule.id || `module_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`);
+        await client.query(
+          `INSERT INTO modules(id, code, name, batch_size, day_type, credits, lectures_per_week, details, lic_id, academic_year, semester, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, $9, $10, $11)`,
+          [
+            generatedId,
+            code,
+            name,
+            Number.isFinite(batchSize) ? batchSize : null,
+            dayType,
+            Number.isFinite(credits) ? credits : null,
+            Number.isFinite(lecturesPerWeek) ? lecturesPerWeek : null,
+            JSON.stringify(details),
+            normalizedAcademicYear,
+            normalizedSemester,
+            req.user?.id || null,
+          ]
+        );
+        inserted += 1;
+      }
+    }
+
+    await client.query('COMMIT');
+
+    return res.json({
+      success: true,
+      message: 'Module registry persisted to database',
+      totalReceived: payloadModules.length,
+      inserted,
+      updated,
+      skipped,
+      totalProcessed: inserted + updated,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    return res.status(500).json({ success: false, error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+router.delete('/timetables/:id', validatePositiveIntegerParam('id'), async (req, res) => {
+  try {
+    const roleKey = String(req.user?.role || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!['facultycoordinator', 'admin'].includes(roleKey)) {
+      return res.status(403).json({ success: false, error: 'Only Faculty Coordinator or Admin can delete timetables' });
+    }
+    const { id } = req.params;
+    const { rowCount } = await pool.query('DELETE FROM timetables WHERE id = $1', [id]);
+    if (!rowCount) {
+      return res.status(404).json({ success: false, error: 'Timetable not found' });
+    }
+    return res.json({ success: true, message: `Timetable #${id} deleted successfully`, deletedId: Number(id) });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
