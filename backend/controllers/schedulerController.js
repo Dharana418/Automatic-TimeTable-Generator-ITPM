@@ -2097,6 +2097,11 @@ export const runSchedulerBySegments = async (req, res) => {
     const instructors = instructorsRes.rows;
     const batches = batchesRes.rows;
 
+    // Fetch all modules once and apply JS-side filtering per segment. This is
+    // more tolerant of different storage formats (details JSON, code tokens).
+    const allModulesRes = await pool.query('SELECT * FROM modules ORDER BY created_at DESC');
+    const allModules = allModulesRes.rows;
+
     if (!halls.length) {
       return res.status(400).json({ error: 'No halls available. Please add halls before running the scheduler engine.' });
     }
@@ -2134,16 +2139,15 @@ export const runSchedulerBySegments = async (req, res) => {
     let skippedEmptySegments = 0;
 
     for (const segment of filteredSegments) {
-      const modulesRes = await pool.query(
-        `SELECT *
-         FROM modules
-         WHERE ($1::TEXT IS NULL OR academic_year = $1::TEXT)
-           AND ($2::TEXT IS NULL OR semester = $2::TEXT)
-         ORDER BY created_at DESC`,
-        [String(segment.year), String(segment.semester)]
-      );
+      const modulesForSegment = allModules.filter((m) => {
+        const moduleYear = inferModuleYear(m);
+        const moduleSemester = inferModuleSemester(m);
+        if (Number.isInteger(segment.year) && segment.year > 0 && Number.isInteger(moduleYear) && moduleYear > 0 && moduleYear !== segment.year) return false;
+        if (Number.isInteger(segment.semester) && segment.semester > 0 && Number.isInteger(moduleSemester) && moduleSemester > 0 && moduleSemester !== segment.semester) return false;
+        return true;
+      });
 
-      const segmentModules = applyCoordinatorHallAllocations(modulesRes.rows, hallAllocationMap)
+      const segmentModules = applyCoordinatorHallAllocations(modulesForSegment, hallAllocationMap)
         .filter((module) => {
           const moduleSpecialization = inferModuleSpecialization(module);
           const specializationMatches =
@@ -2292,39 +2296,35 @@ export const runSchedulerForYearSemester = async (req, res) => {
       return res.status(400).json({ error: 'Semester is required' });
     }
 
-    // Fetch data with year/semester filters
-    const [hallsRes, modulesRes, licsRes, instructorsRes, batchesRes] = await Promise.all([
+    // Fetch data; retrieve all modules and filter in JS so we handle different
+    // storage formats (details JSON, code-derived year tokens, etc.).
+    const [hallsRes, allModulesRes, licsRes, instructorsRes, batchesRes] = await Promise.all([
       pool.query('SELECT * FROM halls WHERE status IN ($1, $2)', ['available', 'occupied']),
-      // Fetch modules for the year/semester while tolerating different storage formats
-      // (some modules store year/semester in the JSON details or as text). Use
-      // flexible text comparisons so older records are included.
-      pool.query(
-        `SELECT m.*
-         FROM modules m
-         LEFT JOIN users u ON u.id = m.created_by
-         WHERE (
-           ($1::TEXT IS NULL) OR
-           (m.academic_year::TEXT = $1::TEXT) OR
-           (COALESCE(m.details->> 'academic_year','') = $1::TEXT)
-         )
-           AND (
-             ($2::TEXT IS NULL) OR
-             (m.semester::TEXT = $2::TEXT) OR
-             (COALESCE(m.details->> 'semester','') = $2::TEXT)
-           )
-         ORDER BY m.created_at DESC`,
-        [String(academicYear), String(semester)]
-      ),
+      pool.query('SELECT m.* FROM modules m LEFT JOIN users u ON u.id = m.created_by ORDER BY m.created_at DESC'),
       pool.query('SELECT * FROM lics'),
       pool.query('SELECT * FROM instructors'),
       pool.query('SELECT * FROM batches'),
     ]);
 
     const halls = sortHallsByStructure(hallsRes.rows);
-    const modules = modulesRes.rows;
+    const allModules = allModulesRes.rows;
     const lics = licsRes.rows;
     const instructors = instructorsRes.rows;
     const batches = batchesRes.rows;
+
+    // JS-side year/semester inference to include modules stored in various formats
+    const yearNumber = Number(academicYear);
+    const semesterNumber = Number(semester);
+    const modules = allModules.filter((module) => {
+      const moduleYear = inferModuleYear(module);
+      const moduleSemester = inferModuleSemester(module);
+
+      if (Number.isInteger(yearNumber) && yearNumber > 0 && Number.isInteger(moduleYear) && moduleYear > 0 && moduleYear !== yearNumber) return false;
+      if (Number.isInteger(semesterNumber) && semesterNumber > 0 && Number.isInteger(moduleSemester) && moduleSemester > 0 && moduleSemester !== semesterNumber) return false;
+
+      // Keep modules that don't have explicit year/semester info so optimizer can consider flexible entries
+      return true;
+    });
 
     const requestedSpecialization = normalizeSpecializationCode(options.specialization || '');
     const requestedGroup = String(options.group || '').trim();
