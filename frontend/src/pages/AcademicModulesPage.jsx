@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { toast } from 'react-toastify';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell';
 import api from '../api/scheduler';
+import { persistAllModulesToDatabase } from '../api/moduleManagement';
 import {
   ResponsiveContainer,
   BarChart,
@@ -174,6 +175,7 @@ export default function AcademicModulesPage({ user }) {
   const [deleteConfirmCode, setDeleteConfirmCode] = useState('');
   const [deleteReason, setDeleteReason] = useState('');
   const [saving, setSaving] = useState(false);
+  const [persistingAllModules, setPersistingAllModules] = useState(false);
 
   // Form State
   const [form, setForm] = useState({
@@ -457,6 +459,43 @@ export default function AcademicModulesPage({ user }) {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const handlePersistAllModules = async () => {
+    if (!modules.length) {
+      toast.info('No modules available to persist.');
+      return;
+    }
+
+    try {
+      setPersistingAllModules(true);
+      const payload = modules.map((m) => ({
+        id: m.id,
+        code: m.code,
+        name: m.name,
+        specialization: m.specialization || m.department || 'GENERAL',
+        academic_year: m.academic_year,
+        semester: m.semester,
+        credits: m.credits,
+        lectures_per_week: m.lectures_per_week,
+        batch_size: m.batch_size,
+        day_type: m.day_type,
+        details: m.details || {},
+      }));
+
+      const result = await persistAllModulesToDatabase(payload);
+      const skippedCount = Array.isArray(result?.skipped) ? result.skipped.length : 0;
+
+      toast.success(
+        `Module registry saved to database. Inserted: ${result.inserted}, Updated: ${result.updated}, Skipped: ${skippedCount}`
+      );
+
+      await fetchModules();
+    } catch (error) {
+      toast.error(error.message || 'Failed to persist modules to database.');
+    } finally {
+      setPersistingAllModules(false);
+    }
   };
 
   const startEditModule = (module) => {
@@ -930,6 +969,21 @@ export default function AcademicModulesPage({ user }) {
               style={{ textAlign: 'center', cursor: 'pointer', color: '#86efac' }}
             >
               Export View (CSV)
+            </button>
+
+            <button
+              type="button"
+              className="ac-select-filter"
+              onClick={handlePersistAllModules}
+              disabled={persistingAllModules}
+              style={{
+                textAlign: 'center',
+                cursor: persistingAllModules ? 'not-allowed' : 'pointer',
+                color: '#67e8f9',
+                opacity: persistingAllModules ? 0.7 : 1,
+              }}
+            >
+              {persistingAllModules ? 'Saving All to DB...' : 'Save All Modules to Database'}
             </button>
           </div>
 
