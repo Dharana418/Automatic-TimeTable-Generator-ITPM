@@ -655,4 +655,135 @@ router.get('/modules/year/:academicYear', async (req, res) => {
   }
 });
 
+router.post('/modules/persist-all', async (req, res) => {
+  const roleKey = String(req.user?.role || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!['academiccoordinator', 'admin'].includes(roleKey)) {
+    return res.status(403).json({ success: false, error: 'Only Academic Coordinator or Admin can persist modules' });
+  }
+
+  const payloadModules = Array.isArray(req.body?.modules) ? req.body.modules : [];
+  if (!payloadModules.length) {
+    return res.status(400).json({ success: false, error: 'modules array is required' });
+  }
+
+  if (payloadModules.length > 5000) {
+    return res.status(400).json({ success: false, error: 'Too many modules in one request (max 5000)' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    let inserted = 0;
+    let updated = 0;
+    const skipped = [];
+
+    for (let index = 0; index < payloadModules.length; index += 1) {
+      const rawModule = payloadModules[index] || {};
+
+      const code = String(rawModule.code || '').trim().toUpperCase();
+      const name = String(rawModule.name || '').trim();
+      const specialization = normalizeSpecializationCode(rawModule.specialization || rawModule.department || 'GENERAL') || 'GENERAL';
+      const academicYear = Number(rawModule.academic_year || rawModule.academicYear || 0);
+      const semester = Number(rawModule.semester || 0);
+
+      const normalizedAcademicYear = [1, 2, 3, 4].includes(academicYear) ? academicYear : null;
+      const normalizedSemester = [1, 2].includes(semester) ? semester : null;
+      const credits = rawModule.credits === '' || rawModule.credits == null ? null : Number(rawModule.credits);
+      const lecturesPerWeek = rawModule.lectures_per_week === '' || rawModule.lectures_per_week == null
+        ? (rawModule.lecturesPerWeek === '' || rawModule.lecturesPerWeek == null ? null : Number(rawModule.lecturesPerWeek))
+        : Number(rawModule.lectures_per_week);
+      const batchSize = rawModule.batch_size === '' || rawModule.batch_size == null ? null : Number(rawModule.batch_size);
+      const dayType = rawModule.day_type || null;
+
+      if (!code || !name) {
+        skipped.push({ index, reason: 'Missing code or name', code: code || null });
+        continue;
+      }
+
+      const sourceDetails = parseJsonSafe(rawModule.details, {});
+      const details = {
+        ...sourceDetails,
+        specialization,
+        ...(normalizedAcademicYear ? { academic_year: normalizedAcademicYear } : {}),
+        ...(normalizedSemester ? { semester: normalizedSemester } : {}),
+        source: 'academic-registry-sync',
+      };
+
+      const existingResult = await client.query(
+        'SELECT id FROM modules WHERE upper(code) = upper($1) LIMIT 1',
+        [code]
+      );
+
+      if (existingResult.rowCount > 0) {
+        await client.query(
+          `UPDATE modules
+             SET code = $2,
+                 name = $3,
+                 batch_size = $4,
+                 day_type = $5,
+                 credits = $6,
+                 lectures_per_week = $7,
+                 details = $8,
+                 academic_year = $9,
+                 semester = $10,
+                 created_by = COALESCE(created_by, $11)
+           WHERE id = $1`,
+          [
+            existingResult.rows[0].id,
+            code,
+            name,
+            Number.isFinite(batchSize) ? batchSize : null,
+            dayType,
+            Number.isFinite(credits) ? credits : null,
+            Number.isFinite(lecturesPerWeek) ? lecturesPerWeek : null,
+            JSON.stringify(details),
+            normalizedAcademicYear,
+            normalizedSemester,
+            req.user?.id || null,
+          ]
+        );
+        updated += 1;
+      } else {
+        const generatedId = String(rawModule.id || `module_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`);
+        await client.query(
+          `INSERT INTO modules(id, code, name, batch_size, day_type, credits, lectures_per_week, details, lic_id, academic_year, semester, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, $9, $10, $11)`,
+          [
+            generatedId,
+            code,
+            name,
+            Number.isFinite(batchSize) ? batchSize : null,
+            dayType,
+            Number.isFinite(credits) ? credits : null,
+            Number.isFinite(lecturesPerWeek) ? lecturesPerWeek : null,
+            JSON.stringify(details),
+            normalizedAcademicYear,
+            normalizedSemester,
+            req.user?.id || null,
+          ]
+        );
+        inserted += 1;
+      }
+    }
+
+    await client.query('COMMIT');
+
+    return res.json({
+      success: true,
+      message: 'Module registry persisted to database',
+      totalReceived: payloadModules.length,
+      inserted,
+      updated,
+      skipped,
+      totalProcessed: inserted + updated,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    return res.status(500).json({ success: false, error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 export default router;
