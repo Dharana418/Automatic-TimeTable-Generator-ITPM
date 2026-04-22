@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import api from '../api/scheduler.js';
+import { getAcademicYears, getModulesByYear } from '../api/moduleManagement.js';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 
 /* ── Department helpers ─────────────────────────────────────────── */
@@ -146,6 +146,8 @@ const FacultyModulesPage = ({ user }) => {
   const navigate = useNavigate();
   const [modules, setModules] = useState([]);
   const [selectedDep, setSelectedDep] = useState('ALL');
+  const [selectedYear, setSelectedYear] = useState('ALL');
+  const [selectedSemester, setSelectedSemester] = useState('ALL');
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [err, setErr] = useState('');
@@ -156,10 +158,29 @@ const FacultyModulesPage = ({ user }) => {
       try {
         setIsLoading(true);
         setErr('');
-        const res = await api.listItems('modules');
+        const yearsRes = await getAcademicYears().catch(() => ({ data: [] }));
+
         if (!mounted) return;
-        const items = Array.isArray(res?.items) ? res.items : [];
-        setModules(items.map(toView));
+
+        const yearRows = Array.isArray(yearsRes?.data) ? yearsRes.data : [];
+
+        const academicItems = [];
+        for (const row of yearRows) {
+          const year = String(row?.academic_year || '').trim();
+          if (!year) continue;
+          const perYear = await getModulesByYear(year).catch(() => ({ data: [] }));
+          const list = Array.isArray(perYear?.data) ? perYear.data : [];
+          academicItems.push(...list);
+        }
+
+        const mergedMap = new Map();
+        academicItems.forEach((item) => {
+          const key = String(item?.id || item?.code || '').trim() || `${String(item?.code || '').trim()}::${String(item?.name || '').trim()}`;
+          if (!key) return;
+          if (!mergedMap.has(key)) mergedMap.set(key, item);
+        });
+
+        setModules(Array.from(mergedMap.values()).map(toView));
       } catch (e) {
         if (!mounted) return;
         setErr(e.message || 'Failed to load modules.');
@@ -176,14 +197,26 @@ const FacultyModulesPage = ({ user }) => {
     return ['ALL', ...Array.from(all).sort()];
   }, [modules]);
 
+  const years = useMemo(() => {
+    const all = new Set(modules.map((m) => String(m.academic_year || '').trim()).filter(Boolean));
+    return ['ALL', ...Array.from(all).sort((a, b) => String(a).localeCompare(String(b)))];
+  }, [modules]);
+
+  const semesters = useMemo(() => {
+    const all = new Set(modules.map((m) => String(m.semester || '').trim()).filter(Boolean));
+    return ['ALL', ...Array.from(all).sort((a, b) => Number(a) - Number(b))];
+  }, [modules]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return modules.filter((m) => {
       const matchDep = selectedDep === 'ALL' || m.department === selectedDep;
+      const matchYear = selectedYear === 'ALL' || String(m.academic_year || '') === selectedYear;
+      const matchSemester = selectedSemester === 'ALL' || String(m.semester || '') === selectedSemester;
       const searchable = `${m.code} ${m.name} ${m.department}`.toLowerCase();
-      return matchDep && (!q || searchable.includes(q));
+      return matchDep && matchYear && matchSemester && (!q || searchable.includes(q));
     });
-  }, [modules, selectedDep, search]);
+  }, [modules, selectedDep, selectedYear, selectedSemester, search]);
 
   /* department stats */
   const depStats = useMemo(() => {
@@ -195,9 +228,9 @@ const FacultyModulesPage = ({ user }) => {
   return (
     <FacultyCoordinatorShell
       user={user}
-      title="Department Module Control"
-      subtitle="Filter, inspect, and monitor modules by department and instructional load"
-      badge="Module Management"
+      title="Academic Module Registry View"
+      subtitle="Read-only module list from Academic Coordinator registry filtered by specialization, year, and semester"
+      badge="View Only"
       sidebarSections={[
         { id: 'moduleFilters', label: 'Filters' },
         { id: 'moduleTable', label: 'Module Table' },
@@ -227,9 +260,9 @@ const FacultyModulesPage = ({ user }) => {
           <div style={{ position: 'absolute', top: -60, right: -60, width: 220, height: 220, borderRadius: '50%', background: 'radial-gradient(circle, rgba(56,189,248,0.1) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
           <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#38bdf8' }}>Module Ledger</p>
-          <h2 style={{ margin: '8px 0 0', fontSize: 22, fontWeight: 900, color: '#f1f5f9' }}>Department Modules</h2>
+          <h2 style={{ margin: '8px 0 0', fontSize: 22, fontWeight: 900, color: '#f1f5f9' }}>Academic Registry Modules</h2>
           <p style={{ margin: '6px 0 0', fontSize: 13, color: 'rgba(148,163,184,0.75)' }}>
-            <strong style={{ color: '#f1f5f9' }}>{displayName}</strong> — review and filter module inventory by department and code.
+            <strong style={{ color: '#f1f5f9' }}>{displayName}</strong> — review modules published in the Academic Coordinator registry.
           </p>
 
             <div style={{ marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 10 }}>
@@ -256,7 +289,7 @@ const FacultyModulesPage = ({ user }) => {
             </div>
 
           {/* Search + select row */}
-          <div style={{ marginTop: 22, display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 14, alignItems: 'end' }}>
+          <div style={{ marginTop: 22, display: 'grid', gridTemplateColumns: '1fr auto auto auto auto', gap: 14, alignItems: 'end' }}>
 
             {/* Search */}
             <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -283,7 +316,7 @@ const FacultyModulesPage = ({ user }) => {
 
             {/* Department select */}
             <label style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 170 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>Department</span>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>Specialization</span>
               <select
                 style={{
                   padding: '10px 14px', borderRadius: 12,
@@ -296,6 +329,44 @@ const FacultyModulesPage = ({ user }) => {
                 {departments.map((d) => (
                   <option key={d} value={d} style={{ background: '#ffffff', color: '#0f172a' }}>
                     {d === 'ALL' ? 'All Departments' : `${d} (${depStats[d] || 0})`}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 150 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>Year</span>
+              <select
+                style={{
+                  padding: '10px 14px', borderRadius: 12,
+                  background: 'linear-gradient(135deg, #f1f5f9 0%, #ffffff 55%, #e5e7eb 100%)', border: '1px solid rgba(148,163,184,0.45)',
+                  color: '#0f172a', fontSize: 13, outline: 'none', cursor: 'pointer',
+                }}
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+              >
+                {years.map((y) => (
+                  <option key={y} value={y} style={{ background: '#ffffff', color: '#0f172a' }}>
+                    {y === 'ALL' ? 'All Years' : y}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 150 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>Semester</span>
+              <select
+                style={{
+                  padding: '10px 14px', borderRadius: 12,
+                  background: 'linear-gradient(135deg, #f1f5f9 0%, #ffffff 55%, #e5e7eb 100%)', border: '1px solid rgba(148,163,184,0.45)',
+                  color: '#0f172a', fontSize: 13, outline: 'none', cursor: 'pointer',
+                }}
+                value={selectedSemester}
+                onChange={(e) => setSelectedSemester(e.target.value)}
+              >
+                {semesters.map((s) => (
+                  <option key={s} value={s} style={{ background: '#ffffff', color: '#0f172a' }}>
+                    {s === 'ALL' ? 'All Semesters' : `Semester ${s}`}
                   </option>
                 ))}
               </select>

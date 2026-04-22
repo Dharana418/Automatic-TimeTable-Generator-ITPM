@@ -295,3 +295,34 @@ export const initializeModulesWithYear = async (academicYear, moduleIds, semeste
     throw error;
   }
 };
+
+/**
+ * Persist all module registry rows to database (bulk upsert)
+ * @param {Array} modules - Module rows to persist
+ * @returns {Promise} Persistence summary
+ */
+export const persistAllModulesToDatabase = async (modules = []) => {
+  try {
+    if (!Array.isArray(modules) || modules.length === 0) {
+      throw new Error('At least one module is required to persist');
+    }
+
+    const response = await fetchFromAPI('/api/academic-coordinator/modules/persist-all', {
+      method: 'POST',
+      body: JSON.stringify({ modules }),
+    });
+
+    return {
+      success: Boolean(response?.success),
+      message: response?.message || 'Module registry persisted',
+      inserted: Number(response?.inserted || 0),
+      updated: Number(response?.updated || 0),
+      skipped: Array.isArray(response?.skipped) ? response.skipped : [],
+      totalProcessed: Number(response?.totalProcessed || 0),
+      totalReceived: Number(response?.totalReceived || modules.length),
+    };
+  } catch (error) {
+    console.error('Error persisting all modules to database:', error);
+    throw error;
+  }
+};
