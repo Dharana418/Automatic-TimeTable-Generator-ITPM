@@ -339,8 +339,11 @@ const TimetableGenerationByYearSemester = () => {
         const details = parseJsonSafe(module.details, {});
         const dayType = String(module.day_type || details.day_type || 'weekday').trim().toLowerCase();
 
+        // Treat weekend batches the same as weekday students: select modules
+        // based on year/semester/specialization (i.e. include weekday/any/both)
+        // so weekend (WE) gets the same module set as weekday (WD).
         if (selectedBatchMode === 'WE') {
-          return ['weekend', 'any', 'both'].includes(dayType);
+          return ['weekday', 'any', 'both', ''].includes(dayType);
         }
 
         return ['weekday', 'any', 'both', ''].includes(dayType);
@@ -569,6 +572,13 @@ const TimetableGenerationByYearSemester = () => {
     setSelectedGroup('');
     setSelectedSubGroup('');
     setSelectedBatch('');
+    // Weekend batches do not have a weekday free day
+    if (autoMode === 'WE') {
+      setWeekdayFreeDay('');
+    } else {
+      // ensure a sensible default for weekday batches
+      if (!weekdayFreeDay) setWeekdayFreeDay('Fri');
+    }
   };
 
   const handleBatchModeChange = (mode) => {
@@ -576,6 +586,12 @@ const TimetableGenerationByYearSemester = () => {
     setSelectedGroup('');
     setSelectedSubGroup('');
     setSelectedBatch('');
+    // Clear free day for weekend mode; restore default for weekday
+    if (mode === 'WE') {
+      setWeekdayFreeDay('');
+    } else {
+      if (!weekdayFreeDay) setWeekdayFreeDay('Fri');
+    }
   };
 
   useEffect(() => {
