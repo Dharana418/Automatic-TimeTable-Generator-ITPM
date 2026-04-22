@@ -278,9 +278,26 @@ const TimetableGenerationByYearSemester = () => {
   const [loadingBatches, setLoadingBatches] = useState(false);
   const [loadingSpecializationGraph, setLoadingSpecializationGraph] = useState(false);
   const [specializationModuleCounts, setSpecializationModuleCounts] = useState([]);
+  const [chartHover, setChartHover] = useState(null);
 
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+
+  // Detect if a timetable already exists for the current selection
+  const alreadyGenerated = useMemo(() => {
+    if (!selectedYear || !selectedSemester || !selectedSpecialization) return null;
+    return existingTimetables.find((t) => {
+      const tYear = String(t.year || '').trim();
+      const tSem  = String(t.semester || '').trim();
+      const tData = typeof t.data === 'object' ? t.data : {};
+      const tSpec = String(tData?.scope?.specialization || tData?.specialization || '').toUpperCase();
+      const selSpec = normalizeSpecialization(selectedSpecialization);
+      const yearMatch = tYear === String(selectedYear).trim();
+      const semMatch  = tSem  === String(selectedSemester).trim();
+      const specMatch = !tSpec || tSpec === selSpec;
+      return yearMatch && semMatch && specMatch;
+    }) || null;
+  }, [existingTimetables, selectedYear, selectedSemester, selectedSpecialization]);
 
   const matchingBatches = useMemo(() => {
     if (!selectedYear || !selectedSemester || !selectedBatchMode || !selectedSpecialization) {
@@ -762,17 +779,16 @@ const TimetableGenerationByYearSemester = () => {
         </div>
       )}
 
-      {/* DEBUG PANEL */}
-      <div className="mb-6 rounded-2xl border border-slate-300 bg-slate-100 p-4">
-        <div className="text-xs font-mono text-slate-700">
-          <div className="mb-2 font-bold">Debug Info:</div>
-          <div>Status: {loadingBatches ? '🔄 Loading...' : '✓ Ready'}</div>
-          <div>Specializations loaded: {specializations.length}</div>
-          <div>Selected specialization: {selectedSpecialization || '(none)'}</div>
-          <div>Available: {specializations.join(', ') || 'None'}</div>
-          {batches.length > 0 && <div>Batches fetched: {batches.length}</div>}
+      {/* WD / WE SHARED MODULES INFO */}
+      {selectedBatchMode && (
+        <div className="mb-5 flex items-start gap-3 rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-50 to-blue-50 px-5 py-4 shadow-sm">
+          <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-sky-500 text-white text-xs font-bold">i</span>
+          <div>
+            <p className="text-sm font-bold text-sky-800">Weekday &amp; Weekend batches share the same module set</p>
+            <p className="mt-0.5 text-xs text-sky-600">Both WD and WE batches of the same year / semester / specialization use identical modules. Only the schedule time-slots differ.</p>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* FORM SECTION */}
       <form onSubmit={handleGenerate} className="">
@@ -974,8 +990,30 @@ const TimetableGenerationByYearSemester = () => {
               )}
             </div>
 
+            {/* ALREADY GENERATED BANNER */}
+            {alreadyGenerated && (
+              <div className="w-full rounded-2xl border-2 border-amber-300 bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 p-5 shadow-lg">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-orange-500 shadow-md">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" className="h-5 w-5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-base font-bold text-amber-900">Timetable Already Generated</p>
+                    <p className="mt-1 text-xs text-amber-700">A timetable for <strong>Year {selectedYear} · Sem {selectedSemester} · {selectedSpecialization}</strong> already exists: <span className="font-mono font-semibold">{alreadyGenerated.name}</span></p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button type="button" onClick={() => openTimetableReport(alreadyGenerated.id)}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-4 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-amber-600 transition-colors">
+                        <CalendarDays size={13}/> View Existing
+                      </button>
+                      <span className="inline-flex items-center rounded-lg border border-amber-300 bg-white/70 px-3 py-1.5 text-xs font-semibold text-amber-800">You may still generate a new one below ↓</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* GENERATE BUTTON */}
-            <div className="w-full pt-4">
+            <div className="w-full pt-2">
               <button
                 type="submit"
                 disabled={loading}
@@ -983,7 +1021,7 @@ const TimetableGenerationByYearSemester = () => {
               >
                 <div className="absolute inset-0 bg-white/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
                 <Cpu size={22} className="relative" />
-                <span className="relative">{loading ? 'Generating...' : 'Generate Schedule'}</span>
+                <span className="relative">{loading ? 'Generating…' : alreadyGenerated ? 'Re-Generate Schedule' : 'Generate Schedule'}</span>
               </button>
             </div>
           </div>
@@ -1056,48 +1094,138 @@ const TimetableGenerationByYearSemester = () => {
           )}
 
           {selectedYear && selectedSemester && selectedSpecialization && (
-            <div className="rounded-2xl border-2 border-indigo-200 bg-gradient-to-r from-indigo-50 to-blue-50 p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <p className="text-sm font-bold text-indigo-900">
-                  Specialization Module Capacity (suggested: up to {MODULE_LIMIT_PER_SPECIALIZATION} — not mandatory)
-                </p>
-                <p className="text-xs font-semibold text-indigo-700">
-                  Year {selectedYear} • Semester {selectedSemester}
-                </p>
+            <div className="rounded-2xl border border-indigo-200 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-5 shadow-xl">
+              {/* Chart header */}
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-indigo-300">Module Distribution</p>
+                  <p className="mt-0.5 text-base font-bold text-white">Modules by Specialization</p>
+                </div>
+                <div className="rounded-lg bg-indigo-800/60 px-3 py-1.5 text-xs font-semibold text-indigo-200">
+                  Y{selectedYear} · Sem {selectedSemester}
+                </div>
               </div>
 
               {loadingSpecializationGraph ? (
-                <p className="text-sm font-semibold text-slate-600">Loading specialization graph...</p>
-              ) : specializationModuleCounts.length === 0 ? (
-                <p className="text-sm font-semibold text-slate-600">No specialization module data available.</p>
-              ) : (
-                <div className="space-y-2">
-                  {specializationModuleCounts.map((row) => {
-                    const width = Math.min(100, (row.count / MODULE_LIMIT_PER_SPECIALIZATION) * 100);
-                    const isSelected = normalizeSpecialization(selectedSpecialization) === row.specialization;
-
-                    return (
-                      <div
-                        key={row.specialization}
-                        className={`rounded-xl border p-2 ${isSelected ? 'border-indigo-400 bg-indigo-100/60' : 'border-slate-200 bg-white/80'}`}
-                      >
-                        <div className="mb-1 flex items-center justify-between text-xs font-semibold">
-                          <span className={`${row.atLimit ? 'text-rose-700' : 'text-slate-700'}`}>{row.specialization}</span>
-                          <span className={`${row.atLimit ? 'text-rose-700' : 'text-indigo-800'}`}>
-                            {row.count}/{MODULE_LIMIT_PER_SPECIALIZATION}
-                          </span>
-                        </div>
-                        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
-                          <div
-                            className={`h-full rounded-full ${row.atLimit ? 'bg-rose-500' : 'bg-indigo-500'}`}
-                            style={{ width: `${width}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="flex items-center gap-3 py-6">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
+                  <span className="text-sm text-indigo-300">Loading chart…</span>
                 </div>
-              )}
+              ) : specializationModuleCounts.length === 0 ? (
+                <p className="py-4 text-center text-sm text-indigo-400">No module data for selected scope.</p>
+              ) : (() => {
+                const maxCount = Math.max(...specializationModuleCounts.map(r => r.count), MODULE_LIMIT_PER_SPECIALIZATION);
+                const BAR_H = 28;
+                const GAP = 10;
+                const LABEL_W = 72;
+                const VAL_W = 36;
+                const chartW = 340;
+                const totalH = specializationModuleCounts.length * (BAR_H + GAP);
+                const COLORS = [
+                  ['#6366f1','#818cf8'], ['#0ea5e9','#38bdf8'], ['#10b981','#34d399'],
+                  ['#f59e0b','#fbbf24'], ['#ec4899','#f472b6'], ['#8b5cf6','#a78bfa'],
+                  ['#14b8a6','#2dd4bf'], ['#f97316','#fb923c'],
+                ];
+                return (
+                  <div className="overflow-x-auto">
+                    <svg width="100%" viewBox={`0 0 ${LABEL_W + chartW + VAL_W + 8} ${totalH}`} className="block">
+                      {/* Grid lines */}
+                      {[0,25,50,75,100].map(pct => {
+                        const x = LABEL_W + (pct / 100) * chartW;
+                        return (
+                          <g key={pct}>
+                            <line x1={x} y1={0} x2={x} y2={totalH} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+                            {pct > 0 && <text x={x} y={totalH + 14} textAnchor="middle" fontSize="8" fill="rgba(255,255,255,0.3)">{pct}%</text>}
+                          </g>
+                        );
+                      })}
+                      {specializationModuleCounts.map((row, i) => {
+                        const y = i * (BAR_H + GAP);
+                        const pct = Math.min(100, (row.count / maxCount) * 100);
+                        const limitPct = Math.min(100, (MODULE_LIMIT_PER_SPECIALIZATION / maxCount) * 100);
+                        const isSelected = normalizeSpecialization(selectedSpecialization) === row.specialization;
+                        const [c1, c2] = COLORS[i % COLORS.length];
+                        const gradId = `g${i}`;
+                        const barW = (pct / 100) * chartW;
+                        const isHov = chartHover === i;
+                        return (
+                          <g key={row.specialization}
+                            onMouseEnter={() => setChartHover(i)}
+                            onMouseLeave={() => setChartHover(null)}
+                            style={{cursor:'default'}}>
+                            <defs>
+                              <linearGradient id={gradId} x1="0" x2="1" y1="0" y2="0">
+                                <stop offset="0%" stopColor={c1}/>
+                                <stop offset="100%" stopColor={c2}/>
+                              </linearGradient>
+                            </defs>
+                            {/* Label */}
+                            <text x={LABEL_W - 8} y={y + BAR_H/2 + 4} textAnchor="end" fontSize="10"
+                              fontWeight={isSelected ? '700' : '500'}
+                              fill={isSelected ? '#a5b4fc' : 'rgba(255,255,255,0.65)'}>
+                              {row.specialization}
+                            </text>
+                            {/* Track */}
+                            <rect x={LABEL_W} y={y + 4} width={chartW} height={BAR_H - 8}
+                              rx="6" fill="rgba(255,255,255,0.05)" />
+                            {/* Bar */}
+                            {barW > 0 && (
+                              <rect x={LABEL_W} y={y + 4} width={barW} height={BAR_H - 8}
+                                rx="6" fill={`url(#${gradId})`}
+                                opacity={isHov ? 1 : 0.85}
+                                style={{transition:'width 0.5s cubic-bezier(.4,0,.2,1)'}}/>
+                            )}
+                            {/* Limit marker */}
+                            <line
+                              x1={LABEL_W + (limitPct/100)*chartW}
+                              y1={y + 2}
+                              x2={LABEL_W + (limitPct/100)*chartW}
+                              y2={y + BAR_H - 2}
+                              stroke="rgba(251,191,36,0.7)" strokeWidth="1.5" strokeDasharray="3,2" />
+                            {/* Selected ring */}
+                            {isSelected && (
+                              <rect x={LABEL_W} y={y + 2} width={chartW} height={BAR_H - 4}
+                                rx="7" fill="none" stroke="#818cf8" strokeWidth="1.5" />
+                            )}
+                            {/* Count label */}
+                            <text x={LABEL_W + chartW + 6} y={y + BAR_H/2 + 4}
+                              fontSize="10" fontWeight="700"
+                              fill={row.atLimit ? '#fbbf24' : 'rgba(255,255,255,0.8)'}>
+                              {row.count}/{MODULE_LIMIT_PER_SPECIALIZATION}
+                            </text>
+                            {/* Hover tooltip */}
+                            {isHov && (
+                              <g>
+                                <rect x={LABEL_W + barW - 2} y={y - 22} width={90} height={18}
+                                  rx="4" fill="#1e1b4b" opacity="0.95" />
+                                <text x={LABEL_W + barW + 43} y={y - 9}
+                                  textAnchor="middle" fontSize="9" fill="#c7d2fe">
+                                  {row.count} module{row.count !== 1 ? 's' : ''} · {Math.round(pct)}% full
+                                </text>
+                              </g>
+                            )}
+                          </g>
+                        );
+                      })}
+                    </svg>
+                    {/* Legend */}
+                    <div className="mt-3 flex items-center gap-4 text-xs text-indigo-300">
+                      <span className="flex items-center gap-1.5">
+                        <span className="inline-block h-2 w-5 rounded bg-gradient-to-r from-indigo-400 to-indigo-300"/>
+                        Modules loaded
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="inline-block h-0 w-5 border-t border-dashed border-amber-400"/>
+                        Suggested cap ({MODULE_LIMIT_PER_SPECIALIZATION})
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="inline-block h-3 w-3 rounded border border-indigo-400 bg-transparent"/>
+                        Selected
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>

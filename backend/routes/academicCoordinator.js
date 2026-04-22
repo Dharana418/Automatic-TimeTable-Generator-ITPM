@@ -786,4 +786,21 @@ router.post('/modules/persist-all', async (req, res) => {
   }
 });
 
+router.delete('/timetables/:id', validatePositiveIntegerParam('id'), async (req, res) => {
+  try {
+    const roleKey = String(req.user?.role || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!['facultycoordinator', 'admin'].includes(roleKey)) {
+      return res.status(403).json({ success: false, error: 'Only Faculty Coordinator or Admin can delete timetables' });
+    }
+    const { id } = req.params;
+    const { rowCount } = await pool.query('DELETE FROM timetables WHERE id = $1', [id]);
+    if (!rowCount) {
+      return res.status(404).json({ success: false, error: 'Timetable not found' });
+    }
+    return res.json({ success: true, message: `Timetable #${id} deleted successfully`, deletedId: Number(id) });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;
