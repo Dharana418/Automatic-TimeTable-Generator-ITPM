@@ -23,6 +23,7 @@ export const updateItem = (type, id, payload) => request(`/api/scheduler/${type}
 export const deleteItem = (type, id) => request(`/api/scheduler/${type}/${id}`, { method: 'DELETE' });
 export const getLicsWithInstructors = () => request(`/api/scheduler/lics-with-instructors`, { method: 'GET' });
 export const getAcademicCoordinatorTimetables = () => request(`/api/academic-coordinator/timetables`, { method: 'GET' });
+export const deleteTimetable = (id) => request(`/api/academic-coordinator/timetables/${id}`, { method: 'DELETE' });
 export const getCoordinatorHallAllocations = () => request(`/api/scheduler/hall-allocations/coordinator`, { method: 'GET' });
 export const listAssignments = () => request(`/api/scheduler/assignments`, { method: 'GET' });
 export const createAssignment = (payload) => request(`/api/scheduler/assignments`, { method: 'POST', body: JSON.stringify(payload) });
@@ -47,6 +48,7 @@ export default {
   deleteItem,
   getLicsWithInstructors,
   getAcademicCoordinatorTimetables,
+  deleteTimetable,
   getCoordinatorHallAllocations,
   listAssignments,
   createAssignment,
