@@ -1164,15 +1164,45 @@ export const listItems = async (req, res) => {
       return res.status(400).json({ error: 'Invalid data type' });
     }
 
-    if (isLic(req.user) && ['instructors', 'modules'].includes(type)) {
-      const licScope = await resolveLicScope(req.user);
-      if (!licScope) return res.json({ success: true, items: [] });
-
-      const { rows } = await pool.query(
-        `SELECT * FROM ${type} WHERE lic_id = $1 ORDER BY created_at DESC`,
-        [licScope.id]
-      );
+    if (isLic(req.user) && type === 'instructors') {
+      const { rows } = await pool.query(`SELECT * FROM instructors ORDER BY created_at DESC`);
       return res.json({ success: true, items: rows });
+    }
+
+    if (isLic(req.user) && type === 'modules') {
+      const requestedYear = Number(req.query?.year || req.query?.academicYear || 0);
+      const requestedSemester = Number(req.query?.semester || 0);
+      const requestedSpecialization = normalizeSpecializationCode(req.query?.specialization || '');
+      const { rows } = await pool.query(`SELECT * FROM modules ORDER BY created_at DESC`);
+
+      const filtered = rows.filter((module) => {
+        const moduleYear = inferModuleYear(module);
+        const moduleSemester = inferModuleSemester(module);
+        const moduleSpecialization = inferModuleSpecialization(module);
+        const normalizedModuleSpecialization = normalizeSpecializationCode(moduleSpecialization);
+
+        if (requestedYear && moduleYear && moduleYear !== requestedYear) return false;
+        if (requestedSemester && moduleSemester && moduleSemester !== requestedSemester) return false;
+        if (requestedSpecialization) {
+          const specializationMatch =
+            requestedSpecialization === 'ENGINEERING'
+              ? moduleSpecialization === 'Engineering'
+              : normalizedModuleSpecialization === requestedSpecialization;
+          if (!specializationMatch) return false;
+        }
+
+        return true;
+      });
+
+      return res.json({
+        success: true,
+        items: filtered,
+        filters: {
+          year: requestedYear || null,
+          semester: requestedSemester || null,
+          specialization: requestedSpecialization || null,
+        },
+      });
     }
 
     if (type === 'halls') {
@@ -1511,12 +1541,60 @@ export const getLicsWithInstructors = async (req, res) => {
   }
 };
 
+const ALLOWED_PREFERRED_DAYS = new Set(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+const ALLOWED_PREFERRED_TIME_SLOTS = new Set([
+  '08:00-10:00',
+  '10:00-12:00',
+  '13:00-15:00',
+  '15:00-17:00',
+  '17:00-19:00',
+]);
+
+const normalizePreferredDays = (days = []) => {
+  if (!Array.isArray(days)) return null;
+  const cleaned = [...new Set(days.map((day) => String(day || '').trim()))].filter(Boolean);
+  if (!cleaned.every((day) => ALLOWED_PREFERRED_DAYS.has(day))) return null;
+  return cleaned;
+};
+
+const normalizePreferredTimeSlots = (timeSlots = []) => {
+  if (!Array.isArray(timeSlots)) return null;
+  const cleaned = [...new Set(timeSlots.map((slot) => String(slot || '').trim()))].filter(Boolean);
+  if (!cleaned.length) return null;
+  if (!cleaned.every((slot) => ALLOWED_PREFERRED_TIME_SLOTS.has(slot))) return null;
+  return cleaned;
+};
+
 export const createModuleAssignment = async (req, res) => {
   try {
-    const { moduleId, lecturerId, licId, academicYear, semester = null } = req.body || {};
+    const {
+      moduleId,
+      lecturerId,
+      licId,
+      academicYear = '1',
+      semester = null,
+      hoursPerWeek,
+      preferredDays = [],
+      preferredTimeSlots = [],
+    } = req.body || {};
 
-    if (!moduleId || !lecturerId || !academicYear) {
-      return res.status(400).json({ error: 'moduleId, lecturerId and academicYear are required' });
+    if (!moduleId || !lecturerId) {
+      return res.status(400).json({ error: 'moduleId and lecturerId are required' });
+    }
+
+    const parsedHours = Number(hoursPerWeek);
+    if (!Number.isInteger(parsedHours) || parsedHours < 1 || parsedHours > 22) {
+      return res.status(400).json({ error: 'hoursPerWeek must be a positive integer between 1 and 22' });
+    }
+
+    const normalizedDays = normalizePreferredDays(preferredDays);
+    if (normalizedDays === null) {
+      return res.status(400).json({ error: 'preferredDays must be an array using Mon, Tue, Wed, Thu, Fri' });
+    }
+
+    const normalizedTimeSlots = normalizePreferredTimeSlots(preferredTimeSlots);
+    if (normalizedTimeSlots === null) {
+      return res.status(400).json({ error: 'preferredTimeSlots must use one or more allowed time slots' });
     }
 
     const moduleResult = await pool.query('SELECT id FROM modules WHERE id = $1', [moduleId]);
@@ -1545,12 +1623,32 @@ export const createModuleAssignment = async (req, res) => {
 
     const id = `asg_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
     const { rows } = await pool.query(
-      `INSERT INTO module_assignments(id, module_id, lecturer_id, lic_id, academic_year, semester)
-       VALUES($1, $2, $3, $4, $5, $6)
+      `INSERT INTO module_assignments(
+         id,
+         module_id,
+         lecturer_id,
+         lic_id,
+         academic_year,
+         semester,
+         hours_per_week,
+         preferred_days,
+         preferred_times
+       )
+       VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT (module_id, lecturer_id, lic_id, academic_year, semester)
        DO NOTHING
        RETURNING *`,
-      [id, moduleId, lecturerId, effectiveLicId, academicYear, semester]
+      [
+        id,
+        moduleId,
+        lecturerId,
+        effectiveLicId,
+        String(academicYear || '1'),
+        semester ? String(semester) : null,
+        parsedHours,
+        normalizedDays,
+        normalizedTimeSlots.join(','),
+      ]
     );
 
     if (!rows[0]) return res.status(409).json({ error: 'Assignment already exists' });
@@ -1586,6 +1684,9 @@ export const listModuleAssignments = async (req, res) => {
         ma.lic_id,
         ma.academic_year,
         ma.semester,
+        ma.hours_per_week,
+        ma.preferred_days,
+        ma.preferred_times,
         ma.created_at,
         m.code AS module_code,
         m.name AS module_name,
@@ -1610,7 +1711,16 @@ export const listModuleAssignments = async (req, res) => {
 export const updateModuleAssignment = async (req, res) => {
   try {
     const { id } = req.params;
-    const { lecturerId = null, licId = null, semester = null, academicYear = null } = req.body || {};
+    const {
+      moduleId,
+      lecturerId,
+      licId,
+      semester,
+      academicYear,
+      hoursPerWeek,
+      preferredDays,
+      preferredTimeSlots,
+    } = req.body || {};
 
     if (!id) return res.status(400).json({ error: 'Assignment id is required' });
 
@@ -1625,26 +1735,87 @@ export const updateModuleAssignment = async (req, res) => {
       }
     }
 
+    const targetModuleId = moduleId || current.module_id;
+    const targetLecturerId = lecturerId || current.lecturer_id;
     const targetLicId = licId || current.lic_id;
+    const targetSemester = typeof semester === 'undefined' ? current.semester : semester;
+    const targetAcademicYear = typeof academicYear === 'undefined' ? current.academic_year : String(academicYear || '1');
+
+    if (moduleId) {
+      const moduleResult = await pool.query('SELECT id FROM modules WHERE id = $1', [moduleId]);
+      if (moduleResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Module not found' });
+      }
+    }
+
+    if (lecturerId) {
+      const lecturerResult = await pool.query('SELECT id FROM instructors WHERE id = $1', [lecturerId]);
+      if (lecturerResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Lecturer not found' });
+      }
+    }
+
+    if (licId) {
+      const licResult = await pool.query('SELECT id FROM lics WHERE id = $1', [licId]);
+      if (licResult.rows.length === 0) {
+        return res.status(404).json({ error: 'LIC not found' });
+      }
+    }
+
+    const targetHours = typeof hoursPerWeek === 'undefined' ? current.hours_per_week : Number(hoursPerWeek);
+    if (!Number.isInteger(targetHours) || targetHours < 1 || targetHours > 22) {
+      return res.status(400).json({ error: 'hoursPerWeek must be a positive integer between 1 and 22' });
+    }
+
+    const targetDays = typeof preferredDays === 'undefined'
+      ? (Array.isArray(current.preferred_days) ? current.preferred_days : [])
+      : normalizePreferredDays(preferredDays);
+    if (targetDays === null) {
+      return res.status(400).json({ error: 'preferredDays must be an array using Mon, Tue, Wed, Thu, Fri' });
+    }
+
+    const currentTimeSlots = String(current.preferred_times || '')
+      .split(',')
+      .map((slot) => slot.trim())
+      .filter(Boolean);
+
+    const targetTimeSlots = typeof preferredTimeSlots === 'undefined'
+      ? currentTimeSlots
+      : normalizePreferredTimeSlots(preferredTimeSlots);
+    if (targetTimeSlots === null) {
+      return res.status(400).json({ error: 'preferredTimeSlots must use one or more allowed time slots' });
+    }
+
     const { rows } = await pool.query(
       `UPDATE module_assignments
-       SET lecturer_id = $1,
-           lic_id = $2,
-           semester = $3,
-           academic_year = $4
-       WHERE id = $5
+       SET module_id = $1,
+           lecturer_id = $2,
+           lic_id = $3,
+           semester = $4,
+           academic_year = $5,
+           hours_per_week = $6,
+           preferred_days = $7,
+           preferred_times = $8
+       WHERE id = $9
        RETURNING *`,
       [
-        lecturerId || current.lecturer_id,
+        targetModuleId,
+        targetLecturerId,
         targetLicId,
-        semester || current.semester,
-        academicYear || current.academic_year,
+        targetSemester,
+        targetAcademicYear,
+        targetHours,
+        targetDays,
+        targetTimeSlots.join(','),
         id,
       ]
     );
 
     return res.json({ success: true, item: rows[0] });
   } catch (err) {
+    if (err?.code === '23505') {
+      return res.status(409).json({ error: 'Assignment already exists for this module, lecturer, year and semester' });
+    }
     console.error('Error updating module assignment:', err);
     return res.status(500).json({ error: err.message });
   }

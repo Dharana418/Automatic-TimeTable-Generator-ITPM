@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Radar, SlidersHorizontal, Search, Download, RefreshCcw, Sparkles, ChevronDown, ChevronRight, Filter, Sun, Moon } from 'lucide-react';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
-import schedulerApi from '../api/scheduler.js';
+import schedulerApi, { deleteTimetable as apiDeleteTimetable } from '../api/scheduler.js';
 import { downloadTimetableAsCSV } from '../api/timetableGeneration.js';
 import facultyDashboardBg from '../assets/Gemini_Generated_Image_hqfdrqhqfdrqhqfd.png';
 
@@ -484,6 +484,12 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
   const [trendHoverIndex, setTrendHoverIndex] = useState(-1);
   const animatedInsightRef = useRef({ timetables: 0, modules: 0, groups: 0, favorites: 0 });
 
+  // Delete confirmation modal state
+  const [deleteModal, setDeleteModal] = useState(null); // { id, name }
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleteSuccess, setDeleteSuccess] = useState('');
+
   useEffect(() => {
     setFilterPresets(safeReadStorageJson(FILTER_PRESET_STORAGE_KEY, []));
     setFavoriteIds(safeReadStorageJson(FAVORITES_STORAGE_KEY, []));
@@ -533,6 +539,24 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
       mounted = false;
     };
   }, []);
+
+  const handleDeleteTimetable = async () => {
+    if (!deleteModal) return;
+    setDeleteLoading(true);
+    setDeleteError('');
+    try {
+      await apiDeleteTimetable(deleteModal.id);
+      setTimetables((prev) => prev.filter((tt) => String(tt.id) !== String(deleteModal.id)));
+      if (String(selectedId) === String(deleteModal.id)) setSelectedId('');
+      setDeleteSuccess(`"${deleteModal.name}" was deleted successfully.`);
+      setTimeout(() => setDeleteSuccess(''), 4000);
+      setDeleteModal(null);
+    } catch (err) {
+      setDeleteError(err?.message || 'Failed to delete timetable');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const generateTimetableNow = async () => {
     try {
@@ -2094,12 +2118,21 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
 
         {!loading && !!selectedTimetable && layoutMode === 'unified' && (
           <section id="report-render" className="theme-shell overflow-hidden rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50/80 via-white to-cyan-50/70 p-4 shadow-[0_16px_40px_rgba(5,150,105,0.14)]">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h4 className="text-base font-bold text-slate-900">Unified Timetable (All Modules)</h4>
-              <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
-                {dayModeFilter === 'WD' ? 'Weekday' : dayModeFilter === 'WE' ? 'Weekend' : 'All'}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">Unified View</p>
+              <h4 className="mt-1 text-xl font-extrabold text-slate-900">Master Timetable — All Modules</h4>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                {dayModeFilter === 'WD' ? 'Weekday Scope' : dayModeFilter === 'WE' ? 'Weekend Scope' : 'All Batches'}
+              </span>
+              <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700">
+                {scopedSchedule.length} sessions
               </span>
             </div>
+          </div>
 
             <div className="overflow-x-auto">
               {!schedule.length ? (
@@ -2111,21 +2144,26 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                 <caption className="caption-top border border-slate-300 border-b-0 bg-slate-100 px-3 py-2 text-left text-sm font-semibold text-slate-800">
                   {INSTITUTION_NAME}
                 </caption>
-                <thead>
-                  <tr>
-                    <td className="sticky left-0 z-10 border border-slate-300 bg-slate-100 px-3 py-2" rowSpan={2} />
-                    <th className="border border-slate-300 bg-slate-100 px-3 py-2 text-center font-semibold text-slate-800" colSpan={Math.max(unifiedTable.days.length, 1)}>
-                      Master Module Timetable
-                    </th>
-                  </tr>
-                  <tr>
-                    {unifiedTable.days.map((day) => (
-                      <th key={day} className="border border-slate-300 bg-slate-100 px-3 py-2 text-center font-semibold text-slate-700">
+              <thead>
+                <tr>
+                  <td className="sticky left-0 z-10 border border-slate-200 bg-gradient-to-br from-slate-800 to-slate-700 px-3 py-3" rowSpan={2}>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Slot</span>
+                  </td>
+                  <th className="border border-slate-200 bg-gradient-to-r from-sky-700 via-blue-700 to-indigo-700 px-3 py-3 text-center text-sm font-bold tracking-wide text-white shadow-inner" colSpan={Math.max(unifiedTable.days.length, 1)}>
+                    {INSTITUTION_NAME} — Master Module Timetable
+                  </th>
+                </tr>
+                <tr>
+                  {unifiedTable.days.map((day, di) => {
+                    const dayColors = ['from-sky-600 to-blue-700','from-blue-600 to-indigo-700','from-indigo-600 to-violet-700','from-violet-600 to-purple-700','from-emerald-600 to-teal-700','from-amber-600 to-orange-700','from-rose-600 to-pink-700'];
+                    return (
+                      <th key={day} className={`border border-slate-200 bg-gradient-to-b ${dayColors[di % dayColors.length]} px-3 py-2.5 text-center text-xs font-bold uppercase tracking-widest text-white`}>
                         {day}
                       </th>
-                    ))}
-                  </tr>
-                </thead>
+                    );
+                  })}
+                </tr>
+              </thead>
                 <tbody>
                   {activeTimeline.map((timelineRow) => {
                     if (timelineRow.type === 'break') {
@@ -2151,40 +2189,47 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                           const entries = unifiedTable.cellMap.get(key) || [];
                           const isRiskyCell = showRiskHighlights && riskInsights.riskyCells.has(key);
                           return (
-                            <td key={key} className={`border px-2 py-2 align-top ${isRiskyCell ? 'border-rose-400 bg-rose-50' : 'border-slate-300 bg-white'}`}>
+                          <td key={key} className={`border px-2 py-2 align-top min-w-[130px] ${
+                              isRiskyCell ? 'border-rose-300 bg-rose-50/80' : 'border-slate-200 bg-white hover:bg-sky-50/40 transition-colors'
+                            }`}>
                               {!entries.length ? (
-                                <span className="text-[11px] text-slate-400">-</span>
+                                <span className="text-[11px] text-slate-300">—</span>
                               ) : (
                                 <div className="space-y-2">
-                                  {entries.map((entry, idx) => (
-                                    <div
-                                      key={`${entry.module}-${entry.group}-${idx}`}
-                                      className={`rounded border px-2 py-1 ${(() => {
-                                        if (!showRiskHighlights) return 'border-emerald-200 bg-emerald-50';
-                                        const hallKey = `${timelineRow.slot}::${day}::${entry.hall}`;
-                                        const instructorKey = `${timelineRow.slot}::${day}::${entry.instructor}`;
-                                        if (riskInsights.hallConflicts.has(hallKey) || riskInsights.instructorConflicts.has(instructorKey)) {
-                                          return 'border-rose-300 bg-rose-100';
-                                        }
-                                        return 'border-emerald-200 bg-emerald-50';
-                                      })()}`}
-                                    >
-                                      <p className="text-xs font-semibold text-slate-900">{entry.module}</p>
-                                      <p className="text-[11px] text-slate-600">{entry.yearSemester} • {entry.specialization} • G{entry.group}</p>
-                                      <p className="text-[11px] text-slate-600">{entry.hall}</p>
-                                      <p className="text-[11px] text-slate-500">{entry.instructor}</p>
-                                      {showRiskHighlights && (
-                                        <div className="mt-1 flex flex-wrap gap-1">
-                                          {riskInsights.hallConflicts.has(`${timelineRow.slot}::${day}::${entry.hall}`) && (
-                                            <span className="rounded bg-rose-200 px-1.5 py-0.5 text-[10px] font-semibold text-rose-800">Hall conflict</span>
-                                          )}
-                                          {riskInsights.instructorConflicts.has(`${timelineRow.slot}::${day}::${entry.instructor}`) && (
-                                            <span className="rounded bg-rose-200 px-1.5 py-0.5 text-[10px] font-semibold text-rose-800">Instructor conflict</span>
-                                          )}
+                                  {entries.map((entry, idx) => {
+                                    const isLab = String(entry.module || '').toLowerCase().includes('lab') || String(entry.sessionType || '').toLowerCase() === 'lab';
+                                    const isTut = String(entry.sessionType || '').toLowerCase() === 'tutorial';
+                                    const hasHallConflict = showRiskHighlights && riskInsights.hallConflicts.has(`${timelineRow.slot}::${day}::${entry.hall}`);
+                                    const hasInstrConflict = showRiskHighlights && riskInsights.instructorConflicts.has(`${timelineRow.slot}::${day}::${entry.instructor}`);
+                                    const hasConflict = hasHallConflict || hasInstrConflict;
+                                    return (
+                                      <div key={`${entry.module}-${entry.group}-${idx}`}
+                                        className={`rounded-lg border px-2.5 py-2 shadow-sm ${
+                                          hasConflict ? 'border-rose-300 bg-gradient-to-br from-rose-50 to-pink-50'
+                                          : isLab ? 'border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50'
+                                          : isTut ? 'border-amber-200 bg-gradient-to-br from-amber-50 to-yellow-50'
+                                          : 'border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50'
+                                        }`}>
+                                        <div className="flex items-start justify-between gap-1 mb-1">
+                                          <p className="text-xs font-bold leading-tight text-slate-900">{entry.module}</p>
+                                          <span className={`flex-shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                                            isLab ? 'bg-violet-200 text-violet-800'
+                                            : isTut ? 'bg-amber-200 text-amber-800'
+                                            : 'bg-emerald-200 text-emerald-800'
+                                          }`}>{isLab ? 'LAB' : isTut ? 'TUT' : 'LEC'}</span>
                                         </div>
-                                      )}
-                                    </div>
-                                  ))}
+                                        <p className="text-[10px] text-slate-600 font-medium">{entry.yearSemester} · {entry.specialization} · G{entry.group}</p>
+                                        <p className="text-[10px] text-indigo-700 font-semibold mt-0.5">{entry.hall}</p>
+                                        <p className="text-[10px] text-slate-500 truncate">{entry.instructor}</p>
+                                        {hasConflict && (
+                                          <div className="mt-1 flex flex-wrap gap-1">
+                                            {hasHallConflict && <span className="rounded bg-rose-200 px-1.5 py-0.5 text-[9px] font-bold text-rose-800">⚠ Hall</span>}
+                                            {hasInstrConflict && <span className="rounded bg-rose-200 px-1.5 py-0.5 text-[9px] font-bold text-rose-800">⚠ Instructor</span>}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               )}
                             </td>
@@ -2241,36 +2286,45 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
               key={batch.batchKey}
               className={`overflow-hidden rounded-3xl border ${isOdd ? 'border-blue-200 bg-gradient-to-br from-blue-50/70 via-white to-sky-50/60' : 'border-slate-200 bg-gradient-to-br from-slate-50/80 via-white to-cyan-50/50'} p-4 shadow-[0_12px_30px_rgba(15,23,42,0.08)]`}
             >
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <h4 className="text-base font-bold text-slate-900">{batch.batchKey}</h4>
-                <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
-                  {batch.yearSemester}
-                </span>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <span className="inline-block rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white shadow-sm mb-2">
+                    Batch Group {index + 1}
+                  </span>
+                  <h4 className="text-lg font-extrabold text-slate-900">{batch.batchKey}</h4>
+                  <p className="mt-0.5 text-xs text-slate-500">Subgroups: <span className="font-semibold text-slate-700">{batch.subgroupLabel}</span></p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">{batch.yearSemester}</span>
+                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">{batch.entries?.length ?? ''} sessions</span>
+                </div>
               </div>
-              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
-                Subgroups in this shared timetable: {batch.subgroupLabel}
-              </p>
 
               <div className="overflow-x-auto">
                 <table id={tableVisualId} className="min-w-full border-collapse text-sm" border="1">
                   <caption className="caption-top border border-slate-300 border-b-0 bg-slate-100 px-3 py-2 text-left text-sm font-semibold text-slate-800">
                     {INSTITUTION_NAME}
                   </caption>
-                  <thead>
-                    <tr>
-                      <td className="sticky left-0 z-10 border border-slate-300 bg-slate-100 px-3 py-2" rowSpan={2} />
-                      <th className="border border-slate-300 bg-slate-100 px-3 py-2 text-center font-semibold text-slate-800" colSpan={Math.max(batch.days.length, 1)}>
-                        {batch.batchKey}
-                      </th>
-                    </tr>
-                    <tr>
-                      {batch.days.map((day) => (
-                        <th key={day} className="border border-slate-300 bg-slate-100 px-3 py-2 text-center font-semibold text-slate-700">
-                          {day}
+                    <thead>
+                      <tr>
+                        <td className="sticky left-0 z-10 border border-slate-200 bg-gradient-to-br from-slate-800 to-slate-700 px-3 py-3" rowSpan={2}>
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Slot</span>
+                        </td>
+                        <th className="border border-slate-200 bg-gradient-to-r from-blue-700 via-indigo-700 to-violet-700 px-3 py-3 text-center text-sm font-bold tracking-wide text-white" colSpan={Math.max(batch.days.length, 1)}>
+                          {batch.batchKey}
                         </th>
-                      ))}
-                    </tr>
-                  </thead>
+                      </tr>
+                      <tr>
+                        {batch.days.map((day, di) => {
+                          const dc = ['from-sky-600 to-blue-700','from-blue-600 to-indigo-700','from-indigo-600 to-violet-700','from-violet-600 to-purple-700','from-emerald-600 to-teal-700','from-amber-600 to-orange-700','from-rose-600 to-pink-700'];
+                          return (
+                            <th key={day} className={`border border-slate-200 bg-gradient-to-b ${dc[di % dc.length]} px-3 py-2.5 text-center text-xs font-bold uppercase tracking-widest text-white`}>
+                              {day}
+                            </th>
+                          );
+                        })}
+                      </tr>
+                    </thead>
                   <tbody>
                     {activeTimeline.map((timelineRow) => {
                       if (timelineRow.type === 'break') {
@@ -2299,39 +2353,46 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                             const entries = batch.cellMap.get(key) || [];
                             const isRiskyCell = showRiskHighlights && riskInsights.riskyCells.has(key);
                             return (
-                                <td key={key} className={`border px-2 py-2 align-top ${isRiskyCell ? 'border-rose-400 bg-rose-50' : 'border-slate-300 bg-white'}`}>
+                                <td key={key} className={`border px-2 py-2 align-top min-w-[120px] ${
+                                    isRiskyCell ? 'border-rose-300 bg-rose-50/80' : 'border-slate-200 bg-white hover:bg-blue-50/30 transition-colors'
+                                  }`}>
                                 {!entries.length ? (
-                                  <span className="text-[11px] text-slate-400">-</span>
+                                  <span className="text-[11px] text-slate-300">—</span>
                                 ) : (
                                   <div className="space-y-2">
-                                    {entries.map((entry, idx) => (
-                                        <div
-                                          key={`${entry.module}-${entry.hall}-${idx}`}
-                                          className={`rounded border px-2 py-1 ${(() => {
-                                            if (!showRiskHighlights) return 'border-slate-200 bg-slate-50';
-                                            const hallKey = `${timelineRow.slot}::${day}::${entry.hall}`;
-                                            const instructorKey = `${timelineRow.slot}::${day}::${entry.instructor}`;
-                                            if (riskInsights.hallConflicts.has(hallKey) || riskInsights.instructorConflicts.has(instructorKey)) {
-                                              return 'border-rose-300 bg-rose-100';
-                                            }
-                                            return 'border-slate-200 bg-slate-50';
-                                          })()}`}
-                                        >
-                                        <p className="text-xs font-semibold text-slate-900">{entry.module}</p>
-                                        <p className="text-[11px] text-slate-600">{entry.hall}</p>
-                                        <p className="text-[11px] text-slate-500">{entry.instructor}</p>
-                                          {showRiskHighlights && (
+                                    {entries.map((entry, idx) => {
+                                      const isLab = String(entry.module || '').toLowerCase().includes('lab') || String(entry.sessionType || '').toLowerCase() === 'lab';
+                                      const isTut = String(entry.sessionType || '').toLowerCase() === 'tutorial';
+                                      const hasHallConflict = showRiskHighlights && riskInsights.hallConflicts.has(`${timelineRow.slot}::${day}::${entry.hall}`);
+                                      const hasInstrConflict = showRiskHighlights && riskInsights.instructorConflicts.has(`${timelineRow.slot}::${day}::${entry.instructor}`);
+                                      const hasConflict = hasHallConflict || hasInstrConflict;
+                                      return (
+                                        <div key={`${entry.module}-${entry.hall}-${idx}`}
+                                          className={`rounded-lg border px-2.5 py-2 shadow-sm ${
+                                            hasConflict ? 'border-rose-300 bg-gradient-to-br from-rose-50 to-pink-50'
+                                            : isLab ? 'border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50'
+                                            : isTut ? 'border-amber-200 bg-gradient-to-br from-amber-50 to-yellow-50'
+                                            : 'border-blue-200 bg-gradient-to-br from-blue-50 to-sky-50'
+                                          }`}>
+                                          <div className="flex items-start justify-between gap-1 mb-1">
+                                            <p className="text-xs font-bold leading-tight text-slate-900">{entry.module}</p>
+                                            <span className={`flex-shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase ${
+                                              isLab ? 'bg-violet-200 text-violet-800'
+                                              : isTut ? 'bg-amber-200 text-amber-800'
+                                              : 'bg-blue-200 text-blue-800'
+                                            }`}>{isLab ? 'LAB' : isTut ? 'TUT' : 'LEC'}</span>
+                                          </div>
+                                          <p className="text-[10px] text-indigo-700 font-semibold mt-0.5">{entry.hall}</p>
+                                          <p className="text-[10px] text-slate-500 truncate">{entry.instructor}</p>
+                                          {hasConflict && (
                                             <div className="mt-1 flex flex-wrap gap-1">
-                                              {riskInsights.hallConflicts.has(`${timelineRow.slot}::${day}::${entry.hall}`) && (
-                                                <span className="rounded bg-rose-200 px-1.5 py-0.5 text-[10px] font-semibold text-rose-800">Hall conflict</span>
-                                              )}
-                                              {riskInsights.instructorConflicts.has(`${timelineRow.slot}::${day}::${entry.instructor}`) && (
-                                                <span className="rounded bg-rose-200 px-1.5 py-0.5 text-[10px] font-semibold text-rose-800">Instructor conflict</span>
-                                              )}
+                                              {hasHallConflict && <span className="rounded bg-rose-200 px-1.5 py-0.5 text-[9px] font-bold text-rose-800">⚠ Hall</span>}
+                                              {hasInstrConflict && <span className="rounded bg-rose-200 px-1.5 py-0.5 text-[9px] font-bold text-rose-800">⚠ Instructor</span>}
                                             </div>
                                           )}
-                                      </div>
-                                    ))}
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 )}
                               </td>
@@ -2341,9 +2402,9 @@ const FacultyCoordinatorTimetableSidebarPage = ({ user }) => {
                       );
                     })}
                     <tr className="foot">
-                      <td className="border border-slate-300 bg-slate-100 px-3 py-2" />
-                      <td className="border border-slate-300 bg-slate-100 px-3 py-2 text-xs text-slate-700" colSpan={Math.max(batch.days.length, 1)}>
-                        Timetable generated with SLIIT Scheduler on {generatedStamp}
+                      <td className="border border-slate-200 bg-gradient-to-r from-slate-800 to-slate-700 px-3 py-2" />
+                      <td className="border border-slate-200 bg-gradient-to-r from-slate-800 to-slate-700 px-3 py-2 text-[10px] text-slate-300 font-medium" colSpan={Math.max(batch.days.length, 1)}>
+                        Generated by SLIIT Scheduler · {generatedStamp} · Batch: {batch.batchKey}
                       </td>
                     </tr>
                   </tbody>
