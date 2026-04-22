@@ -327,9 +327,64 @@ const TimetableGenerationByYearSemester = () => {
     try {
       setLoadingModules(true);
 
-      const res = await getModulesByYear(selectedYear, selectedSemester, selectedSpecialization || null);
+      // Primary attempt: fetch from academic-coordinator endpoint
+      let res;
+      try {
+        res = await getModulesByYear(selectedYear, selectedSemester, selectedSpecialization || null);
+      } catch (err) {
+        console.warn('getModulesByYear failed, falling back to scheduler modules', err);
+        res = { data: [] };
+      }
 
-      const mapped = (res.data || []).map((m) => ({
+      let modulesData = Array.isArray(res?.data) ? res.data : [];
+      let usedFallback = false;
+
+      // Fallback: if academic-coordinator endpoint returned no modules,
+      // try the scheduler `modules` list and filter locally.
+      if (modulesData.length === 0) {
+        try {
+          const schedRes = await listItems('modules');
+          const rawModules = Array.isArray(schedRes?.items)
+            ? schedRes.items
+            : Array.isArray(schedRes?.data)
+            ? schedRes.data
+            : [];
+
+          const yearMatches = (selYear, modYear) => {
+            const sel = String(selYear || '').trim();
+            const mod = String(modYear || '').trim();
+            if (!sel || !mod) return false;
+            const selToken = normalizeYearToken(sel);
+            const modToken = normalizeYearToken(mod);
+            if (selToken && modToken) return selToken === modToken;
+            const fmt = (s) => String(s).toLowerCase().replace(/\s+/g, '').replace(/-/g, '');
+            return fmt(sel) === fmt(mod) || fmt(mod).includes(fmt(sel));
+          };
+
+          modulesData = rawModules.filter((m) => {
+            const details = parseJsonSafe(m.details, {});
+            const moduleYearRaw = m.academic_year || details.academic_year || m.academicYear || '';
+            const moduleSemesterRaw = String(m.semester || details.semester || '').trim();
+
+            if (!yearMatches(selectedYear, moduleYearRaw)) return false;
+            if (selectedSemester && String(selectedSemester).trim() !== String(moduleSemesterRaw).trim()) return false;
+
+            if (selectedSpecialization) {
+              const selSpec = normalizeSpecialization(selectedSpecialization);
+              const modSpec = normalizeSpecialization(inferSpecializationFromModule(m) || m.department || m.department_id || details.specialization || '');
+              if (selSpec !== 'ALL' && selSpec && modSpec && selSpec !== modSpec) return false;
+            }
+
+            return true;
+          });
+
+          if (modulesData.length > 0) usedFallback = true;
+        } catch (err) {
+          console.warn('Fallback scheduler modules fetch failed', err);
+        }
+      }
+
+      const mapped = (modulesData || []).map((m) => ({
         ...m,
         specialization: inferSpecializationFromModule(m),
       }));
@@ -339,9 +394,7 @@ const TimetableGenerationByYearSemester = () => {
         const details = parseJsonSafe(module.details, {});
         const dayType = String(module.day_type || details.day_type || 'weekday').trim().toLowerCase();
 
-        // Treat weekend batches the same as weekday students: select modules
-        // based on year/semester/specialization (i.e. include weekday/any/both)
-        // so weekend (WE) gets the same module set as weekday (WD).
+        // Weekend batches should use the same modules as weekday students
         if (selectedBatchMode === 'WE') {
           return ['weekday', 'any', 'both', ''].includes(dayType);
         }
@@ -351,10 +404,11 @@ const TimetableGenerationByYearSemester = () => {
 
       const limitedModules = filteredByMode.slice(0, MODULE_LIMIT_PER_SPECIALIZATION);
       setModules(limitedModules);
-      const message = `${limitedModules.length} modules has been fetched successfully`;
+      const message = `${limitedModules.length} modules has been fetched successfully${usedFallback ? ' (using fallback list)' : ''}`;
       setSuccess(message);
       toast.success(message);
-    } catch {
+    } catch (err) {
+      console.error('fetchModules error:', err);
       setError('Failed to fetch modules');
     } finally {
       setLoadingModules(false);
