@@ -621,6 +621,9 @@ const TimetableGenerationByYearSemester = () => {
 
     const validation = (() => {
       try {
+        // Weekend batches do not have a weekday free day — validate without it
+        const freeDayToValidate = selectedBatchMode === 'WE' ? '' : weekdayFreeDay;
+
         return validateCoordinatorTimetableRequest({
           academicYear: selectedYear,
           semester: selectedSemester,
@@ -630,7 +633,7 @@ const TimetableGenerationByYearSemester = () => {
           subgroup: selectedSubGroup,
           batchId,
           timetableName: resolvedTimetableName,
-          weekdayFreeDay,
+          weekdayFreeDay: freeDayToValidate,
         });
       } catch (validationError) {
         setError(validationError.message || 'Fill all required fields');
@@ -645,19 +648,25 @@ const TimetableGenerationByYearSemester = () => {
     try {
       setLoading(true);
 
+      const optionsPayload = {
+        algorithms,
+        timetableName: validation.timetableName,
+        batchMode: validation.batchMode,
+        specialization: validation.specialization,
+        group: validation.group,
+        subgroup: validation.subgroup,
+        batchId: validation.batchId,
+      };
+
+      // Only include weekdayFreeDay for non-weekend batches
+      if (validation.batchMode !== 'WE' && validation.weekdayFreeDay) {
+        optionsPayload.weekdayFreeDay = validation.weekdayFreeDay;
+      }
+
       const res = await generateTimetableForYearSemester(
         validation.academicYear,
         validation.semester,
-        {
-          algorithms,
-          timetableName: validation.timetableName,
-          weekdayFreeDay: validation.weekdayFreeDay,
-          batchMode: validation.batchMode,
-          specialization: validation.specialization,
-          group: validation.group,
-          subgroup: validation.subgroup,
-          batchId: validation.batchId,
-        }
+        optionsPayload
       );
 
       setGeneratedTimetable(res);
