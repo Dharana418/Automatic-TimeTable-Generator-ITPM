@@ -708,6 +708,32 @@ const resolveInstructorScope = async (user) => {
   return rows[0] || null;
 };
 
+const syncAdminUsersToInstructorRegistry = async () => {
+  await pool.query(
+    `INSERT INTO instructors (id, name, email, department, availabilities, details, lic_id)
+     SELECT
+       u.id::text,
+       u.name,
+       u.email,
+       NULL,
+       NULL,
+       jsonb_build_object(
+         'user_id', u.id::text,
+         'source', 'admin_dashboard',
+         'role', u.role,
+         'synced_at', NOW()
+       ),
+       NULL
+     FROM users u
+     WHERE regexp_replace(lower(COALESCE(u.role, '')), '[^a-z0-9]', '', 'g') IN ('lecturer', 'instructor', 'lic', 'professor', 'seniorlecturer')
+       AND u.role_assigned_by IS NOT NULL
+     ON CONFLICT (id) DO UPDATE SET
+       name = EXCLUDED.name,
+       email = EXCLUDED.email,
+       details = COALESCE(instructors.details, '{}'::jsonb) || EXCLUDED.details`
+  );
+};
+
 const loadSoftConstraintsForUser = async (userId) => {
   if (!userId) return null;
   const { rows } = await pool.query(
@@ -1165,7 +1191,15 @@ export const listItems = async (req, res) => {
     }
 
     if (isLic(req.user) && type === 'instructors') {
-      const { rows } = await pool.query(`SELECT * FROM instructors ORDER BY created_at DESC`);
+      await syncAdminUsersToInstructorRegistry();
+      const { rows } = await pool.query(
+        `SELECT i.*, u.role AS role_label
+         FROM instructors i
+         JOIN users u ON u.id::text = i.id
+         WHERE regexp_replace(lower(COALESCE(u.role, '')), '[^a-z0-9]', '', 'g') IN ('lecturer', 'instructor', 'lic', 'professor', 'seniorlecturer')
+           AND u.role_assigned_by IS NOT NULL
+         ORDER BY i.created_at DESC`
+      );
       return res.json({ success: true, items: rows });
     }
 
