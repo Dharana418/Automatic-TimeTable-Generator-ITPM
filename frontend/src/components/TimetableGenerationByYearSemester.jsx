@@ -406,9 +406,10 @@ const TimetableGenerationByYearSemester = () => {
         return ['weekday', 'any', 'both', ''].includes(dayType);
       });
 
-      const limitedModules = filteredByMode.slice(0, MODULE_LIMIT_PER_SPECIALIZATION);
+      // Do not enforce a minimum or mandatory cap client-side — show all matching modules
+      const limitedModules = filteredByMode; // intentionally not sliced to a fixed cap
       setModules(limitedModules);
-      const message = `${limitedModules.length} modules has been fetched successfully${usedFallback ? ' (using fallback list)' : ''}`;
+      const message = `${limitedModules.length} modules have been fetched successfully${usedFallback ? ' (using fallback list)' : ''}`;
       setSuccess(message);
       toast.success(message);
     } catch (err) {
@@ -1058,7 +1059,7 @@ const TimetableGenerationByYearSemester = () => {
             <div className="rounded-2xl border-2 border-indigo-200 bg-gradient-to-r from-indigo-50 to-blue-50 p-4">
               <div className="mb-3 flex items-center justify-between">
                 <p className="text-sm font-bold text-indigo-900">
-                  Specialization Module Capacity (Max {MODULE_LIMIT_PER_SPECIALIZATION})
+                  Specialization Module Capacity (suggested: up to {MODULE_LIMIT_PER_SPECIALIZATION} — not mandatory)
                 </p>
                 <p className="text-xs font-semibold text-indigo-700">
                   Year {selectedYear} • Semester {selectedSemester}

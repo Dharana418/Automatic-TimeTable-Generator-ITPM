@@ -2359,9 +2359,7 @@ export const runSchedulerForYearSemester = async (req, res) => {
       ? Math.floor(rawModuleLimitPerSpecialization)
       : 5;
 
-    const yearNumber = Number(academicYear);
-    const semesterNumber = Number(semester);
-
+    // yearNumber and semesterNumber are already declared above (used for module filtering)
     const filteredBatches = batches.filter((batch) => {
       const scope = parseBatchSchedulingScope(batch);
 
