@@ -665,24 +665,24 @@ const FacultyAddedModulesPage = ({ user }) => {
           </div>
         )}
 
-        <section id="addedModulesTable" className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(3,10,20,0.92),rgba(8,18,34,0.9))] p-5 shadow-[0_22px_58px_rgba(2,6,23,0.42)] backdrop-blur">
-          <div className="flex flex-col gap-2 border-b border-white/10 pb-4 sm:flex-row sm:items-end sm:justify-between">
+        <section id="addedModulesTable" className="rounded-[30px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff,#f8fbff)] p-5 shadow-[0_20px_52px_rgba(15,23,42,0.12)] backdrop-blur">
+          <div className="flex flex-col gap-2 border-b border-slate-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Advanced Table View</p>
-              <h3 className="mt-2 text-xl font-bold text-white">{loading ? 'Loading module archive' : `${tableModules.length} modules in view`}</h3>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-700">Advanced Table View</p>
+              <h3 className="mt-2 text-xl font-bold text-slate-900">{loading ? 'Loading module archive' : `${tableModules.length} modules in view`}</h3>
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setViewMode('table')}
-                className={`rounded-xl border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${viewMode === 'table' ? 'border-cyan-300/50 bg-cyan-400/15 text-cyan-100' : 'border-white/15 bg-white/5 text-slate-300 hover:border-cyan-300/30 hover:text-cyan-100'}`}
+                className={`rounded-xl border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${viewMode === 'table' ? 'border-sky-300 bg-sky-50 text-sky-700' : 'border-slate-300 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-700'}`}
               >
                 Table
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode('cards')}
-                className={`rounded-xl border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${viewMode === 'cards' ? 'border-cyan-300/50 bg-cyan-400/15 text-cyan-100' : 'border-white/15 bg-white/5 text-slate-300 hover:border-cyan-300/30 hover:text-cyan-100'}`}
+                className={`rounded-xl border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${viewMode === 'cards' ? 'border-sky-300 bg-sky-50 text-sky-700' : 'border-slate-300 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-700'}`}
               >
                 Cards
               </button>
@@ -692,20 +692,20 @@ const FacultyAddedModulesPage = ({ user }) => {
           {loading ? (
             <div className="mt-5 space-y-2">
               {Array.from({ length: 7 }, (_, index) => (
-                <div key={index} className="h-12 animate-pulse rounded-2xl border border-white/8 bg-white/5" />
+                <div key={index} className="h-12 animate-pulse rounded-2xl border border-slate-200 bg-slate-100" />
               ))}
             </div>
           ) : tableModules.length === 0 ? (
-            <div className="mt-6 rounded-[24px] border border-dashed border-white/15 bg-white/5 px-6 py-12 text-center">
-              <p className="text-lg font-semibold text-white">No academic-coordinator modules match this view.</p>
-              <p className="mt-2 text-sm text-slate-400">Try clearing the filters or wait for the academic coordinator to publish more modules.</p>
+            <div className="mt-6 rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
+              <p className="text-lg font-semibold text-slate-900">No academic-coordinator modules match this view.</p>
+              <p className="mt-2 text-sm text-slate-500">Try clearing the filters or wait for the academic coordinator to publish more modules.</p>
             </div>
           ) : viewMode === 'table' ? (
-            <div className="mt-5 overflow-hidden rounded-[22px] border border-white/10 bg-slate-950/30">
+            <div className="mt-5 overflow-hidden rounded-[22px] border border-slate-200 bg-white">
               <div className="max-h-[560px] overflow-auto">
                 <table className="min-w-full border-collapse text-sm">
-                  <thead className="sticky top-0 z-10 bg-[linear-gradient(135deg,rgba(7,18,36,0.98),rgba(9,27,51,0.96))] backdrop-blur">
-                    <tr className="border-b border-cyan-300/20">
+                  <thead className="sticky top-0 z-10 bg-[linear-gradient(180deg,#f8fafc,#f1f5f9)] backdrop-blur">
+                    <tr className="border-b border-slate-200">
                       {[
                         { label: 'Module Code', key: 'code' },
                         { label: 'Module Name', key: 'name' },
@@ -720,10 +720,10 @@ const FacultyAddedModulesPage = ({ user }) => {
                           <button
                             type="button"
                             onClick={() => handleSort(column.key)}
-                            className="group flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-300 transition hover:text-cyan-100"
+                            className="group flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition hover:text-sky-700"
                           >
                             <span>{column.label}</span>
-                            <span className={`rounded-md border px-1.5 py-0.5 text-[9px] font-bold ${sortConfig.key === column.key ? 'border-cyan-300/50 bg-cyan-400/10 text-cyan-100' : 'border-white/15 bg-white/5 text-slate-500 group-hover:text-slate-300'}`}>
+                            <span className={`rounded-md border px-1.5 py-0.5 text-[9px] font-bold ${sortConfig.key === column.key ? 'border-sky-300 bg-sky-50 text-sky-700' : 'border-slate-300 bg-white text-slate-500 group-hover:text-slate-700'}`}>
                               {getSortLabel(column.key)}
                             </span>
                           </button>
@@ -740,20 +740,20 @@ const FacultyAddedModulesPage = ({ user }) => {
                       return (
                         <tr
                           key={module.id}
-                          className={`border-b border-white/6 transition hover:bg-cyan-400/5 ${index % 2 === 0 ? 'bg-white/[0.02]' : 'bg-transparent'}`}
+                          className={`border-b border-slate-100 transition hover:bg-sky-50 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}`}
                         >
                           <td className="px-4 py-3">
-                            <span className="inline-flex rounded-lg border border-cyan-300/25 bg-cyan-400/10 px-2.5 py-1 font-bold text-cyan-100">{module.code || 'N/A'}</span>
+                            <span className="inline-flex rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 font-bold text-sky-700">{module.code || 'N/A'}</span>
                           </td>
-                          <td className="px-4 py-3 text-slate-100">{module.name || 'Module name unavailable'}</td>
+                          <td className="px-4 py-3 text-slate-900">{module.name || 'Module name unavailable'}</td>
                           <td className="px-4 py-3">
-                            <span className="inline-flex rounded-full border border-indigo-300/25 bg-indigo-400/10 px-2.5 py-1 text-xs font-semibold text-indigo-100">{module.department || 'GENERAL'}</span>
+                            <span className="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">{module.department || 'GENERAL'}</span>
                           </td>
-                          <td className="px-4 py-3 text-slate-200">{formatAcademicYear(module.academicYear)}</td>
-                          <td className="px-4 py-3 text-slate-200">{module.semester || 'N/A'}</td>
-                          <td className="px-4 py-3 text-slate-200">{module.credits || 'N/A'}</td>
-                          <td className="px-4 py-3 text-slate-200">{module.lecturesPerWeek || 'N/A'}</td>
-                          <td className="px-4 py-3 text-slate-300">{createdAtLabel}</td>
+                          <td className="px-4 py-3 text-slate-700">{formatAcademicYear(module.academicYear)}</td>
+                          <td className="px-4 py-3 text-slate-700">{module.semester || 'N/A'}</td>
+                          <td className="px-4 py-3 text-slate-700">{module.credits || 'N/A'}</td>
+                          <td className="px-4 py-3 text-slate-700">{module.lecturesPerWeek || 'N/A'}</td>
+                          <td className="px-4 py-3 text-slate-500">{createdAtLabel}</td>
                         </tr>
                       );
                     })}

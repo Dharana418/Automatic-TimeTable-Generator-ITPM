@@ -38,7 +38,6 @@ const getRoleNav = (roleKey) => {
     return [
       ...common,
       { id: 'scheduler', label: 'Scheduler', to: '/scheduler/by-year', icon: Icon.calendar },
-      { id: 'faculty-modules', label: 'Modules', to: '/faculty/modules', icon: Icon.book },
       { id: 'faculty-added-modules', label: 'Added Modules', to: '/faculty/modules/added', icon: Icon.book },
       { id: 'faculty-batches', label: 'Batches', to: '/faculty/batches', icon: Icon.users },
       { id: 'faculty-report', label: 'Timetable Report', to: '/faculty/timetable-report', icon: Icon.calendar },
