@@ -2,6 +2,21 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../api/scheduler.js';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 import backgroundImage from '../assets/room-interior-design.jpg';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ComposedChart,
+  Legend,
+  Line,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
 const normalizeDep = (value = '') => String(value || '').trim().toUpperCase();
 
@@ -92,6 +107,14 @@ const formatAcademicYear = (value) => {
   const text = String(value || '').trim();
   if (!text) return 'N/A';
   return text.includes('-') ? text.replace('-', ' - ') : text;
+};
+
+const CHART_COLORS = ['#22d3ee', '#3b82f6', '#6366f1', '#10b981', '#f59e0b', '#f97316', '#f43f5e', '#8b5cf6'];
+
+const formatYearSemester = (year, semester) => {
+  const y = formatAcademicYear(year);
+  const s = semester ? `S${semester}` : 'S?';
+  return `${y} • ${s}`;
 };
 
 const StatCard = ({ label, value, helper, tone = 'cyan' }) => {
@@ -266,6 +289,79 @@ const FacultyAddedModulesPage = ({ user }) => {
     [filteredModules]
   );
 
+  const specializationChartData = useMemo(() => {
+    const statsMap = new Map();
+
+    filteredModules.forEach((module) => {
+      const specialization = module.department || 'GENERAL';
+      const credits = Number(module.credits || 0);
+      const lectures = Number(module.lecturesPerWeek || 0);
+
+      if (!statsMap.has(specialization)) {
+        statsMap.set(specialization, {
+          name: specialization,
+          modules: 0,
+          creditsTotal: 0,
+          lecturesTotal: 0,
+        });
+      }
+
+      const stat = statsMap.get(specialization);
+      stat.modules += 1;
+      stat.creditsTotal += Number.isFinite(credits) ? credits : 0;
+      stat.lecturesTotal += Number.isFinite(lectures) ? lectures : 0;
+    });
+
+    return Array.from(statsMap.values())
+      .map((entry) => ({
+        ...entry,
+        avgCredits: entry.modules ? Number((entry.creditsTotal / entry.modules).toFixed(2)) : 0,
+        avgLectures: entry.modules ? Number((entry.lecturesTotal / entry.modules).toFixed(2)) : 0,
+      }))
+      .sort((left, right) => right.modules - left.modules)
+      .slice(0, 8);
+  }, [filteredModules]);
+
+  const timelineChartData = useMemo(() => {
+    const bucket = new Map();
+
+    filteredModules.forEach((module) => {
+      const year = String(module.academicYear || '').trim() || 'N/A';
+      const semester = String(module.semester || '').trim() || 'N/A';
+      const key = `${year}::${semester}`;
+
+      if (!bucket.has(key)) {
+        bucket.set(key, {
+          key,
+          label: formatYearSemester(year, semester === 'N/A' ? '' : semester),
+          year,
+          semester,
+          modules: 0,
+        });
+      }
+
+      bucket.get(key).modules += 1;
+    });
+
+    const parseYear = (value) => {
+      const text = String(value || '');
+      const direct = Number(text);
+      if (Number.isInteger(direct)) return direct;
+      const match = text.match(/(\d{4})/);
+      return match ? Number(match[1]) : 0;
+    };
+
+    return Array.from(bucket.values()).sort((left, right) => {
+      const yDiff = parseYear(left.year) - parseYear(right.year);
+      if (yDiff !== 0) return yDiff;
+      const sLeft = Number(left.semester) || 0;
+      const sRight = Number(right.semester) || 0;
+      return sLeft - sRight;
+    });
+  }, [filteredModules]);
+
+  const topSpecialization = specializationChartData[0]?.name || 'N/A';
+
   const clearFilters = () => {
     setSearch('');
     setSelectedDepartment('ALL');
@@ -287,6 +383,7 @@ const FacultyAddedModulesPage = ({ user }) => {
       sidebarSections={[
         { id: 'addedModulesSummary', label: 'Summary' },
         { id: 'addedModulesFilters', label: 'Filters' },
+        { id: 'addedModulesInsights', label: 'Insights' },
         { id: 'addedModulesTable', label: 'Module Cards' },
       ]}
       headerActions={
@@ -300,10 +397,25 @@ const FacultyAddedModulesPage = ({ user }) => {
       }
     >
       <div className="fc-layout-stack fc-layout-stack-tight">
+        <style>{`
+          @keyframes floatPulse {
+            0% { transform: translate3d(0, 0, 0) scale(1); }
+            50% { transform: translate3d(0, -8px, 0) scale(1.02); }
+            100% { transform: translate3d(0, 0, 0) scale(1); }
+          }
+
+          .added-modules-hero-glow {
+            animation: floatPulse 8s ease-in-out infinite;
+          }
+        `}</style>
+
         <section
           id="addedModulesSummary"
-          className="rounded-[30px] border border-white/10 bg-[linear-gradient(135deg,rgba(4,15,30,0.92),rgba(10,26,48,0.82))] p-6 shadow-[0_24px_70px_rgba(2,6,23,0.45)] backdrop-blur"
+          className="relative overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(130deg,rgba(4,15,30,0.94),rgba(10,26,48,0.9)_50%,rgba(9,40,48,0.72))] p-6 shadow-[0_24px_70px_rgba(2,6,23,0.45)] backdrop-blur"
         >
+          <div className="added-modules-hero-glow pointer-events-none absolute -right-14 -top-14 h-44 w-44 rounded-full bg-cyan-300/10 blur-2xl" />
+          <div className="added-modules-hero-glow pointer-events-none absolute -bottom-16 left-24 h-48 w-48 rounded-full bg-emerald-300/10 blur-3xl" />
+
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
               <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-emerald-200/80">Governance Ledger</p>
@@ -330,6 +442,105 @@ const FacultyAddedModulesPage = ({ user }) => {
           <StatCard label="Visible in view" value={summaryStats.visible} helper="Matches your current filters." tone="cyan" />
           <StatCard label="Specializations" value={summaryStats.departments} helper="Unique module streams currently displayed." tone="indigo" />
           <StatCard label="Avg. workload" value={`${summaryStats.avgCredits} / ${summaryStats.avgLectures}`} helper="Credits and lectures per week in the filtered set." tone="amber" />
+        </section>
+
+        <section
+          id="addedModulesInsights"
+          className="rounded-[30px] border border-white/10 bg-[linear-gradient(160deg,rgba(6,16,30,0.94),rgba(4,10,23,0.88))] p-5 shadow-[0_24px_68px_rgba(2,6,23,0.48)] backdrop-blur"
+        >
+          <div className="flex flex-col gap-2 border-b border-white/10 pb-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-300/75">Analytics</p>
+              <h3 className="mt-2 text-xl font-black text-white">Advanced Module Insights</h3>
+            </div>
+            <p className="text-sm text-slate-400">
+              Top specialization: <span className="font-semibold text-cyan-100">{topSpecialization}</span>
+            </p>
+          </div>
+
+          <div className="mt-5 grid gap-5 xl:grid-cols-[1.35fr_1fr]">
+            <div className="rounded-[24px] border border-white/10 bg-slate-950/35 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Specialization Distribution</p>
+              <div className="mt-4 h-[320px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={specializationChartData} margin={{ top: 10, right: 8, left: 0, bottom: 5 }}>
+                    <defs>
+                      <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.95} />
+                        <stop offset="95%" stopColor="#2563eb" stopOpacity={0.65} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.18)" />
+                    <XAxis dataKey="name" tick={{ fill: '#cbd5e1', fontSize: 12 }} axisLine={false} tickLine={false} />
+                    <YAxis yAxisId="left" tick={{ fill: '#cbd5e1', fontSize: 12 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: 'rgba(2,6,23,0.92)', border: '1px solid rgba(56,189,248,0.3)', borderRadius: 12 }}
+                      labelStyle={{ color: '#e2e8f0', fontWeight: 700 }}
+                    />
+                    <Legend wrapperStyle={{ color: '#cbd5e1', fontSize: 12 }} />
+                    <Bar yAxisId="left" dataKey="modules" name="Modules" radius={[10, 10, 0, 0]} fill="url(#barGradient)" />
+                    <Line yAxisId="right" type="monotone" dataKey="avgCredits" name="Avg Credits" stroke="#fbbf24" strokeWidth={2.5} dot={{ r: 3, stroke: '#fbbf24', fill: '#111827' }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="grid gap-5">
+              <div className="rounded-[24px] border border-white/10 bg-slate-950/35 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Volume by Year / Semester</p>
+                <div className="mt-4 h-[220px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={timelineChartData} margin={{ top: 6, right: 0, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
+                      <XAxis dataKey="label" tick={{ fill: '#cbd5e1', fontSize: 10 }} axisLine={false} tickLine={false} interval={0} angle={-12} textAnchor="end" height={56} />
+                      <YAxis tick={{ fill: '#cbd5e1', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <Tooltip
+                        formatter={(value) => [`${value}`, 'Modules']}
+                        contentStyle={{ backgroundColor: 'rgba(2,6,23,0.92)', border: '1px solid rgba(20,184,166,0.28)', borderRadius: 12 }}
+                        labelStyle={{ color: '#e2e8f0', fontWeight: 700 }}
+                      />
+                      <Bar dataKey="modules" radius={[8, 8, 0, 0]}>
+                        {timelineChartData.map((entry, index) => (
+                          <Cell key={entry.key} fill={CHART_COLORS[index % CHART_COLORS.length]} fillOpacity={0.9} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="rounded-[24px] border border-white/10 bg-slate-950/35 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Specialization Share</p>
+                <div className="mt-4 h-[220px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={specializationChartData}
+                        dataKey="modules"
+                        nameKey="name"
+                        innerRadius={48}
+                        outerRadius={82}
+                        paddingAngle={3}
+                        stroke="rgba(15,23,42,0.8)"
+                        strokeWidth={2}
+                      >
+                        {specializationChartData.map((entry, index) => (
+                          <Cell key={`${entry.name}-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value, _name, payload) => [`${value} modules`, payload?.payload?.name || 'Specialization']}
+                        contentStyle={{ backgroundColor: 'rgba(2,6,23,0.92)', border: '1px solid rgba(129,140,248,0.3)', borderRadius: 12 }}
+                        labelStyle={{ color: '#e2e8f0', fontWeight: 700 }}
+                      />
+                      <Legend wrapperStyle={{ color: '#cbd5e1', fontSize: 12 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section id="addedModulesFilters" className="rounded-[28px] border border-white/10 bg-white/6 p-5 shadow-[0_18px_44px_rgba(2,6,23,0.28)] backdrop-blur">
