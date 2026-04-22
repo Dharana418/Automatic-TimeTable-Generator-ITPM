@@ -565,6 +565,11 @@ export async function initDb() {
             }
         }
 
+        await pool.query(`ALTER TABLE module_assignments ADD COLUMN IF NOT EXISTS hours_per_week INTEGER`);
+        await pool.query(`ALTER TABLE module_assignments ADD COLUMN IF NOT EXISTS preferred_days TEXT[] DEFAULT ARRAY[]::TEXT[]`);
+        await pool.query(`ALTER TABLE module_assignments ADD COLUMN IF NOT EXISTS preferred_times VARCHAR(50)`);
+        console.log('✓ module_assignments lecturer preference columns ensured');
+
 
         await pool.query(`
             CREATE TABLE IF NOT EXISTS faculty_soft_constraints (

@@ -1,0 +1,82 @@
+.lic-day-selector {
+  margin-top: 0.25rem;
+  display: grid;
+  column-gap: 0.75rem;
+  row-gap: 0.5rem;
+}
+
+.lic-days-selector {
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+}
+
+.lic-time-slot-selector {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.lic-dashboard-main {
+  display: block;
+  width: 100%;
+  max-width: none;
+}
+
+.lic-left-col {
+  width: 100%;
+  max-width: none;
+}
+
+.lic-left-col .panel {
+  width: 100%;
+}
+
+.lic-preference-section {
+  margin-top: 0.375rem;
+  margin-bottom: 0.25rem;
+  border-radius: 0.5rem;
+  border: 1px solid #dbe3ef;
+  background: #f8fbff;
+  padding: 0.75rem;
+}
+
+.lic-field-title {
+  margin-bottom: 0.5rem;
+  margin-top: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgb(71 85 105);
+}
+
+.lic-day-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.25rem;
+  border-radius: 0.375rem;
+  border: 1px solid #d6dde9;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.85rem;
+  color: rgb(51 65 85);
+}
+
+.lic-day-checkbox span {
+  white-space: nowrap;
+}
+
+.lic-day-checkbox input {
+  margin: 0;
+}
+
+.lic-action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lic-edit-btn {
+  background: #e8f2ff;
+  color: #1d4f91;
+}
+
+.lic-btn-secondary {
+  background: linear-gradient(135deg, #4b5563 0%, #1f2937 100%);
+}
