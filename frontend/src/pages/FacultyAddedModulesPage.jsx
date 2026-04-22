@@ -413,14 +413,12 @@ const FacultyAddedModulesPage = ({ user }) => {
   return (
     <FacultyCoordinatorShell
       user={user}
-      title="Academic Coordinator Added Modules"
-      subtitle="Read-only catalogue of modules published from the academic coordinator side"
-      backgroundImage={backgroundImage}
-      brandTitle="Academic Coordinator"
-      brandSubtitle="Published Module Archive"
-      badge="Read-Only Catalogue"
-      themeVariant="academic"
-      footerNote="Only modules added by the academic coordinator are shown here."
+      title="Added Modules"
+      subtitle="Govern and maintain the academic module registry"
+      badge="Governance Control Center"
+      footerNote={canManageModules ? 'Use Update for corrections and Delete for retired modules only.' : 'View-only mode: modules are managed by Academic Coordinator.'}
+      contentSectionWidthClass="max-w-none"
+      contentSectionClassName="lg:w-[calc(100%+21.5rem)] lg:ml-[-21.5rem]"
       sidebarSections={[
         { id: 'addedModulesSummary', label: 'Summary' },
         { id: 'addedModulesFilters', label: 'Filters' },
