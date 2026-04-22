@@ -244,7 +244,7 @@ export default function FacultyCoordinatorShell({
                 </div>
               </section>
 
-              <section className={`fc-shell-content mx-auto w-full mt-25 ${contentSectionWidthClass} ${contentSectionClassName} rounded-[32px] border backdrop-blur-xl ${isLightTheme ? 'border-sky-200/80 bg-[linear-gradient(145deg,rgba(255,255,255,0.95),rgba(241,245,249,0.93),rgba(224,242,254,0.88))] shadow-[0_18px_50px_rgba(14,116,144,0.12)]' : 'border-cyan-300/20 bg-[linear-gradient(145deg,rgba(2,6,23,0.75),rgba(15,23,42,0.64),rgba(7,89,133,0.38))] shadow-[0_18px_50px_rgba(2,6,23,0.24)]'}`}>
+              <section className={`fc-shell-content mx-auto w-full mt-24 ${contentSectionWidthClass} ${contentSectionClassName} rounded-[32px] border backdrop-blur-xl ${isLightTheme ? 'border-sky-200/80 bg-[linear-gradient(145deg,rgba(255,255,255,0.95),rgba(241,245,249,0.93),rgba(224,242,254,0.88))] shadow-[0_18px_50px_rgba(14,116,144,0.12)]' : 'border-cyan-300/20 bg-[linear-gradient(145deg,rgba(2,6,23,0.75),rgba(15,23,42,0.64),rgba(7,89,133,0.38))] shadow-[0_18px_50px_rgba(2,6,23,0.24)]'}`}>
                 {children}
               </section>
             </div>

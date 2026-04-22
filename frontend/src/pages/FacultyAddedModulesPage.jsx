@@ -182,6 +182,8 @@ const FacultyAddedModulesPage = ({ user }) => {
       subtitle="Govern and maintain the academic module registry"
       badge="Governance Control Center"
       footerNote={canManageModules ? 'Use Update for corrections and Delete for retired modules only.' : 'View-only mode: modules are managed by Academic Coordinator.'}
+      contentSectionWidthClass="max-w-none"
+      contentSectionClassName="lg:w-[calc(100%+21.5rem)] lg:ml-[-21.5rem]"
       sidebarSections={[
         { id: 'addedModulesSummary', label: 'Summary' },
         { id: 'addedModulesFilters', label: 'Filters' },
