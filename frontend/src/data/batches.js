@@ -1,146 +1,89 @@
-const GROUP_CAPACITY = 120;
 const SUBGROUP_CAPACITY = 60;
 
-const RAW_BATCH_IDS = [
-  'Y1.S2.WE.IT.01',
-  'Y1.S2.WE.IT.02',
-  'Y1.S2.WE.IT.03',
-  'Y1.S2.WD.IT.01',
-  'Y1.S2.WD.IT.02',
-  'Y1.S2.WD.IT.03',
-  'Y1.S2.WD.IT.04',
-  'Y1.S2.WD.IT.05',
-  'Y1.S2.WD.IT.06',
-  'Y1.S2.WD.IT.07',
-  'Y1.S2.WD.IT.08',
-  'Y1.S2.WD.IT.09',
-  'Y1.S2.WD.IT.10',
-  'Y1.S2.WD.IT.11',
-  'Y1.S2.WD.IT.12',
-  'Y1.S2.WD.IT.13',
-  'Y1.S2.WD.IT.14',
-  'Y1.S2.WD.IT.15',
-  'Y1.S2.WD.IT.16',
-  'Y1.S2.WD.IT.17',
-  'Y1.S2.WD.IT.01.QU',
-  'Y2.S1.WD.IT.01',
-  'Y2.S2.WE.IT.01',
-  'Y2.S2.WE.IT.02',
-  'Y2.S2.WE.IT.03',
-  'Y2.S2.WE.IT.04',
-  'Y2.S2.WE.CS.01',
-  'Y2.S2.WE.ISE.01',
-  'Y2.S2.WE.CSNE.01',
-  'Y2.S2.WE.SE.01',
-  'Y2.S2.WE.IM.01',
-  'Y2.S2.WE.DS.01',
-  'Y2.S2.WD.IT.01',
-  'Y2.S2.WD.IT.02',
-  'Y2.S2.WD.IT.03',
-  'Y2.S2.WD.IT.04',
-  'Y2.S2.WD.IT.05',
-  'Y2.S2.WD.IT.06',
-  'Y2.S2.WD.IT.07',
-  'Y2.S2.WD.DS.01',
-  'Y2.S2.WD.DS.01',
-  'Y2.S2.WD.CS.01',
-  'Y2.S2.WD.CS.02',
-  'Y2.S2.WD.ISE.01',
-  'Y2.S2.WD.CSNE.01',
-  'Y2.S2.WD.IM.01',
-  'Y2.S2.WD.SE.01',
-  'Y2.S2.WD.SE.02',
-  'Y3.S1.WE.IT.01',
-  'Y3.S1.WE.IT.02',
-  'Y3.S1.WE.IT.03',
-  'Y3.S1.WE.IT.04',
-  'Y3.S1.WE.IT.05',
-  'Y3.S1.WE.CS.01',
-  'Y3.S1.WE.ISE.01',
-  'Y3.S1.WE.CSNE.01',
-  'Y3.S1.WE.SE.01',
-  'Y3.S1.WE.SE.02',
-  'Y3.S1.WE.IM.01',
-  'Y3.S1.WE.DS.01',
-  'Y3.S1.WE.DS.02',
-  'Y3.S1.WD.IT.01',
-  'Y3.S1.WD.IT.02',
-  'Y3.S1.WD.IT.03',
-  'Y3.S1.WD.CSNE.01',
-  'Y3.S1.WD.CS.01',
-  'Y3.S1.WD.ISE.01',
-  'Y3.S1.WD.SE.01',
-  'Y3.S1.WD.IM.01',
-  'Y3.S1.WD.DS.01',
-  'Y3.S2.WE.IT.01',
-  'Y3.S2.WE.IT.02',
-  'Y3.S2.WE.IT.03',
-  'Y3.S2.WE.IT.04',
-  'Y3.S2.WE.IT.05',
-  'Y3.S2.WE.CSNE.01',
-  'Y3.S2.WE.CS.01',
-  'Y3.S2.WE.ISE.01',
-  'Y3.S2.WE.SE.01',
-  'Y3.S2.WE.SE.02',
-  'Y3.S2.WE.SE.03',
-  'Y3.S2.WE.SE.04',
-  'Y3.S2.WE.DS.01',
-  'Y3.S2.WE.DS.02',
-  'Y3.S2.WE.IM.01',
-  'Y3.S2.WD.IT.01',
-  'Y3.S2.WD.SE.01',
-  'Y3.S2.WD.DS.01',
-  'Y3.S2.WD.IM.01',
-  'Y3.S2.WD.CS.01',
-  'Y3.S2.WD.ISE.01',
-  'Y3.S2.WD.CSNE.01',
-  'Y4.S1.WE.IT.01',
-  'Y4.S1.WE.IT.02',
-  'Y4.S1.WE.IT.03',
-  'Y4.S1.WE.CS.01',
-  'Y4.S1.WE.ISE.01',
-  'Y4.S1.WE.IM.01',
-  'Y4.S1.WE.DS.01',
-  'Y4.S1.WE.SE.01',
-  'Y4.S1.WD.IT.01',
-  'Y4.S1.WD.CS.01',
-  'Y4.S1.WD.ISE.01',
-  'Y4.S1.WD.IM.01',
-  'Y4.S1.WD.DS.01',
-  'Y4.S1.WD.SE.01',
-  'Y4.S2.WE.IT.01',
-  'Y4.S2.WE.IT.02',
-  'Y4.S2.WE.IT.03',
-  'Y4.S2.WE.IT.04',
-  'Y4.S2.WE.IT.05',
-  'Y4.S2.WE.IT.06',
-  'Y4.S2.WE.IT.07',
-  'Y4.S2.WE.IT.08',
-  'Y4.S2.WE.CSNE.01',
-  'Y4.S2.WE.CS.01',
-  'Y4.S2.WE.ISE.01',
-  'Y4.S2.WE.IM.01',
-  'Y4.S2.WE.DS.01',
-  'Y4.S2.WE.DS.02',
-  'Y4.S2.WE.SE.01',
-  'Y4.S2.WE.SE.02',
-  'Y4.S2.WE.SE.03',
-  'Y4.S2.WD.IT.02',
-  'Y4.S2.WD.IM.01',
-  'Y4.S2.WD.DS.01',
-  'Y4.S2.WD.SE.01',
-  'Y4.S2.WD.CSNE.01',
-  'Y4.S2.WD.CS.01',
-  'Y4.S2.WD.ISE.01',
-];
+const yearlyPlan = {
+  1: [
+    { specialization: 'IT', capacity: 1000 },
+    { specialization: 'SE', capacity: 300 },
+    { specialization: 'DS', capacity: 300 },
+    { specialization: 'ISE', capacity: 200 },
+    { specialization: 'IM', capacity: 50 },
+    { specialization: 'CYBER SECURITY', capacity: 150 },
+  ],
+  2: [
+    { specialization: 'IT', capacity: 1000 },
+    { specialization: 'SE', capacity: 300 },
+    { specialization: 'DS', capacity: 300 },
+    { specialization: 'ISE', capacity: 200 },
+    { specialization: 'IM', capacity: 50 },
+    { specialization: 'CYBER SECURITY', capacity: 150 },
+  ],
+  3: [
+    { specialization: 'IT', capacity: 1000 },
+    { specialization: 'SE', capacity: 300 },
+    { specialization: 'DS', capacity: 300 },
+    { specialization: 'ISE', capacity: 200 },
+    { specialization: 'IM', capacity: 50 },
+    { specialization: 'CYBER SECURITY', capacity: 200 },
+  ],
+  4: [
+    { specialization: 'IT', capacity: 1000 },
+    { specialization: 'SE', capacity: 300 },
+    { specialization: 'DS', capacity: 300 },
+    { specialization: 'ISE', capacity: 200 },
+    { specialization: 'IM', capacity: 50 },
+    { specialization: 'CYBER SECURITY', capacity: 200 },
+  ],
+};
 
-const isSubgroupId = (id) => String(id).split('.').length >= 6;
+const buildBatchId = ({ year, semester, mode, specialization, group, subgroup }) => {
+  const groupToken = String(group).padStart(2, '0');
+  const subgroupToken = String(subgroup).padStart(2, '0');
+  return `Y${year}.S${semester}.${mode}.${specialization}.${groupToken}.${subgroupToken}`;
+};
 
-const batchObjects = Array.from(
-  new Set(RAW_BATCH_IDS.map((id) => String(id).trim()).filter(Boolean))
-).map((id) => ({
-  id,
-  capacity: isSubgroupId(id) ? SUBGROUP_CAPACITY : GROUP_CAPACITY,
-}));
+const splitStudentsIntoBatches = ({ year, semester, mode, specialization, capacity }) => {
+  const rows = [];
+  let remaining = Number(capacity || 0);
+  let group = 1;
+  let subgroup = 1;
+
+  while (remaining > 0) {
+    const subgroupCapacity = Math.min(SUBGROUP_CAPACITY, remaining);
+    rows.push({
+      id: buildBatchId({ year, semester, mode, specialization, group, subgroup }),
+      capacity: subgroupCapacity,
+    });
+
+    remaining -= subgroupCapacity;
+    subgroup += 1;
+
+    if (subgroup > 2) {
+      subgroup = 1;
+      group += 1;
+    }
+  }
+
+  return rows;
+};
+
+const batchObjects = [];
+
+for (const year of [1, 2, 3, 4]) {
+  for (const semester of [1, 2]) {
+    const mode = semester === 1 ? 'WD' : 'WE';
+
+    for (const plan of yearlyPlan[year]) {
+      batchObjects.push(
+        ...splitStudentsIntoBatches({
+          year,
+          semester,
+          mode,
+          specialization: plan.specialization,
+          capacity: plan.capacity,
+        })
+      );
+    }
+  }
+}
 
 export default batchObjects;

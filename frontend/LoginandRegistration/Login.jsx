@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import sliitLogo from "../src/assets/SLIIT_LOGO.png";
+import backgroundImage from "../src/assets/Gemini_Generated_Image_b9cdgeb9cdgeb9cd.png";
 import { showError, showSuccess, showWarning } from "../src/utils/alerts.js";
 
 const Login = ({ apiBase, onAuthSuccess }) => {
@@ -60,7 +61,13 @@ const Login = ({ apiBase, onAuthSuccess }) => {
   };
 
   return (
-    <div className="w-full max-w-md rounded-3xl border border-white/50 bg-white/95 px-8 py-10 text-center shadow-[0_24px_60px_rgba(15,23,42,0.22)] backdrop-blur-md">
+    <div
+      className="relative min-h-screen w-full overflow-hidden bg-cover bg-center bg-no-repeat"
+      style={{ backgroundImage: `url(${backgroundImage})` }}
+    >
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-900/70 via-slate-800/60 to-indigo-900/65" />
+      <div className="relative z-10 flex min-h-screen items-center justify-center px-4">
+        <div className="w-full max-w-md rounded-3xl border border-white/50 bg-white/95 px-8 py-10 text-center shadow-[0_24px_60px_rgba(15,23,42,0.22)] backdrop-blur-md">
       <img src={sliitLogo} alt="SLIIT Logo" className="mx-auto mb-5 block w-20 drop-shadow-sm" />
       <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-indigo-500">Welcome Back</p>
       <h2 className="mb-6 text-3xl text-slate-900">Sign In</h2>
@@ -110,10 +117,29 @@ const Login = ({ apiBase, onAuthSuccess }) => {
 
         {error && <div className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-center text-sm text-red-600">{error}</div>}
 
-        <button type="submit" className="mt-2 rounded-xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-slate-900 px-4 py-3 font-bold text-white shadow-lg shadow-indigo-500/30 transition hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70" disabled={loading}>
-          {loading ? "Signing In..." : "Sign In"}
+        <button
+          type="submit"
+          className="group relative mt-2 inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl border border-indigo-300/60 bg-gradient-to-r from-blue-700 via-indigo-700 to-slate-900 px-4 py-3 font-bold text-white shadow-[0_14px_30px_rgba(30,64,175,0.35)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_34px_rgba(30,64,175,0.45)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
+          disabled={loading}
+        >
+          <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition duration-700 group-hover:translate-x-full" aria-hidden />
+          <span className="relative inline-flex items-center gap-2">
+            {loading ? "Signing In..." : "Sign In"}
+            <svg
+              className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
+              viewBox="0 0 20 20"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden
+            >
+              <path d="M4.5 10H15.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              <path d="M11.5 6L15.5 10L11.5 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
         </button>
       </form>
+        </div>
+      </div>
     </div>
   );
 };

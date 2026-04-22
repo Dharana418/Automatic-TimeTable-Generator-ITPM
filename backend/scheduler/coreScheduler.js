@@ -4,7 +4,25 @@
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const WEEKEND = ['Sat', 'Sun'];
 const DAYS = [...WEEKDAYS, ...WEEKEND];
-const SLOTS = ['09:00-10:00', '10:00-11:00', '11:00-12:00', '13:00-14:00', '14:00-15:00'];
+const WEEKDAY_SLOTS = [
+  '08:00-09:00',
+  '09:00-10:00',
+  '10:00-11:00',
+  '11:00-12:00',
+  '12:00-13:00',
+  '13:00-14:00',
+  '14:00-15:00',
+  '15:00-16:00',
+  '16:00-17:00',
+];
+const WEEKEND_SLOTS = [
+  ...WEEKDAY_SLOTS,
+  '17:00-18:00',
+  '18:00-19:00',
+  '19:00-20:00',
+  '19:30-20:30',
+];
+const SLOTS = [...WEEKEND_SLOTS];
 
 function parseJSONField(val) {
   if (!val) return null;
@@ -27,11 +45,42 @@ function instructorAvailable(instructor, day, slot) {
   return false;
 }
 
+function normalizeText(value = '') {
+  return String(value || '').trim().toLowerCase();
+}
+
+function normalizeDayToken(value = '') {
+  const token = String(value || '').trim().toLowerCase().slice(0, 3);
+  const dayMap = {
+    mon: 'Mon',
+    tue: 'Tue',
+    wed: 'Wed',
+    thu: 'Thu',
+    fri: 'Fri',
+  };
+  return dayMap[token] || 'Fri';
+}
+
+function getEffectiveHallCapacity(hall = {}) {
+  const rawCapacity = Number(hall?.capacity || 0);
+  const normalizedCapacity = Number.isFinite(rawCapacity) && rawCapacity > 0 ? rawCapacity : 0;
+  const hallType = normalizeText(hall?.features?.hallType || hall?.features?.roomType || hall?.hallType || hall?.roomType);
+  const isLectureOrLab = hallType.includes('lecture') || hallType.includes('hall') || hallType.includes('lab');
+
+  if (isLectureOrLab) {
+    // Domain rule: one lecture hall or one lab can host at most 120 students.
+    return normalizedCapacity ? Math.min(normalizedCapacity, 120) : 120;
+  }
+
+  return normalizedCapacity;
+}
+
 export function scheduleGreedy(constraints = {}, options = {}) {
   const halls = (constraints.halls || []).map(h => ({...h, features: parseJSONField(h.features)}));
   const modules = (constraints.modules || []).map(m => ({...m, details: parseJSONField(m.details)}));
   const lics = (constraints.lics || []).map(l => ({...l, details: parseJSONField(l.details)}));
   const instructors = (constraints.instructors || []).map(i => ({...i, availabilities: parseJSONField(i.availabilities)}));
+  const weekdayFreeDay = normalizeDayToken(options.weekdayFreeDay || options?.softConstraints?.weekdayFreeDay || 'Fri');
 
   // occupancy map: day -> slot -> {hallId, moduleId, instructorId}
   const occupancy = {};
@@ -45,7 +94,8 @@ export function scheduleGreedy(constraints = {}, options = {}) {
   function findHallFor(module, day, slot) {
     const expected = Number(module.batch_size || module.expected_students || (module.details && module.details.expected_students) || module.expected_size || null);
     for (const h of halls) {
-      if (h.capacity && expected && Number(h.capacity) < Number(expected)) continue;
+      const effectiveCapacity = getEffectiveHallCapacity(h);
+      if (effectiveCapacity && expected && Number(effectiveCapacity) < Number(expected)) continue;
       const key = `${day}:${slot}`;
       if (!occupancy[day][slot]) return h; // simple: first free hall
       // else check if hall free
@@ -77,12 +127,28 @@ export function scheduleGreedy(constraints = {}, options = {}) {
     for (let s = 0; s < lectures; s++) {
       let placed = false;
       // try allowed day-slot combos
+      // CONSTRAINT: Lectures and labs can ONLY be on weekdays (Mon-Fri)
       let allowedDays = WEEKDAYS;
-      if (mod.day_type === 'weekend') allowedDays = WEEKEND;
-      else if (mod.day_type === 'any' || mod.day_type === 'both') allowedDays = WEEKDAYS.concat(WEEKEND);
+      let allowedSlots = WEEKDAY_SLOTS;
+      
+      if (mod.day_type === 'weekend') {
+        // Only explicitly 'weekend' type modules can use weekend slots
+        allowedDays = WEEKEND;
+        allowedSlots = WEEKEND_SLOTS;
+      } else {
+        // 'weekday' (default), 'any', 'both' all follow weekday constraint
+        // Lectures and labs must be Mon-Fri only
+        allowedDays = WEEKDAYS.filter((day) => day !== weekdayFreeDay);
+        if (!allowedDays.length) allowedDays = WEEKDAYS;
+        allowedSlots = WEEKDAY_SLOTS;
+      }
+
+      if (!allowedDays.length) {
+        allowedDays = WEEKDAYS;
+      }
 
       for (const day of allowedDays) {
-        for (const slot of SLOTS) {
+        for (const slot of allowedSlots) {
           // ensure not already occupied too many times
           // find instructor candidate
           let instructorCandidate = assignedInstructor;
