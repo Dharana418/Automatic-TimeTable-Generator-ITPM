@@ -898,15 +898,21 @@ const TimetableGenerationByYearSemester = () => {
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">
                 <Wand2 size={16} className="inline mr-2" /> Free Day
               </label>
-              <select
-                value={weekdayFreeDay}
-                onChange={(e) => setWeekdayFreeDay(e.target.value)}
-                className="w-full rounded-xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 px-4 py-3 font-semibold text-slate-900 shadow-md transition-all duration-200 hover:border-amber-300 hover:shadow-lg focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-300/50"
-              >
-                {WEEKDAY_FREE_DAY_OPTIONS.map((d) => (
-                  <option key={d} value={d}>{d}day</option>
-                ))}
-              </select>
+              {selectedBatchMode === 'WE' ? (
+                <div className="rounded-xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 px-4 py-3 font-semibold text-slate-900 shadow-md">
+                  Not applicable for weekend batches
+                </div>
+              ) : (
+                <select
+                  value={weekdayFreeDay}
+                  onChange={(e) => setWeekdayFreeDay(e.target.value)}
+                  className="w-full rounded-xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 px-4 py-3 font-semibold text-slate-900 shadow-md transition-all duration-200 hover:border-amber-300 hover:shadow-lg focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-300/50"
+                >
+                  {WEEKDAY_FREE_DAY_OPTIONS.map((d) => (
+                    <option key={d} value={d}>{d}day</option>
+                  ))}
+                </select>
+              )}
             </div>
 
             {/* GENERATE BUTTON */}
