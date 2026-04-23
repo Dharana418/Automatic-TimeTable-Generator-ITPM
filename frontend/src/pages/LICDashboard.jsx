@@ -5,6 +5,7 @@ import {
 import schedulerApi from '../api/scheduler.js';
 import { confirmDelete, showError, showSuccess, showWarning } from '../utils/alerts.js';
 import '../styles/lic-dashboard.css';
+import licBackgroundImage from '../assets/SLIIT-Building.jpg';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const TIME_SLOTS = [
@@ -35,6 +36,14 @@ const LICDashboard = ({ user }) => {
 
   const [assignmentForm, setAssignmentForm] = useState(initialAssignmentForm);
   const [editingAssignmentId, setEditingAssignmentId] = useState('');
+
+  const licBackgroundStyle = {
+    backgroundImage: `linear-gradient(rgba(9, 17, 32, 0.58), rgba(9, 17, 32, 0.72)), url(${licBackgroundImage})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundAttachment: 'fixed',
+    backgroundRepeat: 'no-repeat',
+  };
 
   const showMessage = (text, type = 'success') => {
     setMessage({ text, type });
@@ -196,24 +205,24 @@ const LICDashboard = ({ user }) => {
   }
 
   return (
-    <div className="dashboard-container">
-      <div className="dashboard-hero">
+    <div className="dashboard-container" style={licBackgroundStyle}>
+      <div className="dashboard-hero lic-hero-card">
         <div className="hero-left">
           <h1 className="lic-hero-title">
             <span className="lic-title-icon lic-title-icon-lg"><GraduationCap size={20} /></span>
             LIC Dashboard
           </h1>
           <p className="hero-sub">Welcome, {user?.name || 'LIC'}. Assign lecturers to existing modules with preferred working days and times.</p>
-          <div className="stat-row">
-            <div className="stat">
+          <div className="stat-row lic-stat-row">
+            <div className="stat lic-stat-card lic-stat-card-lecturers">
               <div className="stat-value">{instructors.length}</div>
               <div className="stat-label">Available Lecturers</div>
             </div>
-            <div className="stat">
+            <div className="stat lic-stat-card lic-stat-card-modules">
               <div className="stat-value">{modules.length}</div>
               <div className="stat-label">Available Modules</div>
             </div>
-            <div className="stat">
+            <div className="stat lic-stat-card lic-stat-card-assignments">
               <div className="stat-value">{assignments.length}</div>
               <div className="stat-label">My Assignments</div>
             </div>
@@ -229,7 +238,7 @@ const LICDashboard = ({ user }) => {
 
       <div className="dashboard-main lic-dashboard-main">
         <div className="left-col lic-left-col">
-          <div className="panel">
+          <div className="panel lic-panel-card lic-panel-form">
             <h3 className="lic-panel-title">
               <span className="lic-title-icon"><Link2 size={17} /></span>
               Lecturer Assignment Management
@@ -311,7 +320,7 @@ const LICDashboard = ({ user }) => {
             </form>
           </div>
 
-          <div className="panel">
+          <div className="panel lic-panel-card lic-panel-table">
             <h3 className="lic-panel-title">
               <span className="lic-title-icon"><BookOpen size={17} /></span>
               My Lecturer Assignments
