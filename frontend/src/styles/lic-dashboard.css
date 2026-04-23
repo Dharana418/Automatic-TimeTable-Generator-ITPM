@@ -1,3 +1,147 @@
+.lic-dashboard-shell {
+  position: relative;
+  display: flex;
+  min-height: 100vh;
+  gap: 1.1rem;
+  padding: 1rem;
+}
+
+.lic-sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.42);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  z-index: 20;
+}
+
+.lic-sidebar-backdrop.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.lic-sidebar {
+  overflow: hidden;
+  width: 252px;
+  flex: 0 0 252px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 24px;
+  padding: 1rem;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.92) 0%, rgba(30, 41, 59, 0.9) 100%);
+  box-shadow: 0 22px 42px rgba(2, 6, 23, 0.28);
+  backdrop-filter: blur(14px);
+  color: #e2e8f0;
+  z-index: 30;
+  opacity: 1;
+  transform: translateX(0);
+  transition: width 0.25s ease, flex-basis 0.25s ease, padding 0.25s ease, opacity 0.2s ease, transform 0.25s ease, margin 0.25s ease, border-color 0.2s ease;
+}
+
+.lic-sidebar.is-closed {
+  width: 0;
+  flex-basis: 0;
+  padding: 0;
+  border-color: transparent;
+  opacity: 0;
+  transform: translateX(-18px);
+  pointer-events: none;
+}
+
+.lic-sidebar-header {
+  padding: 0.35rem 0.25rem 1rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.lic-sidebar-kicker {
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(125, 211, 252, 0.9);
+}
+
+.lic-sidebar-name {
+  margin-top: 0.35rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.lic-sidebar-nav {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.lic-sidebar-link {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 16px;
+  padding: 0.9rem 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  color: #cbd5e1;
+  font-size: 0.94rem;
+  font-weight: 600;
+  text-align: left;
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, color 0.2s ease;
+}
+
+.lic-sidebar-link:hover {
+  transform: translateY(-1px);
+  border-color: rgba(125, 211, 252, 0.35);
+  background: rgba(14, 165, 233, 0.12);
+  color: #f8fafc;
+}
+
+.lic-sidebar-link.is-active {
+  border-color: rgba(125, 211, 252, 0.48);
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.24) 0%, rgba(59, 130, 246, 0.26) 100%);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.lic-workspace {
+  flex: 1;
+  min-width: 0;
+}
+
+.lic-topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-bottom: 0.9rem;
+}
+
+.lic-menu-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(191, 219, 254, 0.45);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  box-shadow: 0 10px 20px rgba(2, 6, 23, 0.18);
+  backdrop-filter: blur(8px);
+}
+
+.lic-topbar-copy {
+  min-width: 0;
+}
+
+.lic-topbar-title {
+  color: #f8fafc;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.lic-topbar-subtitle {
+  margin-top: 0.18rem;
+  color: rgba(226, 232, 240, 0.88);
+  font-size: 0.86rem;
+}
+
 .lic-day-selector {
   margin-top: 0.25rem;
   display: grid;
@@ -19,6 +163,63 @@
   max-width: none;
 }
 
+.lic-hero-card {
+  border: 1px solid rgba(147, 197, 253, 0.45);
+  border-radius: 20px;
+  padding: 1.15rem 1.25rem;
+  background: linear-gradient(140deg, rgba(255, 255, 255, 0.95) 0%, rgba(236, 254, 255, 0.88) 100%);
+  box-shadow: 0 18px 38px rgba(2, 6, 23, 0.22);
+  backdrop-filter: blur(8px);
+}
+
+.lic-hero-card .hero-sub {
+  color: rgb(30 41 59);
+  font-weight: 500;
+}
+
+.lic-stat-row {
+  margin-top: 0.85rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.75rem;
+}
+
+.lic-stat-card {
+  border-radius: 14px;
+  border: 1px solid transparent;
+  padding: 0.7rem 0.85rem;
+  color: #fff;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.18);
+}
+
+.lic-stat-card .stat-value {
+  font-size: 1.55rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.lic-stat-card .stat-label {
+  margin-top: 0.2rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.lic-stat-card-lecturers {
+  background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%);
+  border-color: rgba(191, 219, 254, 0.45);
+}
+
+.lic-stat-card-modules {
+  background: linear-gradient(135deg, #7c3aed 0%, #ec4899 100%);
+  border-color: rgba(233, 213, 255, 0.45);
+}
+
+.lic-stat-card-assignments {
+  background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
+  border-color: rgba(153, 246, 228, 0.45);
+}
+
 .lic-left-col {
   width: 100%;
   max-width: none;
@@ -28,13 +229,66 @@
   width: 100%;
 }
 
+.lic-panel-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(191, 219, 254, 0.42);
+  border-radius: 18px;
+  background: linear-gradient(140deg, rgba(255, 255, 255, 0.96) 0%, rgba(247, 252, 255, 0.92) 100%);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 18px 36px rgba(2, 6, 23, 0.2);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.lic-panel-card::before {
+  content: '';
+  position: absolute;
+  top: -65px;
+  right: -65px;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(14, 165, 233, 0.2), rgba(14, 165, 233, 0));
+  pointer-events: none;
+}
+
+.lic-panel-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(56, 189, 248, 0.55);
+  box-shadow: 0 24px 42px rgba(2, 6, 23, 0.24);
+}
+
+.lic-panel-title {
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid rgba(14, 165, 233, 0.18);
+  color: rgb(15 23 42);
+  font-size: 1.05rem;
+  letter-spacing: 0.01em;
+}
+
+.lic-panel-title .lic-title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.35rem;
+  color: rgb(3 105 161);
+}
+
+.lic-panel-note {
+  margin: -0.1rem 0 0.9rem;
+  color: rgb(71 85 105);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
 .lic-preference-section {
   margin-top: 0.375rem;
-  margin-bottom: 0.25rem;
-  border-radius: 0.5rem;
+  margin-bottom: 0.45rem;
+  border-radius: 0.75rem;
   border: 1px solid #dbe3ef;
-  background: #f8fbff;
-  padding: 0.75rem;
+  background: linear-gradient(135deg, #f8fbff 0%, #f3f9ff 100%);
+  padding: 0.85rem;
 }
 
 .lic-field-title {
@@ -51,11 +305,19 @@
   display: inline-flex;
   align-items: center;
   gap: 1.25rem;
-  border-radius: 0.375rem;
+  border-radius: 0.5rem;
   border: 1px solid #d6dde9;
-  padding: 0.375rem 0.625rem;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 0.46rem 0.72rem;
   font-size: 0.85rem;
   color: rgb(51 65 85);
+  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+}
+
+.lic-day-checkbox:hover {
+  border-color: rgba(14, 165, 233, 0.45);
+  background: rgba(240, 249, 255, 0.98);
+  transform: translateY(-1px);
 }
 
 .lic-day-checkbox span {
@@ -72,6 +334,25 @@
   gap: 0.5rem;
 }
 
+.lic-panel-table .ac-table-wrapper {
+  border: 1px solid rgba(219, 234, 254, 0.9);
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.lic-panel-table .ac-table thead {
+  background: linear-gradient(90deg, rgba(224, 242, 254, 0.88), rgba(240, 249, 255, 0.92));
+}
+
+.lic-panel-table .ac-table tbody tr:nth-child(even) {
+  background: rgba(248, 250, 252, 0.82);
+}
+
+.lic-panel-table .ac-table tbody tr:hover {
+  background: rgba(224, 242, 254, 0.55);
+}
+
 .lic-edit-btn {
   background: #e8f2ff;
   color: #1d4f91;
@@ -79,4 +360,282 @@
 
 .lic-btn-secondary {
   background: linear-gradient(135deg, #4b5563 0%, #1f2937 100%);
+}
+
+.lic-form-actions {
+  margin-top: 0.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.lic-btn-sm {
+  padding: 0.45rem 0.8rem;
+  min-height: 34px;
+  font-size: 0.83rem;
+  border-radius: 10px;
+}
+
+.lic-dnd-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.lic-dnd-panel {
+  min-height: 560px;
+}
+
+.lic-search-box {
+  margin-bottom: 0.8rem;
+}
+
+.lic-search-input {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.95) 100%);
+}
+
+.lic-dnd-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  max-height: 560px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.lic-empty-search {
+  border: 1px dashed rgba(148, 163, 184, 0.45);
+  border-radius: 16px;
+  padding: 1rem;
+  background: rgba(248, 250, 252, 0.84);
+  color: rgb(100 116 139);
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.lic-dnd-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  width: 100%;
+  border: 1px solid rgba(191, 219, 254, 0.72);
+  border-radius: 16px;
+  padding: 0.95rem 1rem;
+  background: linear-gradient(135deg, rgba(239, 246, 255, 0.95) 0%, rgba(250, 245, 255, 0.92) 100%);
+  text-align: left;
+  color: rgb(15 23 42);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  cursor: grab;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.lic-dnd-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(59, 130, 246, 0.58);
+  box-shadow: 0 16px 28px rgba(15, 23, 42, 0.14);
+}
+
+.lic-dnd-card.is-dragging {
+  opacity: 0.72;
+  transform: scale(0.98);
+}
+
+.lic-dnd-card-title {
+  font-size: 0.96rem;
+  font-weight: 700;
+}
+
+.lic-dnd-card-subtitle {
+  font-size: 0.84rem;
+  color: rgb(71 85 105);
+}
+
+.lic-drop-card {
+  border: 1px dashed rgba(59, 130, 246, 0.36);
+  border-radius: 18px;
+  padding: 1rem;
+  background: linear-gradient(140deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 249, 255, 0.88) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+  transition: border-color 0.2s ease, transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.lic-drop-card.is-over {
+  transform: translateY(-2px);
+  border-color: rgba(14, 165, 233, 0.85);
+  background: linear-gradient(140deg, rgba(224, 242, 254, 0.98) 0%, rgba(219, 234, 254, 0.94) 100%);
+  box-shadow: 0 18px 30px rgba(14, 165, 233, 0.16);
+}
+
+.lic-drop-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.lic-drop-card-badges {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.lic-drop-card-code {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: rgb(30 41 59);
+}
+
+.lic-drop-card-badge {
+  border-radius: 999px;
+  padding: 0.28rem 0.72rem;
+  background: rgba(14, 165, 233, 0.12);
+  color: rgb(3 105 161);
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.lic-drop-card-badge-assigned {
+  background: rgba(16, 185, 129, 0.14);
+  color: rgb(6 95 70);
+}
+
+.lic-drop-card-name {
+  margin-top: 0.7rem;
+  color: rgb(15 23 42);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.lic-drop-card-meta {
+  margin-top: 0.45rem;
+  color: rgb(100 116 139);
+  font-size: 0.82rem;
+}
+
+.lic-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.52);
+  z-index: 40;
+}
+
+.lic-modal-card {
+  width: min(720px, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  border: 1px solid rgba(191, 219, 254, 0.5);
+  border-radius: 24px;
+  padding: 1.15rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 100%);
+  box-shadow: 0 28px 64px rgba(2, 6, 23, 0.3);
+}
+
+.lic-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.lic-modal-kicker {
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgb(3 105 161);
+}
+
+.lic-modal-title {
+  margin: 0.3rem 0 0;
+  color: rgb(15 23 42);
+}
+
+.lic-modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  border-radius: 12px;
+  background: #fff;
+  color: rgb(51 65 85);
+}
+
+.lic-modal-form {
+  gap: 0.8rem;
+}
+
+.lic-static-field {
+  border: 1px solid #dbe3ef;
+  border-radius: 14px;
+  padding: 0.8rem 0.9rem;
+  background: linear-gradient(135deg, #f8fbff 0%, #f1f5f9 100%);
+  color: rgb(15 23 42);
+  font-weight: 600;
+}
+
+.lic-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+@media (max-width: 768px) {
+  .lic-dashboard-shell {
+    padding: 0.8rem;
+  }
+
+  .lic-sidebar {
+    position: fixed;
+    top: 0.8rem;
+    left: 0.8rem;
+    bottom: 0.8rem;
+    width: min(280px, calc(100vw - 1.6rem));
+    flex-basis: auto;
+    max-width: 280px;
+    transform: translateX(-120%);
+    transition: transform 0.25s ease, opacity 0.2s ease;
+  }
+
+  .lic-sidebar.is-open {
+    transform: translateX(0);
+  }
+
+  .lic-sidebar.is-closed {
+    width: min(280px, calc(100vw - 1.6rem));
+    padding: 1rem;
+    border-color: rgba(148, 163, 184, 0.24);
+    transform: translateX(-120%);
+  }
+
+  .lic-dnd-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .lic-hero-card {
+    padding: 0.95rem;
+  }
+}
+
+@media (min-width: 769px) {
+  .lic-sidebar-backdrop {
+    display: none;
+  }
+
+  .lic-sidebar.is-open {
+    width: 252px;
+    flex-basis: 252px;
+    padding: 1rem;
+    border-color: rgba(148, 163, 184, 0.24);
+    pointer-events: auto;
+  }
 }
