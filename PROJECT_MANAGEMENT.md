@@ -260,5 +260,15 @@ Automatic-TimeTable-Generator-ITPM/
 
 ---
 
-**Last Updated:** April 18, 2026  
+**Last Updated:** April 24, 2026  
 **Document Owner:** Dev-Backend-2 (Project Management)
+
+---
+
+## Visualizing this Document
+
+To use this file as an interactive project management tool:
+
+1. **VS Code Extension:** Install the **"Kanban"** or **"Markdown Kanban"** extension. Open this file and click the "Open Kanban" button in the editor title bar.
+2. **Project Dashboard:** I have generated a premium **[PROJECT_DASHBOARD.html](./PROJECT_DASHBOARD.html)** file in the root directory. Open it in any browser for a professional, high-fidelity visualization of the current project status.
+

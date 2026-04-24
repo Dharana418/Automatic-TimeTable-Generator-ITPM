@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Management Dashboard - Automatic TimeTable Generator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --accent-primary: #38bdf8;
+            --accent-secondary: #818cf8;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 0% 0%, rgba(56, 189, 248, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 100% 100%, rgba(129, 140, 248, 0.1) 0%, transparent 50%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 3rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1.5rem;
+        }
+
+        .logo-area h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(to right, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo-area p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-top: 0.25rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            padding: 1.5rem;
+            border-radius: 1rem;
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent-primary);
+        }
+
+        .stat-card .label {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-top: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .stat-card .trend {
+            font-size: 0.8rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 2rem;
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+        }
+
+        .kanban-board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+        }
+
+        .column {
+            background: rgba(15, 23, 42, 0.4);
+            border-radius: 1.25rem;
+            padding: 1.5rem;
+            min-height: 600px;
+            border: 1px solid var(--border-color);
+        }
+
+        .column-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .column-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .todo-dot { background: var(--text-secondary); }
+        .doing-dot { background: var(--accent-primary); }
+        .done-dot { background: var(--success); }
+
+        .count {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.2rem 0.6rem;
+            border-radius: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .task-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .task-card:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+            background: rgba(30, 41, 59, 0.9);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .task-tag {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            padding: 0.2rem 0.5rem;
+            border-radius: 0.4rem;
+            margin-bottom: 0.75rem;
+            display: inline-block;
+        }
+
+        .tag-backend { background: rgba(56, 189, 248, 0.1); color: var(--accent-primary); }
+        .tag-frontend { background: rgba(129, 140, 248, 0.1); color: var(--accent-secondary); }
+        .tag-alg { background: rgba(245, 158, 11, 0.1); color: var(--warning); }
+
+        .task-title {
+            font-size: 0.95rem;
+            font-weight: 500;
+            line-height: 1.4;
+            margin-bottom: 1rem;
+        }
+
+        .task-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .assignee {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .avatar {
+            width: 24px;
+            height: 24px;
+            background: linear-gradient(45deg, var(--accent-primary), var(--accent-secondary));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            color: white;
+            font-weight: 700;
+        }
+
+        .priority-indicator {
+            width: 4px;
+            height: 40px;
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            border-radius: 0 4px 4px 0;
+        }
+
+        .priority-high { background: var(--danger); }
+        .priority-med { background: var(--warning); }
+        .priority-low { background: var(--success); }
+
+        .gantt-preview {
+            margin-top: 3rem;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 1.25rem;
+            padding: 2rem;
+        }
+
+        .gantt-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .gantt-chart {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .gantt-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .gantt-label {
+            width: 150px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .gantt-bar-bg {
+            flex-grow: 1;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            position: relative;
+        }
+
+        .gantt-bar {
+            height: 100%;
+            border-radius: 6px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            transition: width 1s ease-in-out;
+        }
+
+        .bar-s1 { width: 100%; background: var(--accent-primary); }
+        .bar-s2 { width: 100%; background: var(--accent-secondary); }
+        .bar-s3 { width: 100%; background: var(--success); }
+        .bar-s4 { width: 45%; background: var(--warning); }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        .pulse-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo-area">
+                <h1>Automatic TimeTable Generator</h1>
+                <p>Project Management Dashboard | FacultyCoordinator Branch</p>
+            </div>
+            <div class="live-indicator">
+                <div class="pulse-dot"></div>
+                LIVE PROJECT DATA
+            </div>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="label">Total Tasks</div>
+                <div class="value">42</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Completed</div>
+                <div class="value" style="color: var(--success)">38 <span class="trend">90%</span></div>
+            </div>
+            <div class="stat-card">
+                <div class="label">In Progress</div>
+                <div class="value" style="color: var(--accent-primary)">4</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Sprint Velocity</div>
+                <div class="value">12.5 <span class="trend" style="background: rgba(56, 189, 248, 0.1); color: var(--accent-primary)">+15%</span></div>
+            </div>
+        </div>
+
+        <div class="kanban-board">
+            <!-- TO DO -->
+            <div class="column">
+                <div class="column-header">
+                    <div class="column-title">
+                        <div class="dot todo-dot"></div>
+                        Backlog
+                    </div>
+                    <div class="count">2</div>
+                </div>
+                
+                <div class="task-card">
+                    <div class="priority-indicator priority-low"></div>
+                    <div class="task-tag tag-backend">BACK-003</div>
+                    <div class="task-title">API rate limiting implementation</div>
+                    <div class="task-footer">
+                        <div class="assignee">
+                            <div class="avatar">DB</div>
+                            <span>Dev-Backend-3</span>
+                        </div>
+                        <span>Week 12</span>
+                    </div>
+                </div>
+
+                <div class="task-card">
+                    <div class="priority-indicator priority-low"></div>
+                    <div class="task-tag tag-frontend">FE-013</div>
+                    <div class="task-title">Frontend bundle size optimization</div>
+                    <div class="task-footer">
+                        <div class="assignee">
+                            <div class="avatar">F1</div>
+                            <span>Dev-Frontend-1</span>
+                        </div>
+                        <span>Week 12</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- IN PROGRESS -->
+            <div class="column">
+                <div class="column-header">
+                    <div class="column-title">
+                        <div class="dot doing-dot"></div>
+                        In Progress
+                    </div>
+                    <div class="count">3</div>
+                </div>
+
+                <div class="task-card">
+                    <div class="priority-indicator priority-high"></div>
+                    <div class="task-tag tag-alg">ENH-005</div>
+                    <div class="task-title">Genetic Algorithm performance optimization</div>
+                    <div class="task-footer">
+                        <div class="assignee">
+                            <div class="avatar">B2</div>
+                            <span>Dev-Backend-2</span>
+                        </div>
+                        <span>Today</span>
+                    </div>
+                </div>
+
+                <div class="task-card">
+                    <div class="priority-indicator priority-med"></div>
+                    <div class="task-tag tag-frontend">ENH-004</div>
+                    <div class="task-title">Advanced filtering & search for batches</div>
+                    <div class="task-footer">
+                        <div class="assignee">
+                            <div class="avatar">F1</div>
+                            <span>Dev-Frontend-1</span>
+                        </div>
+                        <span>Tomorrow</span>
+                    </div>
+                </div>
+
+                <div class="task-card">
+                    <div class="priority-indicator priority-med"></div>
+                    <div class="task-tag tag-backend">ENH-007</div>
+                    <div class="task-title">Jest Unit Tests for Scheduler</div>
+                    <div class="task-footer">
+                        <div class="assignee">
+                            <div class="avatar">B1</div>
+                            <span>Dev-Backend-1</span>
+                        </div>
+                        <span>Today</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DONE -->
+            <div class="column">
+                <div class="column-header">
+                    <div class="column-title">
+                        <div class="dot done-dot"></div>
+                        Completed
+                    </div>
+                    <div class="count">38</div>
+                </div>
+
+                <div class="task-card">
+                    <div class="task-tag tag-frontend">ENH-003</div>
+                    <div class="task-title">Building 2D visualization component</div>
+                    <div class="task-footer">
+                        <div class="assignee">
+                            <div class="avatar">F3</div>
+                            <span>Dev-Frontend-3</span>
+                        </div>
+                        <span>Apr 22</span>
+                    </div>
+                </div>
+
+                <div class="task-card">
+                    <div class="task-tag tag-backend">API-001</div>
+                    <div class="task-title">Scheduler API endpoints & controllers</div>
+                    <div class="task-footer">
+                        <div class="assignee">
+                            <div class="avatar">B2</div>
+                            <span>Dev-Backend-2</span>
+                        </div>
+                        <span>Apr 20</span>
+                    </div>
+                </div>
+
+                <div class="task-card">
+                    <div class="task-tag tag-alg">ALG-005</div>
+                    <div class="task-title">Hybrid Scheduler Engine core logic</div>
+                    <div class="task-footer">
+                        <div class="assignee">
+                            <div class="avatar">B2</div>
+                            <span>Dev-Backend-2</span>
+                        </div>
+                        <span>Apr 18</span>
+                    </div>
+                </div>
+                
+                <div style="text-align: center; color: var(--text-secondary); font-size: 0.8rem; margin-top: 1rem;">
+                    + 35 more completed tasks
+                </div>
+            </div>
+        </div>
+
+        <div class="gantt-preview">
+            <div class="gantt-header">
+                <div class="column-title">Project Roadmap (Sprints)</div>
+                <div class="live-indicator" style="color: var(--text-secondary)">WEEKS 1 - 12</div>
+            </div>
+            <div class="gantt-chart">
+                <div class="gantt-row">
+                    <div class="gantt-label">Sprint 1: Core Infra</div>
+                    <div class="gantt-bar-bg"><div class="gantt-bar bar-s1"></div></div>
+                </div>
+                <div class="gantt-row">
+                    <div class="gantt-label">Sprint 2: Algorithms</div>
+                    <div class="gantt-bar-bg"><div class="gantt-bar bar-s2"></div></div>
+                </div>
+                <div class="gantt-row">
+                    <div class="gantt-label">Sprint 3: UI/UX</div>
+                    <div class="gantt-bar-bg"><div class="gantt-bar bar-s3"></div></div>
+                </div>
+                <div class="gantt-row">
+                    <div class="gantt-label">Sprint 4: Enhancement</div>
+                    <div class="gantt-bar-bg"><div class="gantt-bar bar-s4"></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -4,7 +4,7 @@
  */
 
 describe('Authentication Logic', () => {
-  
+
   describe('Email Validation', () => {
     it('should validate correct email format', () => {
       const isValidEmail = (email) => {
@@ -33,7 +33,7 @@ describe('Authentication Logic', () => {
   describe('Password Validation', () => {
     it('should enforce minimum password length', () => {
       const isValidPassword = (password) => {
-        return password && password.length >= 6;
+        return !!(password && password.length >= 6);
       };
 
       expect(isValidPassword('pass123')).toBe(true);
@@ -60,7 +60,7 @@ describe('Authentication Logic', () => {
   describe('User Registration', () => {
     it('should validate required registration fields', () => {
       const validateRegistration = (data) => {
-        return data.name && data.email && data.password;
+        return !!(data.name && data.email && data.password);
       };
 
       expect(validateRegistration({ name: 'John', email: 'john@example.com', password: 'pass123' })).toBe(true);
@@ -92,7 +92,7 @@ describe('Authentication Logic', () => {
   describe('Login Validation', () => {
     it('should require both email and password', () => {
       const validateLogin = (data) => {
-        return data.email && data.password;
+        return !!(data.email && data.password);
       };
 
       expect(validateLogin({ email: 'user@example.com', password: 'pass123' })).toBe(true);
@@ -170,7 +170,7 @@ describe('Authentication Logic', () => {
       const assignUserRole = (email) => {
         if (email.includes('admin')) return 'admin';
         if (email.includes('coordinator')) return 'coordinator';
-        if (email.includes('faculty')) return 'faculty_coordinator';
+        if (email.includes('faculty') || email.includes('prof')) return 'faculty_coordinator';
         return 'user';
       };
 
