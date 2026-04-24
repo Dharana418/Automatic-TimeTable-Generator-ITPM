@@ -10,7 +10,7 @@
     "generate:logical": "node scripts/generateLogicalTimetables.js",
     "seed:modules": "node scripts/seedDummyModules.js",
     "seed:modules:ac": "node scripts/seedDummyModulesAsAC.js",
-    "test": "jest --detectOpenHandles",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --detectOpenHandles",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
   },

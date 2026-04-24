@@ -235,7 +235,7 @@ describe('Timetable Generation Component', () => {
   describe('Generation Workflow', () => {
     it('should validate required fields before generation', () => {
       const validateForm = (data) => {
-        return data.year && data.semester && data.specialization && data.group;
+        return !!(data.year && data.semester && data.specialization && data.group);
       };
 
       expect(validateForm({ year: 1, semester: 1, specialization: 'CSC', group: 1 })).toBe(true);

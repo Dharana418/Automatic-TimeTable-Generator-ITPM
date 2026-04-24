@@ -450,7 +450,8 @@ function resolveSessionBatchMode(session = {}) {
 }
 
 function getAllowedDays(session, options = {}) {
-  const dt = resolveSessionBatchMode(session) || String(session.module.day_type || session.module?.details?.day_type || 'weekday').toLowerCase();
+  const rawDt = resolveSessionBatchMode(session) || String(session.module.day_type || session.module?.details?.day_type || 'weekday');
+  const dt = rawDt.toLowerCase();
   const weekdayFreeDay = resolveWeekdayFreeDay(options);
 
   const weekdayDays = WEEKDAYS.filter((day) => day !== weekdayFreeDay);
@@ -465,7 +466,8 @@ function getAllowedDays(session, options = {}) {
 }
 
 function getAllowedSlotIndexes(session, allSlots = SLOTS) {
-  const dt = resolveSessionBatchMode(session) || String(session.module.day_type || session.module?.details?.day_type || 'weekday').toLowerCase();
+  const rawDt = resolveSessionBatchMode(session) || String(session.module.day_type || session.module?.details?.day_type || 'weekday');
+  const dt = rawDt.toLowerCase();
 
   // CONSTRAINT: Lectures and labs can ONLY be on weekdays (Mon-Fri)
   // Only explicitly 'weekend' type modules get extended weekend slots
