@@ -23,7 +23,6 @@ export default {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
   transform: {},
-  extensionsToTreatAsEsm: ['.js'],
   testTimeout: 10000,
   verbose: true
 };

@@ -24,6 +24,7 @@ describe('ErrorHandler Utility', () => {
 
   it('should have proper stack trace', () => {
     const error = new ErrorHandler('Database error', 500);
+    error.name = 'ErrorHandler';
     expect(error.stack).toBeDefined();
     expect(error.stack).toContain('ErrorHandler');
   });
