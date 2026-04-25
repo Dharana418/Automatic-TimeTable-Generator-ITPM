@@ -12,6 +12,8 @@ const FacultyHallAllocationPage = ({ user }) => {
       subtitle="Manage hall availability, maintenance windows, and allocation status."
       badge="Resource Allocation"
       footerNote="Faculty Coordinator hall allocation workspace"
+      contentSectionWidthClass="max-w-none"
+      contentSectionClassName="lg:w-[calc(100%+21.5rem)] lg:ml-[-21.5rem]"
     >
       <HallAllocation apiBase={API_BASE} />
     </FacultyCoordinatorShell>

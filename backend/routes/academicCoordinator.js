@@ -108,6 +108,46 @@ const validateReviewComment = (fieldName) => (req, res, next) => {
   return next();
 };
 
+const validateTimetableEditPayload = (req, res, next) => {
+  const schedule = req.body?.schedule;
+
+  if (!Array.isArray(schedule)) {
+    return res.status(400).json({
+      success: false,
+      error: 'schedule must be an array',
+    });
+  }
+
+  if (schedule.length > 5000) {
+    return res.status(400).json({
+      success: false,
+      error: 'schedule contains too many rows',
+    });
+  }
+
+  for (let i = 0; i < schedule.length; i += 1) {
+    const row = schedule[i];
+    if (!row || typeof row !== 'object' || Array.isArray(row)) {
+      return res.status(400).json({
+        success: false,
+        error: `schedule[${i}] must be an object`,
+      });
+    }
+
+    const day = String(row.day || row.dayOfWeek || row.weekday || '').trim();
+    const time = String(row.timeSlot || row.slot || row.time || row.timeslot || '').trim();
+
+    if (!day || !time) {
+      return res.status(400).json({
+        success: false,
+        error: `schedule[${i}] must include valid day and time`,
+      });
+    }
+  }
+
+  return next();
+};
+
 const validateCalendarPayload = (req, res, next) => {
   const errors = [];
   const {
@@ -241,6 +281,39 @@ router.get('/timetables', validateTimetableQuery, async (req, res) => {
   }
 });
 
+router.get('/timetables/edit-history', async (req, res) => {
+  try {
+    const limitParam = Number(req.query.limit);
+    const limit = Number.isInteger(limitParam) && limitParam > 0
+      ? Math.min(limitParam, 200)
+      : 50;
+
+    const { rows } = await pool.query(
+      `SELECT
+         h.id,
+         h.timetable_id,
+         h.edited_by,
+         h.edited_at,
+         h.previous_schedule,
+         h.updated_schedule,
+         t.name AS timetable_name,
+         u.name AS editor_name,
+         COALESCE(jsonb_array_length(h.previous_schedule), 0) AS previous_count,
+         COALESCE(jsonb_array_length(h.updated_schedule), 0) AS updated_count
+       FROM timetable_edit_history h
+       LEFT JOIN timetables t ON t.id = h.timetable_id
+       LEFT JOIN users u ON u.id = h.edited_by
+       ORDER BY h.edited_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+
+    return res.json({ success: true, data: rows });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.put('/timetables/:id/approve', validatePositiveIntegerParam('id'), async (req, res) => {
   try {
     const { id } = req.params;
@@ -290,6 +363,48 @@ router.put('/timetables/:id/reject', validatePositiveIntegerParam('id'), validat
     }
 
     return res.json({ success: true, data: rows[0] });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.put('/timetables/:id/edit', validatePositiveIntegerParam('id'), validateTimetableEditPayload, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const schedule = req.body?.schedule || [];
+
+    const existingRes = await pool.query(
+      'SELECT * FROM timetables WHERE id = $1 LIMIT 1',
+      [id]
+    );
+
+    if (!existingRes.rowCount) {
+      return res.status(404).json({ success: false, error: 'Timetable not found' });
+    }
+
+    const existing = existingRes.rows[0];
+    const existingData = parseJsonSafe(existing.data, {});
+    const previousSchedule = Array.isArray(existingData?.schedule) ? existingData.schedule : [];
+    const mergedData = {
+      ...existingData,
+      schedule,
+    };
+
+    const updateRes = await pool.query(
+      `UPDATE timetables
+       SET data = $2::jsonb
+       WHERE id = $1
+       RETURNING *`,
+      [id, JSON.stringify(mergedData)]
+    );
+
+    await pool.query(
+      `INSERT INTO timetable_edit_history (timetable_id, edited_by, previous_schedule, updated_schedule)
+       VALUES ($1, $2, $3::jsonb, $4::jsonb)`,
+      [id, req.user?.id || null, JSON.stringify(previousSchedule), JSON.stringify(schedule)]
+    );
+
+    return res.json({ success: true, data: updateRes.rows[0] });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
