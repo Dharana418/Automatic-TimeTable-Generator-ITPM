@@ -686,14 +686,14 @@ const FacultyAddedModulesPage = ({ user }) => {
               <button
                 type="button"
                 onClick={() => setViewMode('table')}
-                className={`rounded-xl border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${viewMode === 'table' ? 'border-sky-300 bg-sky-50 text-sky-700' : 'border-slate-300 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-700'}`}
+                className={`rounded-xl border px-4 py-2 text-xs font-black uppercase tracking-[0.1em] transition ${viewMode === 'table' ? 'border-sky-500 bg-sky-600 text-white shadow-md shadow-sky-500/30' : 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'}`}
               >
                 Table
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode('cards')}
-                className={`rounded-xl border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${viewMode === 'cards' ? 'border-sky-300 bg-sky-50 text-sky-700' : 'border-slate-300 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-700'}`}
+                className={`rounded-xl border px-4 py-2 text-xs font-black uppercase tracking-[0.1em] transition ${viewMode === 'cards' ? 'border-sky-500 bg-sky-600 text-white shadow-md shadow-sky-500/30' : 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'}`}
               >
                 Cards
               </button>
