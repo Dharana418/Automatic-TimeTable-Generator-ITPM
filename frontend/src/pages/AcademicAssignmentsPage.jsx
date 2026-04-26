@@ -55,6 +55,34 @@ const DarkSelect = ({ label, value, onChange, options, required = false }) => (
   </label>
 );
 
+const DarkCheckboxGroup = ({ label, options, selected, onChange }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 200 }}>
+    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>{label}</span>
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      {options.map(opt => {
+        const isSelected = selected.includes(opt);
+        return (
+          <button
+            key={opt}
+            type="button"
+            onClick={() => {
+              if (isSelected) onChange(selected.filter(x => x !== opt));
+              else onChange([...selected, opt]);
+            }}
+            style={{
+              padding: '6px 12px', borderRadius: 12, border: `1px solid ${isSelected ? 'rgba(245,158,11,0.5)' : 'rgba(148,163,184,0.2)'}`,
+              background: isSelected ? 'rgba(245,158,11,0.15)' : 'rgba(15,23,42,0.4)',
+              color: isSelected ? '#fbbf24' : '#94a3b8', fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
+            }}
+          >
+            {opt}
+          </button>
+        )
+      })}
+    </div>
+  </div>
+);
+
 const sectionPanelStyle = {
   background: 'linear-gradient(145deg, rgba(2,6,23,0.9), rgba(15,23,42,0.82), rgba(7,89,133,0.35))',
   padding: 24,
@@ -77,7 +105,10 @@ export default function AcademicAssignmentsPage({ user }) {
     lecturerId: '',
     licId: '',
     academicYear: '1',
-    semester: '1'
+    semester: '1',
+    hoursPerWeek: '2',
+    preferredDays: ['Mon', 'Wed'],
+    preferredTimeSlots: ['08:00-10:00', '10:00-12:00']
   });
 
   const [editingId, setEditingId] = useState(null);
@@ -140,14 +171,17 @@ export default function AcademicAssignmentsPage({ user }) {
       lecturerId: a.lecturer_id || '',
       licId: a.lic_id || '',
       academicYear: a.academic_year?.toString() || '1',
-      semester: a.semester?.toString() || '1'
+      semester: a.semester?.toString() || '1',
+      hoursPerWeek: a.hours_per_week?.toString() || '2',
+      preferredDays: Array.isArray(a.preferred_days) ? a.preferred_days : [],
+      preferredTimeSlots: (a.preferred_times || '').split(',').map(s => s.trim()).filter(Boolean)
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleCancelEdit = () => {
     setEditingId(null);
-    setForm({ moduleId: '', lecturerId: '', licId: '', academicYear: '1', semester: '1' });
+    setForm({ moduleId: '', lecturerId: '', licId: '', academicYear: '1', semester: '1', hoursPerWeek: '2', preferredDays: ['Mon', 'Wed'], preferredTimeSlots: ['08:00-10:00', '10:00-12:00'] });
   };
 
   const handleDeleteAssignment = async (id) => {
@@ -224,9 +258,25 @@ export default function AcademicAssignmentsPage({ user }) {
               />
             </div>
             
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', maxWidth: '600px' }}>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
               <DarkInput label="Academic Year *" val={form.academicYear} onChange={v => setForm(p => ({...p, academicYear: v}))} type="number" min="1" max="4" />
               <DarkInput label="Semester" val={form.semester} onChange={v => setForm(p => ({...p, semester: v}))} type="number" min="1" max="2" />
+              <DarkInput label="Hours / Week *" val={form.hoursPerWeek} onChange={v => setForm(p => ({...p, hoursPerWeek: v}))} type="number" min="1" max="22" />
+            </div>
+
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              <DarkCheckboxGroup 
+                label="Preferred Days" 
+                options={['Mon', 'Tue', 'Wed', 'Thu', 'Fri']} 
+                selected={form.preferredDays} 
+                onChange={v => setForm(p => ({...p, preferredDays: v}))} 
+              />
+              <DarkCheckboxGroup 
+                label="Preferred Time Slots" 
+                options={['08:00-10:00', '10:00-12:00', '13:00-15:00', '15:00-17:00', '17:00-19:00']} 
+                selected={form.preferredTimeSlots} 
+                onChange={v => setForm(p => ({...p, preferredTimeSlots: v}))} 
+              />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10, gap: 12 }}>

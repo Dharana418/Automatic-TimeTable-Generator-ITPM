@@ -644,7 +644,7 @@ export default function AcademicModulesPage({ user }) {
       return;
     }
 
-    const expectedCode = String(deleteTarget.code || '').trim().toUpperCase();
+    const expectedCode = String(deleteTarget.code || deleteTarget.id).trim().toUpperCase();
     const enteredCode = String(deleteConfirmCode || '').trim().toUpperCase();
     if (!expectedCode || enteredCode !== expectedCode) {
       toast.warn('Confirmation code does not match the module code.');
@@ -1334,7 +1334,7 @@ export default function AcademicModulesPage({ user }) {
                   label="Type Module Code To Confirm"
                   val={deleteConfirmCode}
                   onChange={setDeleteConfirmCode}
-                  placeholder={String(deleteTarget.code || '').toUpperCase()}
+                  placeholder={String(deleteTarget.code || deleteTarget.id).toUpperCase()}
                   help="Delete button unlocks only when this matches exactly"
                 />
                 <DarkInput
@@ -1354,7 +1354,7 @@ export default function AcademicModulesPage({ user }) {
                   onClick={confirmDeleteModule}
                   disabled={
                     deletingModuleId === deleteTarget.id ||
-                    String(deleteConfirmCode || '').trim().toUpperCase() !== String(deleteTarget.code || '').trim().toUpperCase() ||
+                    String(deleteConfirmCode || '').trim().toUpperCase() !== String(deleteTarget.code || deleteTarget.id).trim().toUpperCase() ||
                     !String(deleteReason || '').trim()
                   }
                   style={{ color: '#fca5a5', borderColor: 'rgba(252,165,165,0.4)' }}

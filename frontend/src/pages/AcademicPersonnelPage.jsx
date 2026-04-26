@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from 'react-toastify';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell';
 import api from '../api/scheduler';
@@ -68,6 +69,11 @@ export default function AcademicPersonnelPage({ user }) {
   // Form States
   const [lecForm, setLecForm] = useState({ name: '', department: 'GENERAL', email: '' });
   const [licForm, setLicForm] = useState({ name: '', department: 'GENERAL' });
+
+  // Edit States
+  const [editingPersonId, setEditingPersonId] = useState(null);
+  const [editingPersonType, setEditingPersonType] = useState(null); // 'instructors' or 'lics'
+  const [editForm, setEditForm] = useState({ name: '', department: 'GENERAL', email: '' });
 
   const FORBIDDEN_CHARS = /[~!@#$%^&*()_+]/;
   const HAS_NUMBERS = /\d/;
@@ -145,6 +151,38 @@ export default function AcademicPersonnelPage({ user }) {
       fetchPersonnel();
     } catch (err) {
       toast.error(err.message || 'Failed to add LIC.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id, type) => {
+    if (!window.confirm(`Are you sure you want to permanently remove this ${type === 'instructors' ? 'lecturer' : 'LIC'}?`)) return;
+    try {
+      await api.deleteItem(type, id);
+      toast.success('Personnel removed successfully.');
+      fetchPersonnel();
+    } catch (err) {
+      toast.error(err.message || 'Failed to remove personnel.');
+    }
+  };
+
+  const openEditModal = (p, type) => {
+    setEditingPersonId(p.id);
+    setEditingPersonType(type);
+    setEditForm({ name: p.name || p.username || '', department: p.department || 'GENERAL', email: p.email || '' });
+  };
+
+  const handleEditSave = async () => {
+    if (!editForm.name.trim()) return toast.warn('Name is required.');
+    try {
+      setSaving(true);
+      await api.updateItem(editingPersonType, editingPersonId, editForm);
+      toast.success('Personnel updated successfully.');
+      setEditingPersonId(null);
+      fetchPersonnel();
+    } catch (err) {
+      toast.error(err.message || 'Failed to update personnel.');
     } finally {
       setSaving(false);
     }
@@ -286,7 +324,7 @@ export default function AcademicPersonnelPage({ user }) {
               <table style={{ width: '100%', minWidth: 600, borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: 'rgba(7,20,43,0.9)' }}>
-                    {['Name', 'Department', 'Email (If provided)'].map((head) => (
+                    {['Name', 'Department', 'Email (If provided)', 'Actions'].map((head) => (
                       <th key={head} style={{ textAlign: 'left', padding: '14px', fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)', borderBottom: '1px solid rgba(148,163,184,0.2)' }}>{head}</th>
                     ))}
                   </tr>
@@ -301,6 +339,12 @@ export default function AcademicPersonnelPage({ user }) {
                         </span>
                       </td>
                       <td style={{ padding: '14px', color: '#cbd5e1', fontSize: 13 }}>{p.email || '—'}</td>
+                      <td style={{ padding: '14px' }}>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button onClick={() => openEditModal(p, activeTab === 'lecturers' ? 'instructors' : 'lics')} style={{ background: 'transparent', border: '1px solid rgba(147,197,253,0.3)', color: '#93c5fd', padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
+                          <button onClick={() => handleDelete(p.id, activeTab === 'lecturers' ? 'instructors' : 'lics')} style={{ background: 'transparent', border: '1px solid rgba(252,165,165,0.3)', color: '#fca5a5', padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Delete</button>
+                        </div>
+                      </td>
                     </tr>
                   )) : (
                     <tr>
@@ -312,6 +356,33 @@ export default function AcademicPersonnelPage({ user }) {
             </div>
           )}
         </section>
+
+        {editingPersonId && typeof document !== 'undefined' && createPortal((
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(2,6,23,0.8)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <div style={{ width: '100%', maxWidth: 500, background: 'linear-gradient(160deg, rgba(15,23,42,0.95), rgba(2,6,23,0.98))', borderRadius: 24, border: '1px solid rgba(148,163,184,0.2)', boxShadow: '0 24px 70px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
+              <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(148,163,184,0.1)' }}>
+                <h3 style={{ margin: 0, color: '#f8fafc', fontSize: 18, fontWeight: 800 }}>Edit {editingPersonType === 'instructors' ? 'Lecturer' : 'LIC'}</h3>
+              </div>
+              <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <DarkInput label="Full Name *" val={editForm.name} onChange={v => setEditForm(p => ({...p, name: v}))} />
+                <DarkInput label="Email Address" val={editForm.email} onChange={v => setEditForm(p => ({...p, email: v}))} type="email" />
+                <DarkSelect 
+                  label="Department *" 
+                  required 
+                  value={editForm.department} 
+                  onChange={(v) => setEditForm(p => ({...p, department: v}))}
+                  options={['IM', 'DS', 'SE', 'CSNE', 'ISE', 'IT', 'CYBER SECURITY', 'GENERAL']} 
+                />
+              </div>
+              <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(148,163,184,0.1)', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+                <button onClick={() => setEditingPersonId(null)} style={{ background: 'transparent', color: '#94a3b8', border: 'none', padding: '10px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                <button onClick={handleEditSave} disabled={saving} style={{ background: '#a78bfa', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 12, fontSize: 13, fontWeight: 800, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ), document.body)}
 
       </div>
     </FacultyCoordinatorShell>

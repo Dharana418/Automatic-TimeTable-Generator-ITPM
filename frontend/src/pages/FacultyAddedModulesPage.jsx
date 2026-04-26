@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../api/scheduler.js';
 import FacultyCoordinatorShell from '../components/FacultyCoordinatorShell.jsx';
 import backgroundImage from '../assets/room-interior-design.jpg';
@@ -142,43 +143,43 @@ const ModuleCard = ({ module }) => {
   }) : 'Recently added';
 
   return (
-    <article className="group rounded-[28px] border border-white/10 bg-white/6 p-5 shadow-[0_20px_46px_rgba(2,6,23,0.35)] backdrop-blur transition duration-300 hover:-translate-y-1 hover:border-cyan-300/25 hover:bg-white/8">
+    <article className="group rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-sky-300 hover:shadow-md">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-200/80">Module Code</p>
-          <h3 className="mt-2 text-lg font-bold text-white">{module.code || 'Untitled'}</h3>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-600">Module Code</p>
+          <h3 className="mt-2 text-lg font-bold text-slate-800">{module.code || 'Untitled'}</h3>
         </div>
-        <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-cyan-100">
+        <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-sky-700">
           Published
         </span>
       </div>
 
-      <p className="mt-4 text-base font-medium leading-6 text-slate-100">{module.name || 'Module name unavailable'}</p>
+      <p className="mt-4 text-base font-medium leading-6 text-slate-600">{module.name || 'Module name unavailable'}</p>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <span className="rounded-full border border-sky-300/20 bg-sky-400/10 px-3 py-1 text-xs font-bold text-sky-100">
+        <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-bold text-sky-700">
           {module.department || 'GENERAL'}
         </span>
-        <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs font-semibold text-slate-200">
+        <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
           Year {formatAcademicYear(module.academicYear)}
         </span>
-        <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs font-semibold text-slate-200">
+        <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
           Semester {module.semester || 'N/A'}
         </span>
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-3 text-sm text-slate-200">
-        <div className="rounded-2xl border border-white/10 bg-slate-950/30 p-3">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Credits</p>
-          <p className="mt-1 font-semibold text-white">{module.credits || 'N/A'}</p>
+      <div className="mt-5 grid grid-cols-2 gap-3 text-sm text-slate-800">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Credits</p>
+          <p className="mt-1 font-semibold text-slate-800">{module.credits || 'N/A'}</p>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-slate-950/30 p-3">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Lectures / Week</p>
-          <p className="mt-1 font-semibold text-white">{module.lecturesPerWeek || 'N/A'}</p>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Lectures / Week</p>
+          <p className="mt-1 font-semibold text-slate-800">{module.lecturesPerWeek || 'N/A'}</p>
         </div>
       </div>
 
-      <div className="mt-5 flex items-center justify-between gap-3 border-t border-white/10 pt-4 text-xs text-slate-300">
+      <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-200 pt-4 text-xs text-slate-500">
         <span>{module.creatorName ? `Academic Coordinator: ${module.creatorName}` : 'Academic Coordinator published'}</span>
         <span>{createdAtLabel}</span>
       </div>
@@ -198,6 +199,10 @@ const FacultyAddedModulesPage = ({ user }) => {
   const [selectedSemester, setSelectedSemester] = useState('ALL');
   const [viewMode, setViewMode] = useState('table');
   const [sortConfig, setSortConfig] = useState({ key: 'code', direction: 'asc' });
+
+  const [editingModuleId, setEditingModuleId] = useState(null);
+  const [editForm, setEditForm] = useState({ code: '', name: '', department: 'GENERAL', academic_year: '', semester: '', credits: '', lectures_per_week: '' });
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const loadModules = useCallback(async () => {
     try {
@@ -223,6 +228,44 @@ const FacultyAddedModulesPage = ({ user }) => {
       setLoading(false);
     }
   }, [selectedDepartment, selectedYear, selectedSemester]);
+
+  const handleDeleteModule = async (id) => {
+    if (!window.confirm("Are you sure you want to permanently delete this module?")) return;
+    try {
+      await api.deleteItem('modules', id);
+      setModules(prev => prev.filter(m => m.id !== id));
+    } catch (err) {
+      console.error(err);
+      alert('Failed to delete module: ' + err.message);
+    }
+  };
+
+  const openEditModal = (m) => {
+    setEditingModuleId(m.id);
+    setEditForm({
+      code: m.code || '',
+      name: m.name || '',
+      department: m.department || m.specialization || 'GENERAL',
+      academic_year: m.academic_year || m.academicYear || '',
+      semester: m.semester || '',
+      credits: m.credits || '',
+      lectures_per_week: m.lectures_per_week || m.lecturesPerWeek || ''
+    });
+  };
+
+  const handleEditSave = async () => {
+    try {
+      setSavingEdit(true);
+      await api.updateItem('modules', editingModuleId, editForm);
+      setEditingModuleId(null);
+      loadModules();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update module: ' + err.message);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   useEffect(() => {
     loadModules();
@@ -726,17 +769,21 @@ const FacultyAddedModulesPage = ({ user }) => {
                         { label: 'Credits', key: 'credits' },
                         { label: 'Lectures/Week', key: 'lecturesPerWeek' },
                         { label: 'Published On', key: 'createdAt' },
+                        { label: 'Actions', key: 'actions' },
                       ].map((column) => (
                         <th key={column.key} className="px-4 py-3 text-left">
                           <button
                             type="button"
-                            onClick={() => handleSort(column.key)}
+                            onClick={() => column.key !== 'actions' && handleSort(column.key)}
                             className="group flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition hover:text-sky-700"
+                            disabled={column.key === 'actions'}
                           >
                             <span>{column.label}</span>
-                            <span className={`rounded-md border px-1.5 py-0.5 text-[9px] font-bold ${sortConfig.key === column.key ? 'border-sky-300 bg-sky-50 text-sky-700' : 'border-slate-300 bg-white text-slate-500 group-hover:text-slate-700'}`}>
-                              {getSortLabel(column.key)}
-                            </span>
+                            {column.key !== 'actions' && (
+                              <span className={`rounded-md border px-1.5 py-0.5 text-[9px] font-bold ${sortConfig.key === column.key ? 'border-sky-300 bg-sky-50 text-sky-700' : 'border-slate-300 bg-white text-slate-500 group-hover:text-slate-700'}`}>
+                                {getSortLabel(column.key)}
+                              </span>
+                            )}
                           </button>
                         </th>
                       ))}
@@ -765,6 +812,12 @@ const FacultyAddedModulesPage = ({ user }) => {
                           <td className="px-4 py-3 text-slate-700">{module.credits || 'N/A'}</td>
                           <td className="px-4 py-3 text-slate-700">{module.lecturesPerWeek || 'N/A'}</td>
                           <td className="px-4 py-3 text-slate-500">{createdAtLabel}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex gap-2">
+                              <button onClick={() => openEditModal(module)} className="rounded-lg border border-sky-200 bg-white px-2 py-1 text-[11px] font-bold text-sky-600 shadow-sm transition hover:bg-sky-50">Edit</button>
+                              <button onClick={() => handleDeleteModule(module.id)} className="rounded-lg border border-red-200 bg-white px-2 py-1 text-[11px] font-bold text-red-500 shadow-sm transition hover:bg-red-50">Delete</button>
+                            </div>
+                          </td>
                         </tr>
                       );
                     })}
@@ -780,6 +833,63 @@ const FacultyAddedModulesPage = ({ user }) => {
             </div>
           )}
         </section>
+
+        {editingModuleId && typeof document !== 'undefined' && createPortal((
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(2,6,23,0.8)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <div style={{ width: '100%', maxWidth: 500, background: 'linear-gradient(160deg, rgba(15,23,42,0.95), rgba(2,6,23,0.98))', borderRadius: 24, border: '1px solid rgba(148,163,184,0.2)', boxShadow: '0 24px 70px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
+              <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(148,163,184,0.1)' }}>
+                <h3 style={{ margin: 0, color: '#f8fafc', fontSize: 18, fontWeight: 800 }}>Edit Module</h3>
+              </div>
+              <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>Code</span>
+                    <input value={editForm.code} onChange={e => setEditForm(p => ({...p, code: e.target.value.toUpperCase()}))} style={{ background: 'rgba(15,23,42,0.4)', border: '1px solid rgba(148,163,184,0.2)', color: '#f1f5f9', padding: '10px 14px', borderRadius: 12, outline: 'none', fontSize: 13 }} />
+                  </label>
+                  <label style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>Name</span>
+                    <input value={editForm.name} onChange={e => setEditForm(p => ({...p, name: e.target.value}))} style={{ background: 'rgba(15,23,42,0.4)', border: '1px solid rgba(148,163,184,0.2)', color: '#f1f5f9', padding: '10px 14px', borderRadius: 12, outline: 'none', fontSize: 13 }} />
+                  </label>
+                </div>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>Department</span>
+                    <select value={editForm.department} onChange={e => setEditForm(p => ({...p, department: e.target.value}))} style={{ background: 'rgba(15,23,42,0.4)', border: '1px solid rgba(148,163,184,0.2)', color: '#f1f5f9', padding: '10px 14px', borderRadius: 12, outline: 'none', fontSize: 13 }}>
+                      {['IM', 'DS', 'SE', 'CSNE', 'ISE', 'IT', 'CYBER SECURITY', 'GENERAL'].map(opt => <option key={opt} value={opt} style={{ background: '#0f172a', color: '#f1f5f9' }}>{opt}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>Academic Year</span>
+                    <input type="number" min="1" max="4" value={editForm.academic_year} onChange={e => setEditForm(p => ({...p, academic_year: e.target.value}))} style={{ background: 'rgba(15,23,42,0.4)', border: '1px solid rgba(148,163,184,0.2)', color: '#f1f5f9', padding: '10px 14px', borderRadius: 12, outline: 'none', fontSize: 13 }} />
+                  </label>
+                  <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>Semester</span>
+                    <input type="number" min="1" max="2" value={editForm.semester} onChange={e => setEditForm(p => ({...p, semester: e.target.value}))} style={{ background: 'rgba(15,23,42,0.4)', border: '1px solid rgba(148,163,184,0.2)', color: '#f1f5f9', padding: '10px 14px', borderRadius: 12, outline: 'none', fontSize: 13 }} />
+                  </label>
+                </div>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>Credits</span>
+                    <input type="number" min="1" max="10" value={editForm.credits} onChange={e => setEditForm(p => ({...p, credits: e.target.value}))} style={{ background: 'rgba(15,23,42,0.4)', border: '1px solid rgba(148,163,184,0.2)', color: '#f1f5f9', padding: '10px 14px', borderRadius: 12, outline: 'none', fontSize: 13 }} />
+                  </label>
+                  <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'rgba(148,163,184,0.7)' }}>Lectures/Week</span>
+                    <input type="number" min="1" max="10" value={editForm.lectures_per_week} onChange={e => setEditForm(p => ({...p, lectures_per_week: e.target.value}))} style={{ background: 'rgba(15,23,42,0.4)', border: '1px solid rgba(148,163,184,0.2)', color: '#f1f5f9', padding: '10px 14px', borderRadius: 12, outline: 'none', fontSize: 13 }} />
+                  </label>
+                </div>
+              </div>
+              <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(148,163,184,0.1)', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+                <button onClick={() => setEditingModuleId(null)} style={{ background: 'transparent', color: '#94a3b8', border: 'none', padding: '10px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                <button onClick={handleEditSave} disabled={savingEdit} style={{ background: '#0284c7', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 12, fontSize: 13, fontWeight: 800, cursor: savingEdit ? 'not-allowed' : 'pointer', opacity: savingEdit ? 0.7 : 1 }}>
+                  {savingEdit ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ), document.body)}
+
       </div>
     </FacultyCoordinatorShell>
   );
